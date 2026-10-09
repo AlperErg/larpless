@@ -2,7 +2,7 @@
 
 > Updated by the WS-C agent after every task. The orchestrator reads this at each checkpoint.
 
-**Current:** C12 sessionController · **Sprint:** 2 · **Last commit:** C11 db
+**Current:** C13 store wiring · **Sprint:** 2 · **Last commit:** C12 sessionController
 
 ## Done
 
@@ -17,6 +17,7 @@
 - C9 `src/core/pomodoro.ts`: `initPomodoro`, `tick` (drift-free from `phaseEndsAtMs`, catches up after sleep, event spans the jump), `skip` (skipped focus is not counted as completed), `toggle(state|null, now, fallbackPreset)` (disable keeps counters; enable starts a fresh focus), `remainingMs`/`resumeWith` for pause. Presets 25/5/15, 50/10 (no long break), demo 2/1/1; long break after round 4, then round 1.
 - C10 `src/core/alerts.ts`: `evaluate(prev, chunk, settings, now, modules?)` → `{next, effects}`. `AlertState` adds `lastSubjectName` (the store keeps only `{level, distractedSinceMs}`). Effects: tint / notify (with `level`) / chime / pulse / flash. Away/unknown chunks shift `distractedSinceMs` forward, so their time is not counted towards the next level. Copy: "You've been on {activity|your phone} for {n min|n s}" / "Back to {subject}?" (falls back to "Back to studying?"). Seconds are shown under a minute, so demoFast doesn't say "0 min". Chimes only when `soundsEnabled`.
 - C11 `src/core/db.ts`: `createDb(kv)` with load/save modules, `loadSettings` (merged over `DEFAULT_SETTINGS`, corrupt → defaults)/`saveSettings`, `listSessions` (newest first)/`saveSession` (upsert), `appendChunk`/`getChunks`/`updateChunk(chunk)`. Read-modify-write ops are serialised. Chunks are whitelisted to the `Chunk` fields before writing. `createMemoryKv()` for tests.
+- C12 `src/core/sessionController.ts`: `createSessionController({native, db, store, getModules, getSettings, classifier, ollama, now, config, onSessionSaved?, demoChunks?, demoIntervalMs?, log?})` returns the `SessionStoreActions` plus `handlePanelAction`, `setPomodoroPreset` and `dispose`. Pure `toPanelState(state, modules, flash)`; the panel is pushed only when the JSON changes. A single 1 s tick closes due chunk windows (`windowStart + chunkS`, drift-free) first, then runs the pomodoro. Away is decided from the webcam before any classifier call. Pause and break shift the open window rather than cutting a partial chunk, so no screenshot is taken at a pause or break. End finalises a partial ≥ 10 s, awaits in-flight chunks, saves the summary and tears everything down (0 timers left). Webcam reject → `webcam.enabled=false`. E_PERMISSION → unknown chunk plus a one-time notification. Breaks: webcam stopped, `duck(0.3)`, timer frozen, alert reset, "Break time"/"Back to focus" notifications plus `chime(phase)`. Ships with a minimal `src/core/demoMode.ts` replayer (finished in C14).
 
 ## C3 bench results (synthetic screenshots, 4b only; 8b/gemma4 skipped to save memory)
 
