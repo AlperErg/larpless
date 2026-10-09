@@ -55,11 +55,17 @@
 
 ## Requests to the orchestrator
 
-- (none yet)
+- **CLAUDE.md (optional):** the "use `NSLog(\"[FLxxx] …\")`" advice yields `<private>` in `log show` on this macOS. Suggest pointing agents at `os.Logger` with `privacy: .public` (see `Native/Capture/FLCaptureLog.swift`), or telling them to add `--info --debug` *and* expect redaction.
+- **WS-C (via orchestrator):** treat a chunk with zero webcam samples as "presence unknown", not `away` (camera errors just stop the samples).
+- No contract, dependency, Info.plist or entitlement changes needed.
+- **NEEDS HUMAN (not permission-related, ~1 min, app is running on Metro 8082):**
+  1. Run `node scripts/js-eval.mjs 8082 "__FL.harness['A.webcamWatch']()"` (20 s): sit in frame ~5 s, step out ~5 s, come back, then hold a phone up ~5 s. Expect a timeline like `PPPPP.....PPPPFFFFF` and `maxPhoneScore` > 0.4.
+  2. Run `node scripts/js-eval.mjs 8082 "__FL.harness['A.window10']()"` and switch to Safari, then to Preview with a PDF: expect `appName` Safari/Preview with the page title / PDF name.
+  3. Optional visual: Harness A tab → Capture, check the 320 px preview has no Focusline window in it.
 
 ## Notes for integration
 
-- Harness runners (Metro 8082): `node scripts/js-eval.mjs 8082 "__FL.harness.A()"` (full suite: permissions, active-window timing, 3 captures if screen is granted, 5 s webcam run if camera is granted). Single checks: `A.perm`, `A.window10` (10 samples, 1 s apart), `A.capture`, `A.webcam` (8 s), `A.webcamCycle` (5× start/stop).
+- Harness runners (Metro 8082): `node scripts/js-eval.mjs 8082 "__FL.harness.A()"` (full suite: permissions, active-window timing, 3 captures if screen is granted, 5 s webcam run if camera is granted). Single checks: `A.perm`, `A.window10` (10 samples, 1 s apart), `A.capture`, `A.webcam` (8 s), `A.webcamCycle` (5× start/stop), `A.webcamWatch` (20 s timeline), `A.photo` (capturePhoto idle + while running). Last full run: all modules present, both permissions granted, active window 0.9 ms native, capture warm 32 ms, webcam 5/5 samples at 1/s.
 - `FLScreenCapture.benchActiveWindow(n)` is an extra dev-only native method (not in the contract, not in the facade) used by the harness for native timing.
 - `webcam.capturePhoto()` works (A9); the JS countdown is the caller's job. It returns `{jpegBase64, width, height}` and must be treated like a screenshot (memory only).
 - If the camera fails mid-session (taken by another app/unplugged), samples simply stop. WS-C: a chunk with **zero** webcam samples should not be judged `away`.
