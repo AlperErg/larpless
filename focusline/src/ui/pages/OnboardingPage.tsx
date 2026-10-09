@@ -12,9 +12,9 @@ import { native } from '../../native';
 import { useAppStore } from '../../store/appStore';
 import { useNavStore } from '../../store/navStore';
 import { useSessionStore } from '../../store/sessionStore';
-import { Button, Callout, CodeBlock, EditableTable, Muted, PageHeader, Strong, Tag, Text } from '../components';
+import { Button, Callout, CodeBlock, EditableTable, ModulePresets, Muted, PageHeader, Strong, Tag, Text } from '../components';
 import { PageBody } from '../layout/Page';
-import { blankDraft, draftsFromModules, duplicateNames, modulesFromDrafts } from '../lib/modules';
+import { addPresetDraft, blankDraft, draftsFromModules, duplicateNames, modulesFromDrafts } from '../lib/modules';
 import type { ModuleDraft } from '../lib/modules';
 import { colors, motion, radius, space, tag } from '../theme';
 
@@ -98,6 +98,12 @@ function ModulesStep({ onNext }: { onNext: () => void }) {
         Add a row per module. Keywords (course codes, topics) help the on-device model pick the right subject.
       </Text>
       <EditableTable rows={drafts} onChange={setDrafts} />
+      <ModulePresets
+        testID="onboarding-presets"
+        existingNames={drafts.map((d) => d.name)}
+        onAdd={(p) => setDrafts((rows) => addPresetDraft(rows, p))}
+        style={styles.presets}
+      />
       {dups.length ? (
         <Text variant="small" color={tag.red.text} style={styles.warn}>
           {`Names must be unique: ${dups.join(', ')}`}
@@ -350,6 +356,7 @@ function OllamaStep({ onBack, onFinish }: { onBack: () => void; onFinish: () => 
 }
 
 const styles = StyleSheet.create({
+  presets: { marginTop: space.lg },
   scroll: { flex: 1, backgroundColor: colors.bg },
   scrollContent: { paddingBottom: 96 },
   progress: { flexDirection: 'row', marginBottom: space.xl },

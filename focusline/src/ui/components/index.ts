@@ -13,6 +13,7 @@ export { PrivacyBadge } from './PrivacyBadge';
 export { Heatmap, heatLevel } from './Heatmap';
 export { PageHeader } from './PageHeader';
 export { EditableTable } from './EditableTable';
+export { ModulePresets } from './ModulePresets';
 export { Segmented } from './Segmented';
 export type { SegmentedOption } from './Segmented';
 export { Switch } from './Switch';

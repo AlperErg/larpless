@@ -65,3 +65,22 @@ export function freshColor(used: TagColor[]): TagColor {
 export function blankDraft(used: TagColor[]): ModuleDraft {
   return { id: newModuleId(), name: '', color: freshColor(used), keywordsText: '' };
 }
+
+/** A table row pre-filled from a suggested module; keeps the preset colour unless another row already uses it. */
+export function draftFromPreset(
+  preset: { name: string; color: TagColor; keywords: string[] },
+  used: TagColor[],
+): ModuleDraft {
+  const color = used.includes(preset.color) ? freshColor(used) : preset.color;
+  return { id: newModuleId(), name: preset.name, color, keywordsText: preset.keywords.join(', ') };
+}
+
+/** Append a preset row unless a row with that name exists (blank rows are replaced first). */
+export function addPresetDraft(
+  drafts: ModuleDraft[],
+  preset: { name: string; color: TagColor; keywords: string[] },
+): ModuleDraft[] {
+  if (drafts.some((d) => d.name.trim().toLowerCase() === preset.name.toLowerCase())) return drafts;
+  const kept = drafts.filter((d) => d.name.trim() || d.keywordsText.trim());
+  return [...kept, draftFromPreset(preset, kept.map((d) => d.color))];
+}

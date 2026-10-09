@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useAppStore } from '../../store/appStore';
-import { Callout, EditableTable, Text } from '../components';
+import { Callout, EditableTable, ModulePresets, Text } from '../components';
 import { Page } from '../layout/Page';
-import { draftsFromModules, duplicateNames, modulesFromDrafts } from '../lib/modules';
+import { addPresetDraft, draftsFromModules, duplicateNames, modulesFromDrafts } from '../lib/modules';
 import type { ModuleDraft } from '../lib/modules';
 import { space, tag } from '../theme';
 
@@ -86,6 +86,12 @@ export function ModulesPage() {
           </Text>
         )}
       </View>
+      <ModulePresets
+        testID="modules-presets"
+        existingNames={drafts.map((d) => d.name)}
+        onAdd={(p) => onChange(addPresetDraft(latest.current, p))}
+        style={styles.presets}
+      />
     </Page>
   );
 }
@@ -94,4 +100,5 @@ const styles = StyleSheet.create({
   lead: { marginBottom: space.lg },
   callout: { marginBottom: space.lg },
   footer: { marginTop: space.sm, minHeight: 18 },
+  presets: { marginTop: space.xl },
 });
