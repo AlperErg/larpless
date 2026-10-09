@@ -58,7 +58,7 @@ export function LoginPage() {
             ]}
           />
           <Text variant="small" style={styles.label}>
-            Username
+            {mode === 'signIn' ? 'Username or email' : 'Username'}
           </Text>
           <TextField
             testID="login-username"

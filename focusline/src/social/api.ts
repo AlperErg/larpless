@@ -84,10 +84,12 @@ export async function signUp(client: SupabaseClient, rawUsername: string, passwo
   if (!data.session) throw new SocialError('Account created, but Supabase wants email confirmation. Turn off "Confirm email" in the dashboard.');
 }
 
+/** Accepts a username or, for accounts made outside the app, a full email address. */
 export async function signIn(client: SupabaseClient, rawUsername: string, password: string): Promise<void> {
   const username = normalizeUsername(rawUsername);
   if (!username || !password) throw new SocialError('Enter your username and password.');
-  const { error } = await client.auth.signInWithPassword({ email: emailFor(username), password });
+  const email = username.includes('@') ? username : emailFor(username);
+  const { error } = await client.auth.signInWithPassword({ email, password });
   if (error) {
     if (/invalid login credentials/i.test(error.message)) throw new SocialError('Wrong username or password.');
     throw new SocialError(error.message);

@@ -64,6 +64,16 @@ describe('accounts', () => {
     await expect(api.signIn(f.client, '', '')).rejects.toThrow(/Enter your username/);
   });
 
+  it('signIn takes a username or a full email', async () => {
+    const f = fakeSupabase();
+    await api.signIn(f.client, 'Ada_L', 'pw');
+    await api.signIn(f.client, ' Alper@Test.com ', 'pw');
+    expect(f.auth.signInWithPassword.mock.calls.map((c) => (c[0] as { email: string }).email)).toEqual([
+      'ada_l@focusline.local',
+      'alper@test.com',
+    ]);
+  });
+
   it('getProfile errors clearly when the schema trigger never ran', async () => {
     const f = fakeSupabase({ profiles: [{ data: null }] });
     await expect(api.getProfile(f.client, ME)).rejects.toThrow(/schema.sql/);
