@@ -2,12 +2,12 @@ import AVFoundation
 import CoreMedia
 import Foundation
 import QuartzCore
-import Vision
 
 /// Webcam presence + phone detection at ~1 fps (CONTRACTS.md §2 `WebcamApi`, event `FLWebcamSample`).
+/// Frame analysis lives in `FLWebcamProcessor`, the Phase 2 photo grab in `FLWebcamPhotoGrabber`.
 ///
-/// PRIVACY: pixel buffers never leave `FLWebcamProcessor.captureOutput`; only booleans and a score are emitted.
-/// Nothing is written to disk or logged except counts and timings.
+/// PRIVACY: pixel buffers never leave the sample-buffer delegates; only booleans and a score are emitted
+/// (plus the explicit in-memory `capturePhoto` JPEG). Nothing is written to disk or logged except counts and timings.
 @objc(FLWebcam)
 final class FLWebcam: RCTEventEmitter {
   private let listenerLock = NSLock()
@@ -23,6 +23,13 @@ final class FLWebcam: RCTEventEmitter {
   private var session: AVCaptureSession?
   private var output: AVCaptureVideoDataOutput?
   private var processor: FLWebcamProcessor?
+  private var runtimeErrorObserver: NSObjectProtocol?
+  private var restartAttempts = 0
+  private var photoGrabber: FLWebcamPhotoGrabber?
+
+  private static let sessionPreset: AVCaptureSession.Preset = .vga640x480
+  private static let photoPreset: AVCaptureSession.Preset = .hd1280x720
+  private static let maxRestartAttempts = 3
 
   override static func requiresMainQueueSetup() -> Bool { false }
   override func supportedEvents() -> [String]! { ["FLWebcamSample"] }
@@ -68,47 +75,21 @@ final class FLWebcam: RCTEventEmitter {
       }
       self.teardownSession()
 
-      guard let device = Self.pickCamera() else {
-        reject("E_CAMERA", "No camera available", nil)
-        return
-      }
-      let session = AVCaptureSession()
-      session.beginConfiguration()
-      if session.canSetSessionPreset(.vga640x480) { session.sessionPreset = .vga640x480 }
+      let built: (session: AVCaptureSession, output: AVCaptureVideoDataOutput, device: AVCaptureDevice)
       do {
-        let input = try AVCaptureDeviceInput(device: device)
-        guard session.canAddInput(input) else { throw FLWebcamError.config("cannot add camera input") }
-        session.addInput(input)
+        built = try self.makeRunningSession(preset: Self.sessionPreset, delegate: processor)
       } catch {
-        session.commitConfiguration()
-        FLCaptureLog.log("[FLWebcam] start failed (input): \(error.localizedDescription)")
-        reject("E_CAMERA", "Camera input failed: \(error.localizedDescription)", error)
+        FLCaptureLog.log("[FLWebcam] start failed: \(error.localizedDescription)")
+        reject("E_CAMERA", error.localizedDescription, error)
         return
       }
-      let output = AVCaptureVideoDataOutput()
-      output.alwaysDiscardsLateVideoFrames = true
-      output.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
-      output.setSampleBufferDelegate(processor, queue: self.videoQueue)
-      guard session.canAddOutput(output) else {
-        session.commitConfiguration()
-        reject("E_CAMERA", "Cannot add video output", nil)
-        return
-      }
-      session.addOutput(output)
-      session.commitConfiguration()
-
-      session.startRunning()  // blocking; we're on sessionQueue, never the main thread
-      guard session.isRunning else {
-        output.setSampleBufferDelegate(nil, queue: nil)
-        FLCaptureLog.log("[FLWebcam] start failed: session did not start")
-        reject("E_CAMERA", "Camera session failed to start", nil)
-        return
-      }
-      self.session = session
-      self.output = output
+      self.session = built.session
+      self.output = built.output
       self.processor = processor
+      self.restartAttempts = 0
+      self.observeRuntimeErrors(of: built.session)
       FLCaptureLog.log(String(format: "[FLWebcam] started (%@, fps=%.2f) in %.0f ms",
-                              device.localizedName, fps, (CACurrentMediaTime() - t0) * 1000))
+                              built.device.localizedName, fps, (CACurrentMediaTime() - t0) * 1000))
       resolve(nil)
     }
   }
@@ -121,29 +102,165 @@ final class FLWebcam: RCTEventEmitter {
     }
   }
 
-  /// Phase 2 (A9), not implemented yet.
+  /// Phase 2 live photo: grabs one frame (≤ 1280 px wide) as an in-memory JPEG.
+  /// Reuses the running 1 fps session (temporarily at 720p) or opens a short-lived one.
   @objc func capturePhoto(_ resolve: @escaping RCTPromiseResolveBlock,
                           reject: @escaping RCTPromiseRejectBlock) {
-    reject("E_NOT_RUNNING", "capturePhoto is not implemented yet (Phase 2)", nil)
+    guard AVCaptureDevice.authorizationStatus(for: .video) == .authorized else {
+      reject("E_PERMISSION", "Camera permission not granted", nil)
+      return
+    }
+    sessionQueue.async { [weak self] in
+      guard let self = self else { return }
+      let t0 = CACurrentMediaTime()
+      var finished = false
+      var cleanup: () -> Void = {}
+
+      // Always called on sessionQueue.
+      let finish: ([String: Any]?, String?) -> Void = { body, failure in
+        guard !finished else { return }
+        finished = true
+        cleanup()
+        if let body = body {
+          FLCaptureLog.log(String(format: "[FLWebcam] capturePhoto done in %.0f ms", (CACurrentMediaTime() - t0) * 1000))
+          resolve(body)
+        } else {
+          FLCaptureLog.log("[FLWebcam] capturePhoto failed: \(failure ?? "unknown")")
+          reject("E_CAMERA", failure ?? "capturePhoto failed", nil)
+        }
+      }
+      // Delegates may be held weakly by the output, so keep the grabber alive until `finish`.
+      let makeGrabber: (Int) -> FLWebcamPhotoGrabber = { skip in
+        let grabber = FLWebcamPhotoGrabber(skipFrames: skip, maxWidth: 1280) { [weak self] body in
+          self?.sessionQueue.async { finish(body, body == nil ? "JPEG encoding failed" : nil) }
+        }
+        self.photoGrabber = grabber
+        return grabber
+      }
+
+      if let session = self.session, session.isRunning, let output = self.output {
+        // Reuse the running session: bump to 720p, grab, then restore preset + analysis delegate.
+        let oldPreset = session.sessionPreset
+        session.beginConfiguration()
+        if session.canSetSessionPreset(Self.photoPreset) { session.sessionPreset = Self.photoPreset }
+        session.commitConfiguration()
+        output.setSampleBufferDelegate(makeGrabber(5), queue: self.videoQueue)
+        cleanup = { [weak self] in
+          guard let self = self else { return }
+          self.photoGrabber = nil
+          guard self.session === session else { return }  // stopped meanwhile
+          output.setSampleBufferDelegate(self.processor, queue: self.videoQueue)
+          session.beginConfiguration()
+          if session.canSetSessionPreset(oldPreset) { session.sessionPreset = oldPreset }
+          session.commitConfiguration()
+        }
+      } else {
+        // Short-lived session; skip a few frames so auto-exposure settles.
+        do {
+          let built = try self.makeRunningSession(preset: Self.photoPreset, delegate: makeGrabber(10))
+          cleanup = { [weak self] in
+            Self.dismantle(built.session, output: built.output)
+            self?.photoGrabber = nil
+          }
+        } catch {
+          finish(nil, error.localizedDescription)
+          return
+        }
+      }
+
+      self.sessionQueue.asyncAfter(deadline: .now() + 4) {
+        finish(nil, "Timed out waiting for a camera frame")
+      }
+    }
   }
 
   // MARK: private (sessionQueue)
 
-  private func teardownSession() {
-    guard let session = session else { return }
-    let t0 = CACurrentMediaTime()
+  private func makeRunningSession(
+    preset: AVCaptureSession.Preset,
+    delegate: AVCaptureVideoDataOutputSampleBufferDelegate
+  ) throws -> (session: AVCaptureSession, output: AVCaptureVideoDataOutput, device: AVCaptureDevice) {
+    guard let device = Self.pickCamera() else { throw FLWebcamError.config("No camera available") }
+    let session = AVCaptureSession()
+    session.beginConfiguration()
+    if session.canSetSessionPreset(preset) { session.sessionPreset = preset }
+    let input: AVCaptureDeviceInput
+    do {
+      input = try AVCaptureDeviceInput(device: device)
+    } catch {
+      session.commitConfiguration()
+      throw FLWebcamError.config("Camera input failed: \(error.localizedDescription)")
+    }
+    guard session.canAddInput(input) else {
+      session.commitConfiguration()
+      throw FLWebcamError.config("Cannot add camera input")
+    }
+    session.addInput(input)
+    let output = AVCaptureVideoDataOutput()
+    output.alwaysDiscardsLateVideoFrames = true
+    output.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
+    output.setSampleBufferDelegate(delegate, queue: videoQueue)
+    guard session.canAddOutput(output) else {
+      session.commitConfiguration()
+      throw FLWebcamError.config("Cannot add video output")
+    }
+    session.addOutput(output)
+    session.commitConfiguration()
+
+    session.startRunning()  // blocking; we're on sessionQueue, never the main thread
+    guard session.isRunning else {
+      Self.dismantle(session, output: output)
+      throw FLWebcamError.config("Camera session failed to start (camera busy or unavailable)")
+    }
+    return (session, output, device)
+  }
+
+  private static func dismantle(_ session: AVCaptureSession, output: AVCaptureVideoDataOutput?) {
     if session.isRunning { session.stopRunning() }
     output?.setSampleBufferDelegate(nil, queue: nil)
     session.beginConfiguration()
     session.outputs.forEach { session.removeOutput($0) }
     session.inputs.forEach { session.removeInput($0) }
     session.commitConfiguration()
+  }
+
+  private func teardownSession() {
+    if let obs = runtimeErrorObserver {
+      NotificationCenter.default.removeObserver(obs)
+      runtimeErrorObserver = nil
+    }
+    guard let session = session else { return }
+    let t0 = CACurrentMediaTime()
+    Self.dismantle(session, output: output)
     let processed = processor?.processedCount ?? 0
     self.session = nil
     self.output = nil
     self.processor = nil
     FLCaptureLog.log(String(format: "[FLWebcam] stopped in %.0f ms (processed %d frames)",
                             (CACurrentMediaTime() - t0) * 1000, processed))
+  }
+
+  /// Camera taken by another app, unplugged, or a media-services reset: try to restart a few times,
+  /// then give up and release the camera (JS then simply stops receiving samples).
+  private func observeRuntimeErrors(of session: AVCaptureSession) {
+    if let obs = runtimeErrorObserver { NotificationCenter.default.removeObserver(obs) }
+    runtimeErrorObserver = NotificationCenter.default.addObserver(
+      forName: .AVCaptureSessionRuntimeError, object: session, queue: nil
+    ) { [weak self] note in
+      let err = note.userInfo?[AVCaptureSessionErrorKey] as? NSError
+      FLCaptureLog.log("[FLWebcam] runtime error \(err?.code ?? 0): \(err?.localizedDescription ?? "unknown")")
+      self?.sessionQueue.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+        guard let self = self, let current = self.session, current === session else { return }
+        guard self.restartAttempts < Self.maxRestartAttempts else {
+          FLCaptureLog.log("[FLWebcam] giving up after \(self.restartAttempts) restarts; camera released")
+          self.teardownSession()
+          return
+        }
+        self.restartAttempts += 1
+        current.startRunning()
+        FLCaptureLog.log("[FLWebcam] restart attempt \(self.restartAttempts): running=\(current.isRunning)")
+      }
+    }
   }
 
   /// Prefer the built-in camera so a Continuity Camera iPhone (the phone we're detecting) isn't picked.
@@ -159,94 +276,5 @@ private enum FLWebcamError: Error, LocalizedError {
   case config(String)
   var errorDescription: String? {
     switch self { case .config(let m): return m }
-  }
-}
-
-/// Sample buffer delegate: gates frames to `fps`, runs Vision (presence + YOLO) and emits a sample.
-/// Runs entirely on the webcam video queue.
-final class FLWebcamProcessor: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, @unchecked Sendable {
-  private let interval: CFTimeInterval
-  private let emit: ([String: Any]) -> Void
-  private var lastProcessed: CFTimeInterval = 0
-  private var loggedVisionError = false
-  private var timingLogsLeft = 3
-  private(set) var processedCount = 0
-
-  static let personThreshold: Float = 0.5
-  static let phoneThreshold: Float = 0.4
-
-  init(fps: Double, emit: @escaping ([String: Any]) -> Void) {
-    // Small tolerance so a 30 fps camera doesn't alias 1 fps to ~1.033 s.
-    self.interval = (1.0 / fps) * 0.97
-    self.emit = emit
-  }
-
-  func captureOutput(_ output: AVCaptureOutput,
-                     didOutput sampleBuffer: CMSampleBuffer,
-                     from connection: AVCaptureConnection) {
-    let now = CACurrentMediaTime()
-    guard now - lastProcessed >= interval else { return }  // drop at once
-    lastProcessed = now
-
-    let body: [String: Any]? = autoreleasepool {
-      guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return nil }
-      return analyse(pixelBuffer)
-    }
-    guard let body = body else { return }
-    processedCount += 1
-    if timingLogsLeft > 0 {
-      timingLogsLeft -= 1
-      FLCaptureLog.log(String(format: "[FLWebcam] frame %d analysed in %.0f ms (yolo=%@)",
-                              processedCount, (CACurrentMediaTime() - now) * 1000,
-                              (body["_yolo"] as? Bool ?? false) ? "on" : "off"))
-    }
-    var out = body
-    out.removeValue(forKey: "_yolo")
-    emit(out)
-  }
-
-  /// The pixel buffer is only used inside this call; nothing retains it.
-  private func analyse(_ pixelBuffer: CVPixelBuffer) -> [String: Any] {
-    let human = VNDetectHumanRectanglesRequest()
-    human.upperBodyOnly = true
-    var requests: [VNRequest] = [human]
-
-    var yolo: VNCoreMLRequest?
-    if let model = FLWebcamModel.shared.current {
-      let req = VNCoreMLRequest(model: model)
-      req.imageCropAndScaleOption = .scaleFit
-      yolo = req
-      requests.append(req)
-    }
-
-    let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: .up, options: [:])
-    do {
-      try handler.perform(requests)
-    } catch {
-      if !loggedVisionError {
-        loggedVisionError = true
-        FLCaptureLog.log("[FLWebcam] Vision perform failed: \(error.localizedDescription)")
-      }
-    }
-
-    var personPresent = (human.results ?? []).contains { $0.confidence > Self.personThreshold }
-    var phoneScore: Float = 0
-    for obs in (yolo?.results as? [VNRecognizedObjectObservation]) ?? [] {
-      guard let top = obs.labels.first else { continue }
-      if top.identifier == FLWebcamModel.phoneLabel {
-        phoneScore = max(phoneScore, top.confidence)
-      } else if top.identifier == FLWebcamModel.personLabel, top.confidence > Self.personThreshold {
-        // Fallback presence signal when the upper-body detector misses (e.g. side-on, close to the camera).
-        personPresent = true
-      }
-    }
-
-    return [
-      "t": Date().timeIntervalSince1970 * 1000,
-      "personPresent": personPresent,
-      "phoneVisible": phoneScore > Self.phoneThreshold,
-      "phoneScore": Double(phoneScore),
-      "_yolo": yolo != nil,
-    ]
   }
 }

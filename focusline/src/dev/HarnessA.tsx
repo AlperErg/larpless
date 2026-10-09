@@ -12,6 +12,7 @@
  *   A.webcam          webcam 8 s run summary
  *   A.webcamCycle     5× start/stop
  *   A.webcamWatch     20 s per-sample timeline (for "leave the frame" / "hold a phone up" checks)
+ *   A.photo           capturePhoto() with the camera idle and with the 1 fps session running (sizes only)
  *
  * PRIVACY: results contain sizes, counts and timings only, never image data.
  */
@@ -210,6 +211,44 @@ async function webcamWatch(seconds: number) {
   return { ok: true, seconds, timeline, changes, ...summariseSamples(samples, seconds), last: undefined };
 }
 
+/** Phase 2 live photo: sizes and timing only. `withSession` runs it while the 1 fps session is active. */
+async function photoOnce(withSession: boolean) {
+  if (!NativeModules.FLWebcam) return { ok: false, error: 'FLWebcam missing' };
+  let photo: { jpegBase64: string; width: number; height: number } | null = null;
+  let samplesAfter = 0;
+  const unsub = webcam.onSample(() => {
+    samplesAfter++;
+  });
+  const t0 = nowMs();
+  try {
+    if (withSession) {
+      await webcam.start({ fps: config.WEBCAM_FPS });
+      await sleep(1500);
+    }
+    const t1 = nowMs();
+    photo = await webcam.capturePhoto();
+    const ms = r1(nowMs() - t1);
+    samplesAfter = 0;
+    if (withSession) await sleep(2500); // analysis must resume after the photo
+    return {
+      ok: true,
+      withSession,
+      ms,
+      totalMs: r1(nowMs() - t0),
+      width: photo.width,
+      height: photo.height,
+      base64Len: photo.jpegBase64.length,
+      samplesAfterPhoto: withSession ? samplesAfter : null,
+    };
+  } catch (e) {
+    return { ok: false, withSession, ...errInfo(e) };
+  } finally {
+    photo = null;
+    unsub();
+    if (withSession) await webcam.stop().catch(() => undefined);
+  }
+}
+
 async function webcamCycle(times: number) {
   if (!NativeModules.FLWebcam) return { ok: false, error: 'FLWebcam missing' };
   let events = 0;
@@ -261,6 +300,7 @@ registerHarness('A.capture', () => captureSeries(3));
 registerHarness('A.webcam', () => webcamRun(8));
 registerHarness('A.webcamCycle', () => webcamCycle(5));
 registerHarness('A.webcamWatch', () => webcamWatch(20));
+registerHarness('A.photo', async () => ({ idle: await photoOnce(false), running: await photoOnce(true) }));
 
 /* ---------------------------------------------------------------- UI */
 

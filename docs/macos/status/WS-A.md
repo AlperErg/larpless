@@ -2,7 +2,7 @@
 
 > Updated by the WS-A agent after every task. The orchestrator reads this at each checkpoint.
 
-**Current:** Sprint 1 + Sprint 2 done (A1–A7); remaining acceptance items need a human in front of the camera · **Sprint:** 2 · **Last commit:** WS-A: A7 webcam harness timeline
+**Current:** A1–A9 done (A10 skipped, cut item 2); remaining acceptance items need a human in front of the camera · **Sprint:** Integration · **Last commit:** WS-A: A8+A9 webcam robustness + capturePhoto
 
 ## Done
 
@@ -13,6 +13,13 @@
 - A5 `FLWebcam` (`RCTEventEmitter`, event `FLWebcamSample`): `AVCaptureSession` (VGA preset, built-in camera preferred), `AVCaptureVideoDataOutput` (BGRA, discards late frames) on a private serial queue, 1/fps gate (frames outside the gate are dropped at once), one `perform([...])` with `VNDetectHumanRectanglesRequest(upperBodyOnly)` + YOLO `VNCoreMLRequest`. `stop()` stops, detaches the delegate, removes inputs/outputs and releases the session (idempotent). Bridge `invalidate()` also tears the camera down. `capturePhoto()` is a stub that rejects `E_NOT_RUNNING` (A9, Phase 2).
 - A6 YOLO: `FLWebcamModel` loads `yolo11n(configuration:)` (`computeUnits = .all`) once, on a background queue when `start()` is first called (≈1.2 s); frames before it's ready are presence-only. Labels checked: 80 COCO labels, `'cell phone'` at index 67 (full list logged once in Debug). The NMS pipeline's `iouThreshold`/`confidenceThreshold` inputs are supplied via `VNCoreMLModel.featureProvider` (0.6 / 0.2).
 - A7 Harness webcam section (was built in A4): Start/Stop webcam with live readout (`present`, `phone`, `score`, samples/s over the last 5 s), 5× start/stop button; headless runners `A.webcam` (8 s summary), `A.webcamCycle`, and `A.webcamWatch` (20 s per-sample timeline `P/F/./f` + transition times, for the human checks below). Sample run: `{"timeline":"PPPPPPPPPPPPPPPPPPPP","samples":20,"perSec":1,"meanGapMs":994,"phoneCount":0}`.
+- A8 Robustness:
+  - Reject codes: `E_INVALID_ARG` (bad `maxWidth`/`jpegQuality`/`fps`/permission kind), `E_PERMISSION` (Screen Recording preflight false, `SCStreamError.userDeclined`, camera not authorized), `E_CAPTURE` (SCK/encode failure, no display), `E_CAMERA` (no camera, input/output failure, session didn't start, photo timeout).
+  - Display changes: `SCShareableContent` is fetched on every capture and falls back to the first display if `CGMainDisplayID()` is gone.
+  - `getActiveWindow` returns all-null + `isSelf:false` when there's no frontmost app.
+  - Webcam: `AVCaptureSessionRuntimeError` (camera taken/unplugged) → up to 3 restarts 0.5 s apart, then the camera is released (JS just stops getting samples). Bridge reload (`invalidate`) releases the camera: verified, ControlCenter logged `[:]` 15 ms after the reload while the webcam was running.
+- A9 `capturePhoto()` (Phase 2): one frame → in-memory JPEG (CoreImage, q 0.8) ≤ 1280 px wide. Camera idle: short-lived 720p session, skips 10 frames for exposure, 1.35 s, 1280×720, ~113 KB. While the 1 fps session runs: preset bumped to 720p, 5 frames skipped, 0.62 s, then the preset and analysis delegate are restored (3 samples arrived in the 2.5 s after). 4 s timeout → `E_CAMERA`. Camera released afterwards (ControlCenter `[:]`). Harness runner `A.photo` (sizes only).
+- A10 (camera preview view): **skipped**, cut item 2 and it would need a new contract component.
 
 ## Acceptance checklist
 
@@ -54,5 +61,7 @@
 
 - Harness runners (Metro 8082): `node scripts/js-eval.mjs 8082 "__FL.harness.A()"` (full suite: permissions, active-window timing, 3 captures if screen is granted, 5 s webcam run if camera is granted). Single checks: `A.perm`, `A.window10` (10 samples, 1 s apart), `A.capture`, `A.webcam` (8 s), `A.webcamCycle` (5× start/stop).
 - `FLScreenCapture.benchActiveWindow(n)` is an extra dev-only native method (not in the contract, not in the facade) used by the harness for native timing.
+- `webcam.capturePhoto()` works (A9); the JS countdown is the caller's job. It returns `{jpegBase64, width, height}` and must be treated like a screenshot (memory only).
+- If the camera fails mid-session (taken by another app/unplugged), samples simply stop. WS-C: a chunk with **zero** webcam samples should not be judged `away`.
 - Error codes: invalid args → `E_INVALID_ARG` (checked: `capture({maxWidth:0})`, `request('nope')`); no Screen Recording → `E_PERMISSION` (preflight before any SCK call, so no surprise prompt); other SCK/encode failures → `E_CAPTURE`.
 - Permissions on the demo Mac are granted for `com.focusline.app` (Screen Recording + Camera) as of 15:15.
