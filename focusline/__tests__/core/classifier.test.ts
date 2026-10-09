@@ -148,4 +148,21 @@ describe('classifier', () => {
     expect(no).toMatchObject({ studying: false, moduleId: null });
     expect(mockVerdictFromTitle('Finder', null, fixtureModules)).toMatchObject({ studying: false, activity: 'Finder' });
   });
+
+  it('privacy: never logs the snapshot or image data on any path', async () => {
+    const spies = (['log', 'warn', 'error', 'info', 'debug'] as const).map((k) => jest.spyOn(console, k).mockImplementation(() => {}));
+    try {
+      const s = setup();
+      await s.c.classifyCurrent(fixtureModules); // vlm
+      await s.c.classifyCurrent(fixtureModules); // cache
+      s.setWin({ windowTitle: 'Instagram' });
+      await s.c.classifyCurrent(fixtureModules); // rule
+      s.setWin({ windowTitle: 'x', isSelf: true });
+      await s.c.classifyCurrent(fixtureModules); // isSelf
+      const all = spies.flatMap((sp) => sp.mock.calls.flat().map((a) => (typeof a === 'string' ? a : JSON.stringify(a))));
+      expect(all.join('\n')).not.toContain('IMG');
+    } finally {
+      spies.forEach((sp) => sp.mockRestore());
+    }
+  });
 });
