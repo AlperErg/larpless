@@ -32,6 +32,9 @@ todos:
   - id: floating-timer
     content: Build always-on-top FloatingTimer via Document Picture-in-Picture (green/red status, current subject, timer) plus escalating distraction alerts
     status: pending
+  - id: pomodoro-sound
+    content: Add pomodoro.ts (presets, phaseEndsAt, break pauses analysis) and sound.ts (generated white/pink/brown noise, rain/cafe loops), wired into the PiP hover hub
+    status: pending
   - id: demo
     content: Add demoMode.ts replay fallback, polish motion and dark mode, rehearse demo script
     status: pending
@@ -182,6 +185,15 @@ A small window that stays on top of every app while the student works elsewhere.
 - It needs a user click to open. Request the PiP window first in the "Start session" click handler, then call `getDisplayMedia`. If that combined call fails, show a "Pop out timer" button on the Session page as a fallback.
 - When the session ends, call `pipWindow.close()`. Handle the `pagehide` event when the user closes it manually, and offer to reopen it.
 - Fallback for Safari and Firefox: draw the timer onto a canvas, `canvas.captureStream()` into a hidden `<video>`, and call `video.requestPictureInPicture()`. This is a stretch goal; the demo runs on Chrome.
+- **Hover hub.** A PiP window can only resize itself after a click (`pipWindow.resizeTo()` needs user activation; hover doesn't count). So:
+  - Open it at 300x170, big enough for the compact view and the hub.
+  - Compact view (default): timer, status pill, Pomodoro phase dots.
+  - On hover (`mouseenter` on the PiP body), a Framer Motion panel slides up over the timer within the same window:
+    - Row 1: Pomodoro play/pause, skip phase, preset chip (25/5, 50/10, custom).
+    - Row 2: sound chips (Off, White, Pink, Brown, Rain, Cafe), each a Notion-style tag, plus a volume slider.
+    - Row 3: Pause session, End session.
+  - `mouseleave` hides the panel after 600 ms, so it doesn't flicker when the mouse brushes past.
+  - Optional: an "Expand" button calls `pipWindow.resizeTo(360, 420)` on click for a fuller hub (today's breakdown bar, session log). Shrink back on the next click.
 
 ### 7. Distraction alerts ([src/lib/alerts.ts](focusline/src/lib/alerts.ts))
 
@@ -193,6 +205,23 @@ A small window that stays on top of every app while the student works elsewhere.
   - The alert resets as soon as a study chunk arrives. That return gets a small green "Back on track" flash.
 - No alerts for `away`. The timer just pauses and shows "Away".
 - A setting to turn sound on or off, and a "focus strictness" choice (2 / 5 / 10 min thresholds).
+- During Pomodoro breaks, no alerts fire (see section 8).
+
+### 8. Pomodoro ([src/lib/pomodoro.ts](focusline/src/lib/pomodoro.ts), part of `sessionStore`)
+
+- Presets: 25/5 (long break 15 after 4 rounds), 50/10, and custom. Pomodoro is optional; the session can also run as a free timer.
+- Store state: `pomodoro: { enabled, phase: "focus" | "break" | "longBreak", round, phaseEndsAt, preset }`. Use `phaseEndsAt` timestamps rather than counting ticks, so the timer stays accurate when Chrome throttles background tabs.
+- At each phase change: a system notification ("Break time - 5 min" / "Back to focus - round 3"), a chime, and the PiP tint turns blue for breaks.
+- **During breaks:** screen sampling and webcam checks pause, nothing is analysed, and break time is left out of the focus score and breakdown. This is a nice privacy line for the pitch: "On breaks, it stops looking."
+- Session totals count only focus time. Rounds completed go on the story card ("4 pomodoros").
+
+### 9. Ambient sound ([src/lib/sound.ts](focusline/src/lib/sound.ts))
+
+- One `AudioContext` in the main window. It keeps playing when the tab is in the background or the PiP window is focused.
+- **Generated noise, no files:** white, pink and brown noise made in code (a looping 2-second `AudioBuffer` filled with filtered random samples), feeding a `GainNode` for volume. Tiny, instant and works offline.
+- **Optional loops:** `public/sounds/rain.mp3` and `cafe.mp3` (CC0, under 1 MB each), played through `AudioBufferSourceNode` with `loop = true`.
+- Crossfade 400 ms when switching sounds. Fade to 30% volume during breaks, or play a different sound if the user picks one.
+- The selected sound and volume are saved in `localStorage`. The AudioContext starts on the first user click (the "Start session" button counts).
 
 ## Data
 
@@ -278,9 +307,9 @@ npx tailwindcss init -p   # then shadcn init
 
 | Person | Owns |
 |---|---|
-| 1 | `screenSampler.ts`, `ollama.ts`, the prompt, accuracy tests on 10 real screenshots in the first hour |
-| 2 | `webcamDetector.ts`, `chunkFuser.ts`, `focus.ts`, `alerts.ts` |
-| 3 | Design system, Sidebar, Session page, BreakdownBar, SerifTimer, motion, FloatingTimer (PiP) |
+| 1 | `screenSampler.ts`, `ollama.ts`, the prompt, accuracy tests on 10 real screenshots in the first hour, then `sound.ts` |
+| 2 | `webcamDetector.ts`, `chunkFuser.ts`, `focus.ts`, `alerts.ts`, `pomodoro.ts` |
+| 3 | Design system, Sidebar, Session page, BreakdownBar, SerifTimer, motion, FloatingTimer (PiP) and its hover hub |
 | 4 | Supabase schema and RLS, auth, Feed, Profile, Summary, StoryCard and export |
 | 5 | Notion Hackathon HQ, pitch deck, demo script, `demoMode.ts`, floater help and QA |
 
@@ -301,6 +330,21 @@ npx tailwindcss init -p   # then shadcn init
 4. Pick up your phone, and it's flagged as distracted (phone).
 5. End the session, relabel one chunk, take the live photo, post it, and it appears in a teammate's feed. Download the story card.
 6. Closing line: "Every frame was analysed on this laptop and deleted within seconds. Screenshots stored: 0. Only the post you chose to share left the device."
+
+## Cut order if behind schedule
+
+Drop from the top down:
+
+1. Rain and cafe loops (keep only the generated noise)
+2. The PiP "Expand" view
+3. Dark mode
+4. The `Cmd+K` palette
+5. Custom Pomodoro presets (keep 25/5)
+6. The Profile page
+7. Accepting friend requests (auto-accept)
+8. Chunk relabelling
+
+Never cut: the live Session page, the floating timer with green/red status, the privacy badge, the story card.
 
 ## Risks and fallbacks
 
