@@ -115,6 +115,10 @@ private struct FLShellCompactView: View {
               .foregroundColor(tag.text.opacity(0.7))
               .padding(.top, 6)
           }
+          if let remaining = model.pomodoroRemainingFraction(at: ctx.date) {
+            FLShellPomodoroRing(remaining: remaining, color: tag.text)
+              .padding(.top, 2)
+          }
         }
         FLShellStatusPill(text: pill, tag: tag)
           .padding(.top, 4)
@@ -165,6 +169,24 @@ private struct FLShellStatusPill: View {
     .padding(.vertical, 3)
     .background(Capsule().fill(Color.white.opacity(0.75)))
     .overlay(Capsule().strokeBorder(tag.text.opacity(0.18), lineWidth: 0.5))
+  }
+}
+
+/// Countdown ring for the current Pomodoro phase (full at the start, empty at the end).
+private struct FLShellPomodoroRing: View {
+  let remaining: Double
+  let color: Color
+
+  var body: some View {
+    ZStack {
+      Circle().stroke(color.opacity(0.18), lineWidth: 2.5)
+      Circle()
+        .trim(from: 0, to: remaining)
+        .stroke(color, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+        .rotationEffect(.degrees(-90))
+        .animation(.linear(duration: 1), value: remaining)
+    }
+    .frame(width: 20, height: 20)
   }
 }
 

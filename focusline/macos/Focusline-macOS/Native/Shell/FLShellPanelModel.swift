@@ -26,11 +26,40 @@ final class FLShellPanelModel: ObservableObject {
   private var hideHubWork: DispatchWorkItem?
   private var flashWork: DispatchWorkItem?
 
+  /// When the current Pomodoro phase started (epoch ms), for the countdown ring. PanelState only carries the
+  /// end time, so the start is inferred: a new phase starts now; an end-time shift within the same phase
+  /// (e.g. after a pause) keeps the phase length.
+  @Published private(set) var phaseStartMs: Double?
+
   func apply(_ next: FLShellPanelState) {
     let previous = state
     updateCount += 1
+    trackPhaseStart(previous: previous.pomodoro, next: next.pomodoro)
     if next != previous { state = next }
     if next.flash == "backOnTrack" && previous.flash != "backOnTrack" { triggerFlash() }
+  }
+
+  private func trackPhaseStart(previous: FLShellPanelPomodoro?, next: FLShellPanelPomodoro?) {
+    guard let next else {
+      if phaseStartMs != nil { phaseStartMs = nil }
+      return
+    }
+    let nowMs = Date().timeIntervalSince1970 * 1000
+    if let previous, let start = phaseStartMs, previous.phase == next.phase, previous.round == next.round {
+      if previous.phaseEndsAtMs != next.phaseEndsAtMs {
+        phaseStartMs = next.phaseEndsAtMs - (previous.phaseEndsAtMs - start)
+      }
+    } else {
+      phaseStartMs = min(nowMs, next.phaseEndsAtMs)
+    }
+  }
+
+  /// Fraction of the current Pomodoro phase still left (1 → 0), or nil without a Pomodoro.
+  func pomodoroRemainingFraction(at date: Date) -> Double? {
+    guard let p = state.pomodoro, let start = phaseStartMs else { return nil }
+    let total = p.phaseEndsAtMs - start
+    guard total > 0 else { return 0 }
+    return min(1, max(0, (p.phaseEndsAtMs - date.timeIntervalSince1970 * 1000) / total))
   }
 
   func triggerFlash() {
@@ -49,11 +78,11 @@ final class FLShellPanelModel: ObservableObject {
     hovering = on
     hideHubWork?.cancel()
     if on {
-      if !hubVisible { withAnimation(.easeOut(duration: 0.2)) { hubVisible = true } }
+      if !hubVisible { withAnimation(.spring(response: 0.3, dampingFraction: 0.86)) { hubVisible = true } }
     } else {
       let work = DispatchWorkItem { [weak self] in
         guard let self, !self.hovering else { return }
-        withAnimation(.easeOut(duration: 0.2)) { self.hubVisible = false }
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.95)) { self.hubVisible = false }
       }
       hideHubWork = work
       DispatchQueue.main.asyncAfter(deadline: .now() + 0.6, execute: work)

@@ -40,6 +40,8 @@ final class FLShellPanelController {
   private var trackingArea: NSTrackingArea?
   private var moveObserver: NSObjectProtocol?
   private(set) var userMoved = false
+  /// While a headless check forces the hub open, real mouse enter/exit events are ignored.
+  private var debugHoverForced = false
   private var programmaticMove = false
   private var dragStartMouse: NSPoint?
   private var dragStartOrigin: NSPoint?
@@ -77,7 +79,10 @@ final class FLShellPanelController {
 
     let tracker = FLShellHoverTracker()
     tracker.onChange = { [weak self] on in
-      MainActor.assumeIsolated { self?.model.setHovering(on) }
+      MainActor.assumeIsolated {
+        guard let self, !self.debugHoverForced else { return }
+        self.model.setHovering(on)
+      }
     }
     let area = NSTrackingArea(rect: .zero,
                               options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
@@ -157,6 +162,11 @@ final class FLShellPanelController {
 
   // MARK: Debug (headless verification)
 
+  func debugSetHover(_ on: Bool) {
+    debugHoverForced = on
+    model.setHovering(on)
+  }
+
   func debugInfo() -> [String: Any] {
     let now = Date()
     let s = model.state
@@ -171,6 +181,7 @@ final class FLShellPanelController {
         "pill": s.pillText(at: now),
         "secondary": s.secondaryText.map { $0 as Any } ?? NSNull(),
         "footer": s.pomodoroFooterText(at: now).map { $0 as Any } ?? NSNull(),
+        "pomodoroRemainingFrac": model.pomodoroRemainingFraction(at: now).map { $0 as Any } ?? NSNull(),
       ],
       "rendered": [
         "timer": model.lastRenderedTimer,
