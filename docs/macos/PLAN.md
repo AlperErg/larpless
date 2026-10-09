@@ -29,7 +29,7 @@
   - If the Xcode 27 build is still broken after 20 minutes, switch to **0.83.x**.
 - **Phase 0 findings (2026-10-09):**
   - **Versions:** react-native **0.81.6** + react-native-macos **0.81.9**.
-  - **Architecture:** the macOS Podfile only enables Fabric when `RCT_NEW_ARCH_ENABLED=1`, so we run the **legacy architecture (bridge)** by default. That's the best fit for our `RCT_EXTERN_MODULE` modules.
+  - **Architecture:** despite the Podfile's `fabric_enabled` flag, the app runs **Fabric + bridgeless** at runtime (checked by WS-D: `nativeFabricUIManager` and `RN$Bridgeless` are both present). Legacy `RCT_EXTERN_MODULE` modules and events work through the interop layer (checked by WS-A and WS-B).
   - **CocoaPods:** needs `LANG=en_US.UTF-8` (it crashes with an ASCII locale).
   - **Project format:** the Xcode project was upgraded to objectVersion 77 for the synchronized `Native/` folder, and it survives `pod install`.
   - **Xcode 27:** needs a pod deployment target ≥ 12, so the Podfile `post_install` forces 14.0.

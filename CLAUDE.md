@@ -44,7 +44,7 @@ Read these before doing anything:
 - Swift 5 language mode, macOS 14.0 deployment target. Do UI and AppKit work on the main thread (`DispatchQueue.main`), and capture and vision work on private serial queues.
 - Native code lives in `focusline/macos/Focusline-macOS/Native/{Shared,Capture,Shell,Social}/`. This is an Xcode **synchronized folder**: just add files there and never edit `project.pbxproj`.
   - Every file in it joins the app target, and resources are **flattened** into `Contents/Resources/`. So every Swift type name and every resource file name must be unique across all subfolders: prefix them (`FLCapture…`, `FLShell…`). Never add `.gitkeep`, `README.md` or other generic file names there.
-- The app runs on the **legacy architecture (bridge)**, which is the react-native-macos default here. Don't enable `RCT_NEW_ARCH_ENABLED`.
+- The app actually runs **Fabric + bridgeless** (New Architecture), as verified by WS-D. Our legacy-style `RCT_EXTERN_MODULE` modules work through the interop layer (verified by WS-A and WS-B). On Fabric, native-driver `Animated` values aren't committed back to the shadow tree, so use JS-driven animations (`useNativeDriver: false`) where layout matters. Don't change the architecture flags.
 - Run `pod install` with a UTF-8 locale (`export LANG=en_US.UTF-8`). You only need it after native dependency changes, not for new Swift files.
 - Promise rejections use codes `E_PERMISSION`, `E_CAPTURE`, `E_CAMERA`, `E_NOT_RUNNING`, `E_INVALID_ARG`.
 
