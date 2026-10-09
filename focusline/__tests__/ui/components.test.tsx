@@ -130,10 +130,15 @@ describe('UI primitives', () => {
     const label = () =>
       r.root.findAll((n) => n.props.testID === 'timer' && n.props.accessibilityLabel != null)[0].props.accessibilityLabel;
     expect(label()).toBe('0:01:05');
+    expect(textOf(r)).toContain('0:01:05');
     act(() => {
       jest.advanceTimersByTime(2000);
     });
     expect(label()).toBe('0:01:07');
+    // Digits 4–9 must be in the rendered string (the old per-digit columns clipped them).
+    const late = render(<SerifTimer timer={{ baseS: 4 * 3600 + 59 * 60 + 48, runningSinceMs: null }} />);
+    expect(textOf(late)).toContain('4:59:48');
+    act(() => late.unmount());
     act(() => r.unmount());
   });
 
