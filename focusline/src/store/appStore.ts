@@ -1,6 +1,10 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { DEFAULT_SETTINGS } from '../config';
+import type { SessionSummary } from '../contracts/domain';
 import type { AppDataState, AppStore } from '../contracts/store';
+import { createDb } from '../core/db';
+import type { KeyValue } from '../core/db';
 
 export const initialAppState: AppDataState = {
   loaded: false,
@@ -9,23 +13,40 @@ export const initialAppState: AppDataState = {
   sessions: [],
 };
 
-const notImplemented = (name: string) => console.log(`[appStore] ${name} (not implemented)`);
+/** The app's db: core/db over AsyncStorage (injected here, never imported by core). Labels only. */
+export const appDb = createDb(AsyncStorage as unknown as KeyValue);
 
-// Phase 0: initial state + no-op actions. WS-C implements them on top of core/db.
-export const useAppStore = create<AppStore>()((set) => ({
+export const useAppStore = create<AppStore>()((set, get) => ({
   ...initialAppState,
+
   load: async () => {
-    notImplemented('load');
-    set({ loaded: true });
+    try {
+      const [modules, settings, sessions] = await Promise.all([appDb.loadModules(), appDb.loadSettings(), appDb.listSessions()]);
+      // No modules yet → onboarding isn't finished, whatever was stored.
+      set({ loaded: true, modules, sessions, settings: modules.length ? settings : { ...settings, onboarded: false } });
+    } catch {
+      console.warn('[appStore] load failed, using defaults');
+      set({ loaded: true });
+    }
   },
-  saveModules: async () => {
-    notImplemented('saveModules');
+
+  saveModules: async (modules) => {
+    set({ modules });
+    await appDb.saveModules(modules);
   },
-  updateSettings: async () => {
-    notImplemented('updateSettings');
+
+  updateSettings: async (patch) => {
+    const settings = { ...get().settings, ...patch };
+    set({ settings });
+    await appDb.saveSettings(settings);
   },
-  getChunks: async () => {
-    notImplemented('getChunks');
-    return [];
-  },
+
+  getChunks: (sessionId) => appDb.getChunks(sessionId),
 }));
+
+/** Insert or replace a saved summary in the in-memory list (newest first). Used by the session store. */
+export function upsertSessionSummary(summary: SessionSummary): void {
+  const sessions = [summary, ...useAppStore.getState().sessions.filter((s) => s.id !== summary.id)];
+  sessions.sort((a, b) => b.startedAt - a.startedAt);
+  useAppStore.setState({ sessions });
+}

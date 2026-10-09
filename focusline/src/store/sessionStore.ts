@@ -1,6 +1,13 @@
 import { create } from 'zustand';
-import { DEFAULT_SETTINGS } from '../config';
+import { config, DEFAULT_SETTINGS } from '../config';
 import type { SessionStore, SessionStoreState } from '../contracts/store';
+import { createClassifier } from '../core/classifier';
+import { createOllama } from '../core/ollama';
+import { createSessionController } from '../core/sessionController';
+import type { SessionController } from '../core/sessionController';
+import { fixtureChunks } from '../fixtures/data';
+import { native } from '../native';
+import { appDb, upsertSessionSummary, useAppStore } from './appStore';
 
 export const initialSessionState: SessionStoreState = {
   status: 'idle',
@@ -17,40 +24,46 @@ export const initialSessionState: SessionStoreState = {
   lastSummary: null,
 };
 
-const notImplemented = (name: string) => console.log(`[sessionStore] ${name} (not implemented)`);
+const settings = () => useAppStore.getState().settings;
 
-// Phase 0: initial state + no-op actions. WS-C wires these to core/sessionController.
+let controller: SessionController | null = null;
+
+/** The session controller behind the store actions (created on first use). */
+export function getSessionController(): SessionController {
+  if (!controller) {
+    const ollama = createOllama({
+      baseUrl: () => settings().ollamaUrl,
+      model: () => settings().model,
+      timeoutMs: config.CLASSIFY_TIMEOUT_MS,
+    });
+    const classifier = createClassifier({ native, ollama, now: Date.now, config });
+    controller = createSessionController({
+      native,
+      db: appDb,
+      store: useSessionStore,
+      getModules: () => useAppStore.getState().modules,
+      getSettings: settings,
+      classifier,
+      ollama,
+      now: Date.now,
+      config,
+      onSessionSaved: upsertSessionSummary,
+      demoChunks: fixtureChunks,
+    });
+  }
+  return controller;
+}
+
 export const useSessionStore = create<SessionStore>()(() => ({
   ...initialSessionState,
-  start: async () => {
-    notImplemented('start');
-  },
-  pause: () => {
-    notImplemented('pause');
-  },
-  resume: () => {
-    notImplemented('resume');
-  },
-  end: async () => {
-    notImplemented('end');
-    return null;
-  },
-  relabelChunk: async () => {
-    notImplemented('relabelChunk');
-  },
-  setSound: () => {
-    notImplemented('setSound');
-  },
-  setVolume: () => {
-    notImplemented('setVolume');
-  },
-  togglePomodoro: () => {
-    notImplemented('togglePomodoro');
-  },
-  skipPomodoroPhase: () => {
-    notImplemented('skipPomodoroPhase');
-  },
-  refreshOllama: async () => {
-    notImplemented('refreshOllama');
-  },
+  start: (opts) => getSessionController().start(opts),
+  pause: () => getSessionController().pause(),
+  resume: () => getSessionController().resume(),
+  end: () => getSessionController().end(),
+  relabelChunk: (chunkId, patch) => getSessionController().relabelChunk(chunkId, patch),
+  setSound: (id) => getSessionController().setSound(id),
+  setVolume: (v) => getSessionController().setVolume(v),
+  togglePomodoro: () => getSessionController().togglePomodoro(),
+  skipPomodoroPhase: () => getSessionController().skipPomodoroPhase(),
+  refreshOllama: () => getSessionController().refreshOllama(),
 }));
