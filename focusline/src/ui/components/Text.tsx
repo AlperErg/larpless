@@ -69,7 +69,18 @@ export function Text({
   );
 }
 
+/** Inline bold run inside a <Text>; inherits size and colour from its parent. */
+export function Strong({ children, color }: { children?: ReactNode; color?: string }) {
+  return <RNText style={[styles.strong, color ? { color } : null]}>{children}</RNText>;
+}
+
+/** Inline muted run inside a <Text>. */
+export function Muted({ children }: { children?: ReactNode }) {
+  return <RNText style={styles.muted}>{children}</RNText>;
+}
+
 const styles = StyleSheet.create({
+  strong: { fontFamily: fonts.semibold },
   title: { fontFamily: fonts.serif, fontSize: 40, lineHeight: 48, color: colors.text },
   h2: { fontFamily: fonts.semibold, fontSize: 20, lineHeight: 28, color: colors.text },
   h3: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 22, color: colors.text },

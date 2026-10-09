@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Animated, Easing, StyleSheet, Text as RNText, View } from 'react-native';
 import type { TagColor } from '../../contracts/domain';
+import { useGutter } from '../lib/hooks';
 import { colors, layout, motion, space, tag } from '../theme';
 import { Text } from './Text';
 
@@ -21,6 +22,7 @@ export function PageHeader({ icon, title, cover, subtitle, right, testID }: Page
   const target = cover ? tag[cover].bg : colors.sidebar;
   const [layers, setLayers] = useState({ under: target, over: target });
   const fade = useRef(new Animated.Value(1)).current;
+  const gutter = useGutter();
 
   useEffect(() => {
     if (target === layers.over) return;
@@ -40,7 +42,7 @@ export function PageHeader({ icon, title, cover, subtitle, right, testID }: Page
       <View style={[styles.cover, { backgroundColor: layers.under }]}>
         <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: layers.over, opacity: fade }]} />
       </View>
-      <View style={styles.column}>
+      <View style={[styles.column, { paddingHorizontal: gutter }]}>
         <RNText style={styles.icon}>{icon}</RNText>
         <View style={styles.titleRow}>
           <Text variant="title" style={styles.title} numberOfLines={2}>
@@ -60,7 +62,6 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: layout.contentMaxWidth,
     alignSelf: 'center',
-    paddingHorizontal: layout.contentPadding,
   },
   icon: { fontSize: 48, lineHeight: 64, height: 64, marginTop: -34, alignSelf: 'flex-start' },
   titleRow: { flexDirection: 'row', alignItems: 'flex-end', marginTop: space.xs },

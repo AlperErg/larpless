@@ -1,4 +1,4 @@
-export { Text } from './Text';
+export { Text, Strong, Muted } from './Text';
 export type { TextProps, TextVariant, TextWeight } from './Text';
 export { Tag } from './Tag';
 export { Button } from './Button';
