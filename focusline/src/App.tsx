@@ -65,6 +65,11 @@ function useBootRouting(): boolean {
       .load()
       .catch((e: unknown) => console.warn('[ui] load failed:', e instanceof Error ? e.message : String(e)))
       .finally(() => {
+        // Health-check Ollama once settings (model/url) are loaded; the sidebar shows the result.
+        useSessionStore
+          .getState()
+          .refreshOllama()
+          .catch((e: unknown) => console.warn('[ui] refreshOllama failed:', e instanceof Error ? e.message : String(e)));
         if (!alive) return;
         const { settings } = useAppStore.getState();
         const nav = useNavStore.getState();
