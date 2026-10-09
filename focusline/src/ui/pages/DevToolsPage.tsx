@@ -17,7 +17,7 @@ import { useNavStore } from '../../store/navStore';
 import type { Route } from '../../store/navStore';
 import { useSessionStore } from '../../store/sessionStore';
 import { Button, Callout, Strong, Text } from '../components';
-import { uiLabel, uiMeasure, uiOverflow, uiStyle, uiText } from '../dev/introspect';
+import { uiLabel, uiMeasure, uiOverflow, uiPress, uiStyle, uiText, uiType } from '../dev/introspect';
 import { caughtErrors } from '../layout/ErrorBoundary';
 import { useViewport } from '../lib/viewport';
 import { Page } from '../layout/Page';
@@ -119,6 +119,8 @@ export function installUiIntrospection(): void {
     measure: uiMeasure,
     overflow: uiOverflow,
     style: uiStyle,
+    press: uiPress,
+    type: uiType,
     /** Pin the root to w×h (dev layout checks); call with no args to reset. */
     viewport: (w?: number, h?: number) => {
       useViewport.getState().setEmulate(w && h ? { w, h } : null);

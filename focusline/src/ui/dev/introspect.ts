@@ -171,3 +171,32 @@ export function uiStyle(testID: string): Record<string, unknown> | null {
   }
   return out;
 }
+
+/** Call the onPress of the first visible element with this testID (dev flow checks). `alt` simulates ⌥-click. */
+export function uiPress(testID: string, alt = false): boolean {
+  const f = findByTestID(testID);
+  const p = f?.memoizedProps as { onPress?: (e: unknown) => void } | undefined;
+  if (!p || typeof p.onPress !== 'function') return false;
+  p.onPress({ nativeEvent: { altKey: alt } });
+  return true;
+}
+
+/** Call the onChangeText of the n-th visible element with this testID. */
+export function uiType(testID: string, text: string, index = 0): boolean {
+  const hits: Fiber[] = [];
+  for (const r of roots()) {
+    walk(r, (f) => {
+      if (isHidden(f)) return false;
+      const p = f.memoizedProps as { testID?: string; onChangeText?: unknown } | null;
+      if (p && typeof p === 'object' && p.testID === testID && typeof p.onChangeText === 'function') {
+        hits.push(f);
+        return false;
+      }
+      return true;
+    });
+  }
+  const p = hits[index]?.memoizedProps as { onChangeText?: (t: string) => void } | undefined;
+  if (!p?.onChangeText) return false;
+  p.onChangeText(text);
+  return true;
+}
