@@ -13,22 +13,26 @@ export interface BreakdownBarProps {
   /** Add the duration next to the % in the legend. */
   legendTime?: boolean;
   height?: number;
+  /** Legend only (no bar). */
+  hideBar?: boolean;
   testID?: string;
   style?: StyleProp<ViewStyle>;
 }
 
 /** Horizontal stacked bar of tag-coloured segments; widths spring when the data changes. */
-export function BreakdownBar({ entries, legend, legendTime, height = 10, testID, style }: BreakdownBarProps) {
+export function BreakdownBar({ entries, legend, legendTime, height = 10, hideBar, testID, style }: BreakdownBarProps) {
   const visible = entries.filter((e) => e.pct > 0);
   return (
     <View testID={testID} style={style}>
-      <View style={[styles.track, { height, borderRadius: Math.min(4, height / 2) }]}>
-        {visible.map((e, i) => (
-          <Segment key={e.key} entry={e} last={i === visible.length - 1} />
-        ))}
-      </View>
+      {hideBar ? null : (
+        <View style={[styles.track, { height, borderRadius: Math.min(4, height / 2) }]}>
+          {visible.map((e, i) => (
+            <Segment key={e.key} entry={e} last={i === visible.length - 1} />
+          ))}
+        </View>
+      )}
       {legend && visible.length > 0 ? (
-        <View style={styles.legend}>
+        <View style={[styles.legend, hideBar ? styles.legendOnly : null]}>
           {visible.map((e) => (
             <Tag
               key={e.key}
@@ -76,5 +80,6 @@ const styles = StyleSheet.create({
   segment: { height: '100%' },
   separator: { borderRightWidth: 2, borderRightColor: colors.bg },
   legend: { flexDirection: 'row', flexWrap: 'wrap', marginTop: space.sm },
+  legendOnly: { marginTop: 0 },
   legendTag: { marginRight: space.xs + 2, marginBottom: space.xs },
 });
