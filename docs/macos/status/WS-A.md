@@ -2,13 +2,14 @@
 
 > Updated by the WS-A agent after every task. The orchestrator reads this at each checkpoint.
 
-**Current:** A1–A3 done, A4 next · **Sprint:** 1 · **Last commit:** WS-A: A2+A3 FLScreenCapture
+**Current:** Sprint 1 done (A1–A4), A5 next · **Sprint:** 2 · **Last commit:** WS-A: A4 HarnessA
 
 ## Done
 
 - A1 FLPermissions: `status` / `request` / `openSettings` / `relaunch` (`Native/Capture/FLPermissions.swift` + `.m`), plus `FLCaptureLog` (public `Logger` helper, see Deviations).
 - A2 `FLScreenCapture.getActiveWindow()`: `NSWorkspace.frontmostApplication` + first named layer-0 window of that pid from `CGWindowListCopyWindowInfo`. Native 0.3 ms avg / 2.6 ms max (50 runs), JS round trip 0.5 ms avg.
 - A3 `FLScreenCapture.capture()`: ScreenCaptureKit `SCScreenshotManager.captureImage`, main display, own app excluded, no cursor, in-memory JPEG (ImageIO) → base64. 1280×831, ~250 KB, cold 81 ms, warm ~25 ms.
+- A4 `src/dev/HarnessA.tsx`: buttons for permissions (status/request/settings/relaunch), active window ×10 over 10 s, Capture (320 px preview, cleared on next press), webcam start/stop + live readout, 5× start/stop. Calls the real facades (`src/native/{screen,permissions,webcam}`) directly and shows a warning while `USE_MOCK_NATIVE` is true. Headless runners registered: `A`, `A.perm`, `A.window10`, `A.capture`, `A.webcam`, `A.webcamCycle` (results carry sizes/counts/timings only).
 
 ## Acceptance checklist
 
@@ -40,5 +41,7 @@
 
 ## Notes for integration
 
-- Harness runners (Metro 8082): `node scripts/js-eval.mjs 8082 "__FL.harness.A()"` (full suite), `"__FL.harness['A.perm']()"`.
+- Harness runners (Metro 8082): `node scripts/js-eval.mjs 8082 "__FL.harness.A()"` (full suite: permissions, active-window timing, 3 captures if screen is granted, 5 s webcam run if camera is granted). Single checks: `A.perm`, `A.window10` (10 samples, 1 s apart), `A.capture`, `A.webcam` (8 s), `A.webcamCycle` (5× start/stop).
+- `FLScreenCapture.benchActiveWindow(n)` is an extra dev-only native method (not in the contract, not in the facade) used by the harness for native timing.
+- Error codes: invalid args → `E_INVALID_ARG` (checked: `capture({maxWidth:0})`, `request('nope')`); no Screen Recording → `E_PERMISSION` (preflight before any SCK call, so no surprise prompt); other SCK/encode failures → `E_CAPTURE`.
 - Permissions on the demo Mac are granted for `com.focusline.app` (Screen Recording + Camera) as of 15:15.
