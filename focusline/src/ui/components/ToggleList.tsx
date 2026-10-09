@@ -60,6 +60,10 @@ export function ToggleRow({ item, open, onToggle }: { item: ToggleItem; open: bo
         useNativeDriver: false,
       }).start();
     }
+    return () => {
+      rot.stopAnimation();
+      fade.stopAnimation();
+    };
   }, [open, rot, fade]);
 
   const rotate = rot.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '90deg'] });

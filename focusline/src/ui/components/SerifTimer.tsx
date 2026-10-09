@@ -93,6 +93,7 @@ function RollingDigit({ slot, digit, size, line, color }: { slot: number; digit:
     } else {
       Animated.timing(pos, { ...cfg, toValue: digit }).start();
     }
+    return () => pos.stopAnimation();
   }, [digit, pos]);
 
   // Memoised so re-renders (every second) reuse the same animated node.

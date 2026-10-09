@@ -22,6 +22,7 @@ export function AppLayout({ route, children }: AppLayoutProps) {
       easing: Easing.out(Easing.cubic),
       useNativeDriver: false,
     }).start();
+    return () => t.stopAnimation();
   }, [route, t]);
   const translateY = useMemo(() => t.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }), [t]);
   return (

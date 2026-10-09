@@ -26,6 +26,7 @@ export function OnboardingPage() {
   useEffect(() => {
     fade.setValue(0);
     Animated.timing(fade, { toValue: 1, duration: motion.base, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+    return () => fade.stopAnimation();
   }, [step, fade]);
   const translateY = useMemo(() => fade.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }), [fade]);
 

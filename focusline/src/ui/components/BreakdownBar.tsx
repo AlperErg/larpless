@@ -56,6 +56,7 @@ function Segment({ entry, last }: { entry: BreakdownEntry; last: boolean }) {
       friction: 9,
       tension: 60,
     }).start();
+    return () => w.stopAnimation();
   }, [entry.pct, w]);
   const width = w.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'], extrapolate: 'clamp' });
   return (

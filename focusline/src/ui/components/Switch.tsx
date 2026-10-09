@@ -25,6 +25,7 @@ export function Switch({ value, onChange, disabled, testID, accessibilityLabel }
       easing: Easing.out(Easing.quad),
       useNativeDriver: false,
     }).start();
+    return () => t.stopAnimation();
   }, [value, t]);
   const translateX = t.interpolate({ inputRange: [0, 1], outputRange: [2, W - KNOB - 2] });
   return (

@@ -35,6 +35,7 @@ export function PageHeader({ icon, title, cover, subtitle, right, testID }: Page
       easing: Easing.out(Easing.quad),
       useNativeDriver: false,
     }).start();
+    return () => fade.stopAnimation();
   }, [target]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
