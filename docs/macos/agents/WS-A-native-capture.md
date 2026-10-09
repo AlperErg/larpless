@@ -10,9 +10,9 @@ xcodebuild -workspace macos/Focusline.xcworkspace -scheme Focusline-macOS build
 
 ## You own
 
-- `focusline/macos/Focusline-macOS/Native/Capture/**` (Swift, `.m` extern files, `Models/`)
-- `focusline/src/native/screen.ts`, `permissions.ts`, `webcam.ts` (Phase 0 wrote them; you fix them as needed)
-- `focusline/src/dev/HarnessA.tsx` (your manual test screen; Phase 0 `App.tsx` has a "Harness A" tab)
+- `larpless/macos/Focusline-macOS/Native/Capture/**` (Swift, `.m` extern files, `Models/`)
+- `larpless/src/native/screen.ts`, `permissions.ts`, `webcam.ts` (Phase 0 wrote them; you fix them as needed)
+- `larpless/src/dev/HarnessA.tsx` (your manual test screen; Phase 0 `App.tsx` has a "Harness A" tab)
 - `docs/macos/status/WS-A.md`
 
 Contracts: `ScreenCaptureApi`, `PermissionsApi` and `WebcamApi` in [CONTRACTS.md §2](../CONTRACTS.md). Swift/JS conventions: CONTRACTS.md §7.
@@ -65,7 +65,7 @@ Contracts: `ScreenCaptureApi`, `PermissionsApi` and `WebcamApi` in [CONTRACTS.md
 **Sprint 1 acceptance:**
 - [ ] Permissions show the right status. After granting + `relaunch()`, screen shows `granted`.
 - [ ] With Safari in front: `appName: "Safari"` and the page title. With Preview: the PDF name.
-- [ ] `capture` returns a JPEG ~1280 px wide in < 300 ms (warm), with no Focusline windows in the image.
+- [ ] `capture` returns a JPEG ~1280 px wide in < 300 ms (warm), with no LarpLess windows in the image.
 - [ ] No files are created during capture. Check with `sudo fs_usage -w -f filesys <pid> | grep -i -E 'jpe?g|png|tmp'` for 30 s, or a `find` with `-newer`.
 
 ### Sprint 2 (3:30–4:00)

@@ -1,8 +1,8 @@
-# Focusline macOS: interface contracts
+# LarpLess macOS: interface contracts
 
-**Frozen after Phase 0.** In Phase 0 the orchestrator copies the code blocks below verbatim into `focusline/src/...`. After that, only the orchestrator changes them. To request a change, add it under "Requests" in your `docs/macos/status/WS-X.md`.
+**Frozen after Phase 0.** In Phase 0 the orchestrator copies the code blocks below verbatim into `larpless/src/...`. After that, only the orchestrator changes them. To request a change, add it under "Requests" in your `docs/macos/status/WS-X.md`.
 
-All paths are relative to `focusline/`.
+All paths are relative to `larpless/`.
 
 ---
 
@@ -108,7 +108,7 @@ export interface ActiveWindow {
   appName: string | null;      // "Safari"
   bundleId: string | null;     // "com.apple.Safari"
   windowTitle: string | null;  // null when Screen Recording is not granted
-  isSelf: boolean;             // Focusline is frontmost
+  isSelf: boolean;             // LarpLess is frontmost
 }
 export interface CaptureOptions { maxWidth: number; jpegQuality: number } // 1280, 0.7
 export interface ScreenSnapshot extends ActiveWindow {
@@ -119,7 +119,7 @@ export interface ScreenSnapshot extends ActiveWindow {
 }
 export interface ScreenCaptureApi {
   getActiveWindow(): Promise<ActiveWindow>;
-  /** Main display, Focusline's own windows excluded, no cursor. Rejects E_PERMISSION / E_CAPTURE. */
+  /** Main display, LarpLess's own windows excluded, no cursor. Rejects E_PERMISSION / E_CAPTURE. */
   capture(opts: CaptureOptions): Promise<ScreenSnapshot>;
 }
 
@@ -442,7 +442,7 @@ RCT_EXTERN_METHOD(ping:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectB
 
 **Payloads:** numbers are `Double` (epoch ms), strings, bools, and nested `NSDictionary`. Return JS `null` as `NSNull()`.
 
-The bridging header `Native/Shared/Focusline-Bridging-Header.h` imports `<React/RCTBridgeModule.h>`, `<React/RCTEventEmitter.h>` and `<React/RCTUtils.h>`.
+The bridging header `Native/Shared/LarpLess-Bridging-Header.h` imports `<React/RCTBridgeModule.h>`, `<React/RCTEventEmitter.h>` and `<React/RCTUtils.h>`.
 
 ## 8. AsyncStorage keys (labels only, never images)
 

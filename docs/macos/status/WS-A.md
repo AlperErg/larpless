@@ -28,11 +28,11 @@
   - Before: `{"screen":"notDetermined","camera":"notDetermined"}`. `request('screen')` and `request('camera')` were each called once; the human granted both. `relaunch()` (via `__FL.NativeModules.FLPermissions.relaunch()`) started a new instance and quit the old one (one process afterwards); the new instance reports `{"screen":"granted","camera":"granted"}`.
 - [~] With Safari in front: `appName: "Safari"` and the page title. With Preview: the PDF name.
   - Verified generically: with the Claude app in front → `{"appName":"Claude","bundleId":"com.anthropic.claudefordesktop","title":"Claude","isSelf":false}`; titles are read once Screen Recording is granted. I did not steal focus to bring Safari/Preview forward on the shared machine. **Human check:** run `node scripts/js-eval.mjs 8082 "__FL.harness['A.window10']()"` and switch to Safari, then Preview, during the 10 s.
-- [x] `capture` returns a JPEG ~1280 px wide in < 300 ms (warm), with no Focusline windows in the image.
+- [x] `capture` returns a JPEG ~1280 px wide in < 300 ms (warm), with no LarpLess windows in the image.
   - 1280×831 (display 1512×982 pt), ~250 KB JPEG at q 0.7. Native: cold 80 ms (content 16 + shot 61 + encode 4), warm 24–25 ms. JS round trip warm ~25 ms.
-  - Own app excluded: the native log shows `excludedApps=1` (Focusline's `SCRunningApplication` found and passed to `SCContentFilter(display:excludingApplications:)`). I can't view the image headlessly (and must not write it to disk), so a visual check of the preview in Harness A → Capture is left to the human.
+  - Own app excluded: the native log shows `excludedApps=1` (LarpLess's `SCRunningApplication` found and passed to `SCContentFilter(display:excludingApplications:)`). I can't view the image headlessly (and must not write it to disk), so a visual check of the preview in Harness A → Capture is left to the human.
 - [x] No files are created during capture.
-  - `touch marker` → 9 captures → `find ~/Library -newer marker -type f | grep -iE 'focusline|\.jpe?g$|\.heic$'` empty; `find` on Caches/Containers/Application Support/HTTPStorages/Group Containers/`$TMPDIR`/`/tmp`/`/private/var/tmp` for `focusline|jpe?g|png|heic` empty; `lsof -p <pid>` shows no image/tmp files open for writing. (`sudo fs_usage` not available headlessly.)
+  - `touch marker` → 9 captures → `find ~/Library -newer marker -type f | grep -iE 'larpless|\.jpe?g$|\.heic$'` empty; `find` on Caches/Containers/Application Support/HTTPStorages/Group Containers/`$TMPDIR`/`/tmp`/`/private/var/tmp` for `larpless|jpe?g|png|heic` empty; `lsof -p <pid>` shows no image/tmp files open for writing. (`sudo fs_usage` not available headlessly.)
 
 ### Sprint 2
 - [~] Sitting in front of the camera → `personPresent:true`. Leaving the frame → false within 2 s.
@@ -46,7 +46,7 @@
 
 ## Deviations from the plan
 
-- **Native logging:** `NSLog` lines appear as `<private>` in `log show`, so Capture code logs through `FLCaptureLog.log(...)` (an `os.Logger`, subsystem `com.focusline.app`, category `capture`, public interpolation, `notice` level). Lines still start with `[FLxxx]`, so `log show --last 3m --style compact --predicate 'process == "Focusline" AND eventMessage CONTAINS "[FL"'` finds them. Only sizes/counts/timings are logged. (Note for CLAUDE.md: the same `<private>` problem applies to every agent using `NSLog`.)
+- **Native logging:** `NSLog` lines appear as `<private>` in `log show`, so Capture code logs through `FLCaptureLog.log(...)` (an `os.Logger`, subsystem `com.larpless.app`, category `capture`, public interpolation, `notice` level). Lines still start with `[FLxxx]`, so `log show --last 3m --style compact --predicate 'process == "LarpLess" AND eventMessage CONTAINS "[FL"'` finds them. Only sizes/counts/timings are logged. (Note for CLAUDE.md: the same `<private>` problem applies to every agent using `NSLog`.)
 - **Camera choice:** `FLWebcam` prefers the built-in camera (`.builtInWideAngleCamera`) and only falls back to `AVCaptureDevice.default(for: .video)`. This Mac also exposes a Continuity Camera (iPhone); using the phone as the webcam would defeat phone detection.
 - **Presence fallback:** besides `VNDetectHumanRectanglesRequest(upperBodyOnly)` > 0.5, a YOLO `person` detection > 0.5 also counts as present (helps when the upper-body detector misses at odd angles). Absence still needs both to miss.
 - **YOLO crop:** `imageCropAndScaleOption = .scaleFit` (letterbox, matches YOLO training) rather than stretching 4:3 → 1:1.
@@ -61,7 +61,7 @@
 - **NEEDS HUMAN (not permission-related, ~1 min, app is running on Metro 8082):**
   1. Run `node scripts/js-eval.mjs 8082 "__FL.harness['A.webcamWatch']()"` (20 s): sit in frame ~5 s, step out ~5 s, come back, then hold a phone up ~5 s. Expect a timeline like `PPPPP.....PPPPFFFFF` and `maxPhoneScore` > 0.4.
   2. Run `node scripts/js-eval.mjs 8082 "__FL.harness['A.window10']()"` and switch to Safari, then to Preview with a PDF: expect `appName` Safari/Preview with the page title / PDF name.
-  3. Optional visual: Harness A tab → Capture, check the 320 px preview has no Focusline window in it.
+  3. Optional visual: Harness A tab → Capture, check the 320 px preview has no LarpLess window in it.
 
 ## Notes for integration
 
@@ -70,4 +70,4 @@
 - `webcam.capturePhoto()` works (A9); the JS countdown is the caller's job. It returns `{jpegBase64, width, height}` and must be treated like a screenshot (memory only).
 - If the camera fails mid-session (taken by another app/unplugged), samples simply stop. WS-C: a chunk with **zero** webcam samples should not be judged `away`.
 - Error codes: invalid args → `E_INVALID_ARG` (checked: `capture({maxWidth:0})`, `request('nope')`); no Screen Recording → `E_PERMISSION` (preflight before any SCK call, so no surprise prompt); other SCK/encode failures → `E_CAPTURE`.
-- Permissions on the demo Mac are granted for `com.focusline.app` (Screen Recording + Camera) as of 15:15.
+- Permissions on the demo Mac are granted for `com.larpless.app` (Screen Recording + Camera) as of 15:15.

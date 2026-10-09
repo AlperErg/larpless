@@ -30,7 +30,7 @@
 
 ## Requests to the orchestrator
 
-- NEEDS HUMAN: in the Supabase dashboard, run `focusline/supabase/schema.sql` in the SQL editor, then turn off Authentication > Sign In / Providers > Email > "Confirm email". As of 16:40 the tables were missing and confirmation was still on.
+- NEEDS HUMAN: in the Supabase dashboard, run `larpless/supabase/schema.sql` in the SQL editor, then turn off Authentication > Sign In / Providers > Email > "Confirm email". As of 16:40 the tables were missing and confirmation was still on.
 - Added deps `@supabase/supabase-js` and `react-native-url-polyfill` (pure JS, no pods). Restart Metro after `npm install`.
 - `jest.setup.js` stubs `react-native-url-polyfill/auto` (ESM-only package; Node has `URL`).
 

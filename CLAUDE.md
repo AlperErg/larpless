@@ -1,6 +1,6 @@
-# Focusline (macOS, React Native): rules for every agent
+# LarpLess (macOS, React Native): rules for every agent
 
-Focusline is a "Strava for studying" Mac app built with **react-native-macos**. It classifies your screen and webcam **on the device**, shows a floating timer, and reports study time per subject.
+LarpLess is a "Strava for studying" Mac app built with **react-native-macos**. It classifies your screen and webcam **on the device**, shows a floating timer, and reports study time per subject.
 
 Read these before doing anything:
 
@@ -42,13 +42,13 @@ Read these before doing anything:
 ## Swift conventions
 
 - Swift 5 language mode, macOS 14.0 deployment target. Do UI and AppKit work on the main thread (`DispatchQueue.main`), and capture and vision work on private serial queues.
-- Native code lives in `focusline/macos/Focusline-macOS/Native/{Shared,Capture,Shell,Social}/`. This is an Xcode **synchronized folder**: just add files there and never edit `project.pbxproj`.
+- Native code lives in `larpless/macos/Focusline-macOS/Native/{Shared,Capture,Shell,Social}/`. This is an Xcode **synchronized folder**: just add files there and never edit `project.pbxproj`.
   - Every file in it joins the app target, and resources are **flattened** into `Contents/Resources/`. So every Swift type name and every resource file name must be unique across all subfolders: prefix them (`FLCapture…`, `FLShell…`). Never add `.gitkeep`, `README.md` or other generic file names there.
 - The app actually runs **Fabric + bridgeless** (New Architecture), as verified by WS-D. Our legacy-style `RCT_EXTERN_MODULE` modules work through the interop layer (verified by WS-A and WS-B). On Fabric, native-driver `Animated` values aren't committed back to the shadow tree, so use JS-driven animations (`useNativeDriver: false`) where layout matters. Don't change the architecture flags.
 - Run `pod install` with a UTF-8 locale (`export LANG=en_US.UTF-8`). You only need it after native dependency changes, not for new Swift files.
 - Promise rejections use codes `E_PERMISSION`, `E_CAPTURE`, `E_CAMERA`, `E_NOT_RUNNING`, `E_INVALID_ARG`.
 
-## Commands (run from `focusline/`)
+## Commands (run from `larpless/`)
 
 ```bash
 npm run typecheck
@@ -74,7 +74,7 @@ xcodebuild -workspace macos/Focusline.xcworkspace -scheme Focusline-macOS -confi
 - `scripts/run-mac.sh <port>` builds and launches a **new** app instance each time. Quit your previous one first:
 
 ```bash
-pkill -f "<your-worktree>/focusline/macos/build/Build/Products/Debug/Focusline.app"
+pkill -f "<your-worktree>/larpless/macos/build/Build/Products/Debug/LarpLess.app"
 ```
 
 - **Drive the running app from the shell** through Metro's inspector:
@@ -91,7 +91,7 @@ node scripts/js-eval.mjs <port> "__FL.pingRoundTrip()"
 - **Native logs:**
 
 ```bash
-log show --last 3m --info --debug --style compact --predicate 'process == "Focusline"'
+log show --last 3m --info --debug --style compact --predicate 'process == "LarpLess"'
 ```
 
   In Swift, log with `os.Logger` and `privacy: .public` interpolation (plain `NSLog` strings show as `<private>`). Copy the pattern in `Native/Capture/FLCaptureLog.swift` and keep the `[FLxxx]` prefix.

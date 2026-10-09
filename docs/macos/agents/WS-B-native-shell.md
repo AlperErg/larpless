@@ -1,6 +1,6 @@
 # WS-B: Native Shell (Swift)
 
-**Mission:** build the parts of Focusline that live outside the main window:
+**Mission:** build the parts of LarpLess that live outside the main window:
 - the always-on-top floating timer with its hover hub
 - system notifications
 - ambient sound and chimes
@@ -10,9 +10,9 @@
 
 ## You own
 
-- `focusline/macos/Focusline-macOS/Native/Shell/**` (Swift, SwiftUI, `.m` extern files, `Sounds/`)
-- `focusline/src/native/panel.ts`, `notifications.ts`, `sound.ts`, `appShell.ts`
-- `focusline/src/dev/HarnessB.tsx`
+- `larpless/macos/Focusline-macOS/Native/Shell/**` (Swift, SwiftUI, `.m` extern files, `Sounds/`)
+- `larpless/src/native/panel.ts`, `notifications.ts`, `sound.ts`, `appShell.ts`
+- `larpless/src/dev/HarnessB.tsx`
 - `docs/macos/status/WS-B.md`
 
 Contracts: `FloatingPanelApi`, `PanelState`, `PanelAction`, `NotificationsApi`, `SoundApi` and `AppShellApi` in [CONTRACTS.md §2](../CONTRACTS.md). Colours and fonts: CONTRACTS.md §9.
@@ -69,7 +69,7 @@ panel.becomesKeyOnlyIfNeeded = true
 **B4. `FLNotifications`:**
 - `requestPermission()` → `UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])`.
 - `post({id, title, body, sound})` → `UNMutableNotificationContent`, with `.default` sound if `sound` is true and a nil trigger.
-- Set a `UNUserNotificationCenterDelegate` (a singleton kept alive) whose `willPresent` returns `[.banner, .sound]`, so banners show while Focusline is in front.
+- Set a `UNUserNotificationCenterDelegate` (a singleton kept alive) whose `willPresent` returns `[.banner, .sound]`, so banners show while LarpLess is in front.
 
 **B5. `HarnessB.tsx`:**
 - Buttons:
@@ -81,10 +81,10 @@ panel.becomesKeyOnlyIfNeeded = true
 
 **Sprint 1 acceptance:**
 - [ ] The panel floats above other apps, including a full-screen Safari window and every Space, and can be dragged.
-- [ ] Clicking hub buttons while another app is focused emits `FLPanelAction` **without** bringing Focusline to the front.
+- [ ] Clicking hub buttons while another app is focused emits `FLPanelAction` **without** bringing LarpLess to the front.
 - [ ] The timer keeps counting with no `update()` calls for 60 s, and is still correct afterwards.
 - [ ] Tint changes animate; pulse and flash work.
-- [ ] A notification banner appears both while Focusline is in front and while it's in the background.
+- [ ] A notification banner appears both while LarpLess is in front and while it's in the background.
 
 ### Sprint 2 (3:30–4:00)
 
@@ -115,7 +115,7 @@ panel.becomesKeyOnlyIfNeeded = true
 
 **Sprint 2 acceptance:**
 - [ ] All three noises play with no clicks or pops; switching crossfades over ~400 ms.
-- [ ] Sound keeps playing when Focusline is in the background.
+- [ ] Sound keeps playing when LarpLess is in the background.
 - [ ] `duck(0.3)` / `duck(1)` works; chimes are audible and pleasant.
 - [ ] ⌘K / ⌘↩ / ⌘. emit `FLMenuCommand` while the main window is focused.
 - [ ] While `beginSessionActivity()` is active, a JS `setInterval(1000)` stays on time with the app in the background for 2 minutes. Log the drift in HarnessB.

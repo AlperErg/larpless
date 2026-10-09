@@ -8,10 +8,10 @@
 
 ## You own
 
-- `focusline/src/ui/**`: `theme.ts`, `components/`, `layout/`, `pages/`
-- `focusline/src/App.tsx`: replace Phase 0's dev tabs, but keep a **Dev tools** page reachable that renders `src/dev/HarnessA` and `HarnessB` plus the fixture switcher
-- `focusline/src/store/navStore.ts`
-- `focusline/__tests__/ui/**` (optional render tests)
+- `larpless/src/ui/**`: `theme.ts`, `components/`, `layout/`, `pages/`
+- `larpless/src/App.tsx`: replace Phase 0's dev tabs, but keep a **Dev tools** page reachable that renders `src/dev/HarnessA` and `HarnessB` plus the fixture switcher
+- `larpless/src/store/navStore.ts`
+- `larpless/__tests__/ui/**` (optional render tests)
 - `docs/macos/status/WS-D.md`
 
 Read: [PLAN.md](../PLAN.md) §1, §6, §12; [CONTRACTS.md](../CONTRACTS.md) §1, §3, §6, §9; the "Notion-inspired design system" and "Pages and UX" sections of [`plan.md`](../../../plan.md).
@@ -72,7 +72,7 @@ interface NavState {
 
 **D3. Layout** (`src/ui/layout/`):
 - **Sidebar:** 240 px, `colors.sidebar` bg.
-  - Workspace header "🎯 Focusline".
+  - Workspace header "🎯 LarpLess".
   - Items, each with a hover bg and the active one bold: 🏠 Home, ⏱ Session (green live dot when running), 📚 Modules, 🗓 History, ⚙️ Settings. A "🛠 Dev tools" item shows only when `config.SHOW_DEV_TOOLS`.
   - At the bottom: an Ollama status line, e.g. "● qwen3-vl:4b ready".
 - **Content:** scrollable, max width 900, centred, with 48-px side padding.
@@ -99,7 +99,7 @@ interface NavState {
 1. **Your modules:** `EditableTable`, pre-filled with an example row "Biology / green / cell, mitosis". Needs at least one module to continue → `saveModules`.
 2. **Permissions:** a checklist of Screen Recording, Camera and Notifications:
    - Each row shows its status Tag plus "Allow" (`request`) / "Open Settings".
-   - Screen Recording also notes that macOS needs Focusline to relaunch after you allow it, with a **Relaunch** button (`permissions.relaunch()`).
+   - Screen Recording also notes that macOS needs LarpLess to relaunch after you allow it, with a **Relaunch** button (`permissions.relaunch()`).
    - Poll `status()` every 2 s while this step is open.
 3. **Local AI:** Ollama card.
    - Green: "● qwen3-vl:4b is ready. Everything stays on this Mac."
@@ -107,7 +107,7 @@ interface NavState {
    - Finish → `updateSettings({onboarded:true})` → Home.
 
 **D6. Home:**
-- `PageHeader` "🎯 Focusline".
+- `PageHeader` "🎯 LarpLess".
 - Greeting by time of day.
 - A big primary **Start session** button. ⌥-click (`event.nativeEvent.altKey`) → `start({ pomodoro, demo: true })`.
 - `Segmented` Pomodoro preset next to the button.

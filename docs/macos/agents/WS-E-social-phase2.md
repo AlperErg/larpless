@@ -6,11 +6,11 @@ Work the priorities **in order** and stop wherever time runs out. Each one is sh
 
 ## You own (from the moment you take this brief)
 
-- `focusline/macos/Focusline-macOS/Native/Social/**`
-- `focusline/src/native/storyCard.ts`: a new facade. Ask the orchestrator to add `storyCard` to `NativeApis` and `src/native/index.ts`.
-- `focusline/src/social/**`: Supabase client and helpers
-- `focusline/src/ui/pages/{Login,Feed,Profile}.tsx` and `focusline/src/ui/components/{StoryPreview,PostCard,LivePhoto}.tsx`
-- `focusline/supabase/schema.sql`
+- `larpless/macos/Focusline-macOS/Native/Social/**`
+- `larpless/src/native/storyCard.ts`: a new facade. Ask the orchestrator to add `storyCard` to `NativeApis` and `src/native/index.ts`.
+- `larpless/src/social/**`: Supabase client and helpers
+- `larpless/src/ui/pages/{Login,Feed,Profile}.tsx` and `larpless/src/ui/components/{StoryPreview,PostCard,LivePhoto}.tsx`
+- `larpless/supabase/schema.sql`
 - Summary page additions: coordinate with WS-D. Add a `<SharePanel/>` component that WS-D drops into Summary with one line.
 - `docs/macos/status/WS-E.md`
 
@@ -24,13 +24,13 @@ Work the priorities **in order** and stop wherever time runs out. Each one is sh
   - Streak badge "🔥 5"
   - Pomodoros "🍅 4"
   - The optional photo in a rounded frame
-  - The "Focusline" wordmark
+  - The "LarpLess" wordmark
 - Fonts come from the app bundle; colours from `NotionColors`.
 - `Native/Social/FLStoryCard.swift` + `.m`:
   - `render(data: NSDictionary) -> Promise<{ path: string }>`
     - Data: `{ durationS, focusPct, breakdown: [{label, color, pct}], streak, pomodoros, username?, photoBase64? }`
     - `ImageRenderer(content: StoryCardView(...))` with `scale = 1` and a proposed size of 1080×1920 → `nsImage` → PNG.
-    - Writes to `~/Downloads/Focusline/story-<yyyyMMdd-HHmm>.png` and returns the path.
+    - Writes to `~/Downloads/LarpLess/story-<yyyyMMdd-HHmm>.png` and returns the path.
   - `share(path)` → `NSSharingServicePicker(items: [URL])` shown at the key window's content view centre.
   - `reveal(path)` → `NSWorkspace.shared.activateFileViewerSelecting`.
 - `StoryPreview.tsx`:
@@ -64,7 +64,7 @@ Work the priorities **in order** and stop wherever time runs out. Each one is sh
 
 **Client:**
 - `src/social/supabase.ts`: `import 'react-native-url-polyfill/auto'`, then `createClient(url, key, { auth: { storage: AsyncStorage, persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } })`.
-- **Login:** username + password. Email is `<username>@focusline.local`, the fastest path for the demo. Create a `profiles` row on sign-up.
+- **Login:** username + password. Email is `<username>@larpless.local`, the fastest path for the demo. Create a `profiles` row on sign-up.
 - **Post** (from `SharePanel`): upload the photo with `decode(photoBase64)` to `post-photos/photos/<uid>/<postId>.jpg` (`contentType: 'image/jpeg'`), then insert the `posts` row with stats from `lastSummary`.
 - **Feed page:** friends' posts as Notion cards (photo, name, duration in serif, breakdown tags, streak, time ago via `date-fns` `formatDistanceToNow`). Pull to refresh is a "Refresh" button.
 - **Offline:** if the network fails, show the last fetched feed cached in memory and a muted "Offline" tag. The local session flow must never depend on Supabase.

@@ -1,4 +1,4 @@
-# Focusline for macOS: master technical plan
+# LarpLess for macOS: master technical plan
 
 **Product:** the product spec in [`plan.md`](../../plan.md) is unchanged: "Strava for studying", on-device analysis, a Notion look, a floating timer, Pomodoro, ambient sound, a privacy badge, a story card.
 
@@ -33,7 +33,7 @@
   - **CocoaPods:** needs `LANG=en_US.UTF-8` (it crashes with an ASCII locale).
   - **Project format:** the Xcode project was upgraded to objectVersion 77 for the synchronized `Native/` folder, and it survives `pod install`.
   - **Xcode 27:** needs a pod deployment target ≥ 12, so the Podfile `post_install` forces 14.0.
-  - **Debug code location:** in Debug builds the app code lives in `Focusline.debug.dylib`.
+  - **Debug code location:** in Debug builds the app code lives in `LarpLess.debug.dylib`.
   - **YOLO11n export:** needed pinned versions (`ultralytics==8.3.170`, `coremltools==8.3.0`, `torch==2.6.0`, `numpy==1.26.4`). With the latest versions coremltools fails.
   - **JS logs:** they no longer reach the Metro terminal. Agents use `scripts/js-eval.mjs` (a CDP client) and `globalThis.__FL` for headless checks.
 - **JS dependencies (Phase 0 only):** `zustand` 5, `@react-native-async-storage/async-storage` **2.2.0** (pinned; v3 vendors a new binary framework), `date-fns` 4. Jest (template).
@@ -47,7 +47,7 @@
 - **Models:**
   - Ollama **`qwen3-vl:4b`** only. 8b is excluded from the project (memory). Bench: 10/10 on synthetic screenshots, p50 3.2 s.
   - **YOLO11n CoreML** (`nms=True`). Fallback: Apple's YOLOv3-Tiny CoreML model.
-- **Signing:** Apple Development certificate (personal team), bundle id `com.focusline.app`. The stable signature keeps the Screen Recording and Camera grants across rebuilds.
+- **Signing:** Apple Development certificate (personal team), bundle id `com.larpless.app`. The stable signature keeps the Screen Recording and Camera grants across rebuilds.
 - **Info.plist:**
   - `NSCameraUsageDescription`
   - `NSAppTransportSecurity → NSAllowsLocalNetworking = YES`
@@ -70,10 +70,10 @@
 | `OLLAMA_ORIGINS` / CORS | Not needed in native code (only the ATS local-networking key) | Phase 0 |
 | html-to-image story card | Phase 2: **SwiftUI `ImageRenderer`** renders the card natively to a PNG (`FLStoryCard`) | WS-E |
 
-## 4. Repo layout (`focusline/`)
+## 4. Repo layout (`larpless/`)
 
 ```
-focusline/
+larpless/
   package.json  tsconfig.json  jest.config.js  index.js
   scripts/
     run-mac.sh            Metro on <port> + xcodebuild with RCT_METRO_PORT + open -n
@@ -272,7 +272,7 @@ No alerts fire during breaks or while away.
 | Risk | Fallback |
 |---|---|
 | RN macOS 0.81 + Xcode 27 build break | Pre-event smoke test; switch to 0.83.x |
-| TCC grants reset on every build | Stable Apple Development signing; `tccutil reset ScreenCapture com.focusline.app`; Screen Recording needs a **relaunch** (`permissions.relaunch()`) |
+| TCC grants reset on every build | Stable Apple Development signing; `tccutil reset ScreenCapture com.larpless.app`; Screen Recording needs a **relaunch** (`permissions.relaunch()`) |
 | Interop module or events fail under the New Architecture | `RCT_NEW_ARCH_ENABLED=0 pod install` |
 | App Nap throttles JS timers | `beginSessionActivity()` during sessions |
 | VLM too slow | 1024 px → 60 s chunks; rules and cache already skip most calls |
@@ -299,6 +299,6 @@ No alerts fire during breaks or while away.
 - **E2E on the M4 Pro:** run the demo script above with `USE_MOCK_*=false`, plus a Pomodoro `demo` break during which `framesAnalysed` doesn't increase.
 - **Privacy:**
   - `grep -rn "console\.\(log\|warn\)" src | grep -i "snapshot\|base64"` returns nothing.
-  - After a session, `find ~/Library -newer <marker> \( -name '*.jpg' -o -name '*.jpeg' -o -name '*.png' \) 2>/dev/null | grep -i focusline` is empty.
+  - After a session, `find ~/Library -newer <marker> \( -name '*.jpg' -o -name '*.jpeg' -o -name '*.png' \) 2>/dev/null | grep -i larpless` is empty.
   - The `fl:*` AsyncStorage values contain no base64 image data.
 - **Offline:** with Ollama stopped and the camera covered, `demoMode` still runs the whole demo.

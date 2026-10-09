@@ -6,8 +6,6 @@
 
 It was built in one hackathon day with **react-native-macos**: one orchestrator ran four parallel Claude Code agents (plus a fifth for the social features), each in its own git worktree.
 
-> **About the name:** the code still uses the working name **Focusline**. The `focusline/` folder, the `Focusline` Xcode workspace and the `com.focusline.app` bundle ID are real paths, so the commands below keep them.
-
 > **Privacy first.** Frames are analysed in memory and dropped right away. Nothing is written to disk, and the only network call involving a frame goes to Ollama on `127.0.0.1`. Only labels such as "Biology, 30 s" are stored. The in-app privacy badge shows `Screenshots analysed: N · checks without a screenshot: M · stored: 0`, and on Pomodoro breaks the app stops capturing.
 
 ---
@@ -90,7 +88,7 @@ ollama pull qwen3-vl:4b
 
 ### Install
 
-From `focusline/`:
+From `larpless/`:
 
 ```bash
 scripts/setup-worktree.sh
@@ -100,14 +98,14 @@ This runs `npm ci` and then `pod install` with the UTF-8 locale CocoaPods needs.
 
 ### Supabase (optional, for the Friends tab)
 
-The social layer reads `focusline/src/social/env.ts`, which is gitignored. Create it:
+The social layer reads `larpless/src/social/env.ts`, which is gitignored. Create it:
 
 ```ts
 export const SUPABASE_URL = 'https://<project>.supabase.co';
 export const SUPABASE_ANON_KEY = '<anon key>';
 ```
 
-Then, in the Supabase dashboard, run [`focusline/supabase/schema.sql`](focusline/supabase/schema.sql) in the SQL editor and turn off **Authentication → Providers → Email → Confirm email** (accounts use a username + password; you can also sign in with the email of an account made outside the app). If both values are empty, the app skips Supabase entirely and runs fully local.
+Then, in the Supabase dashboard, run [`larpless/supabase/schema.sql`](larpless/supabase/schema.sql) in the SQL editor and turn off **Authentication → Providers → Email → Confirm email** (accounts use a username + password; you can also sign in with the email of an account made outside the app). If both values are empty, the app skips Supabase entirely and runs fully local.
 
 ### Run
 
@@ -118,12 +116,12 @@ scripts/run-mac.sh 8081
 This starts Metro on the port, builds the Debug app with that port baked in, and launches it. Each run opens a **new** app instance, so quit the previous one first:
 
 ```bash
-pkill -f "$PWD/macos/build/Build/Products/Debug/Focusline.app"
+pkill -f "$PWD/macos/build/Build/Products/Debug/LarpLess.app"
 ```
 
 On first launch, grant **Screen Recording** (macOS needs an app relaunch afterwards; onboarding has a button for it), **Camera** and **Notifications**.
 
-Switches in [`focusline/src/config.ts`](focusline/src/config.ts):
+Switches in [`larpless/src/config.ts`](larpless/src/config.ts):
 
 | Flag | Effect |
 |---|---|
@@ -139,7 +137,7 @@ Switches in [`focusline/src/config.ts`](focusline/src/config.ts):
 
 ## Development
 
-Run these from `focusline/`.
+Run these from `larpless/`.
 
 Type-check:
 
@@ -171,10 +169,10 @@ Stream the JS console for 20 s (RN 0.81 no longer prints it in the Metro termina
 node scripts/js-eval.mjs 8081 --console 20
 ```
 
-Native logs use `os.Logger` under the subsystem `com.focusline.app`:
+Native logs use `os.Logger` under the subsystem `com.larpless.app`:
 
 ```bash
-log show --last 5m --style compact --predicate 'subsystem == "com.focusline.app"'
+log show --last 5m --style compact --predicate 'subsystem == "com.larpless.app"'
 ```
 
 **Classifier bench.** `node scripts/bench-classifier.ts --model qwen3-vl:4b` scores the prompt against `bench/<expected>__<desc>.png`. If that folder is empty it renders 10 synthetic mock-ups instead and never captures the real screen. Add `--clean` to delete the images afterwards.
@@ -195,7 +193,7 @@ log show --last 5m --style compact --predicate 'subsystem == "com.focusline.app"
 │   ├── ORCHESTRATOR.md       hackathon-day runbook
 │   ├── agents/WS-*.md        one brief per workstream
 │   └── status/WS-*.md        per-workstream progress, deviations and open requests
-└── focusline/                the app
+└── larpless/                the app
     ├── src/
     │   ├── contracts/        domain, native and store types
     │   ├── core/             pure TS: prompt, ollama, rules, classifier, chunkFuser, focus,

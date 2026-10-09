@@ -1,6 +1,6 @@
 # WS-C: Core logic (pure TypeScript + Jest)
 
-**Mission:** own Focusline's brain: classification (rules → cache → Ollama VLM), chunk fusion, focus metrics, Pomodoro, alerts, persistence, and the session controller that wires the native facades to the store.
+**Mission:** own LarpLess's brain: classification (rules → cache → Ollama VLM), chunk fusion, focus metrics, Pomodoro, alerts, persistence, and the session controller that wires the native facades to the store.
 
 Everything you write in `src/core` is **pure TS** (no `react-native` imports) and covered by Jest with fake timers.
 
@@ -8,10 +8,10 @@ Everything you write in `src/core` is **pure TS** (no `react-native` imports) an
 
 ## You own
 
-- `focusline/src/core/**`
-- `focusline/src/store/sessionStore.ts` and `appStore.ts`: action implementations and wiring. Keep the state shape from CONTRACTS.md §3.
-- `focusline/__tests__/core/**`
-- `focusline/scripts/bench-classifier.ts`
+- `larpless/src/core/**`
+- `larpless/src/store/sessionStore.ts` and `appStore.ts`: action implementations and wiring. Keep the state shape from CONTRACTS.md §3.
+- `larpless/__tests__/core/**`
+- `larpless/scripts/bench-classifier.ts`
 - `docs/macos/status/WS-C.md`
 
 Read: [PLAN.md §6–8](../PLAN.md) (runtime loop, classification, thresholds) and [CONTRACTS.md](../CONTRACTS.md) (all of it).

@@ -44,8 +44,8 @@ Goal: a building app with every contract, mock, fixture and script in place, so 
 
 ```bash
 cd ~/Code/notion-hackathon/notion-hackathon
-npx @react-native-community/cli@latest init Focusline --version <rn-0.81.x> --directory focusline --skip-git-init --install-pods false
-cd focusline
+npx @react-native-community/cli@latest init LarpLess --version <rn-0.81.x> --directory larpless --skip-git-init --install-pods false
+cd larpless
 npx react-native-macos-init --version <rnm-0.81.x>
 npm i zustand @react-native-async-storage/async-storage date-fns
 ```
@@ -54,11 +54,11 @@ npm i zustand @react-native-async-storage/async-storage date-fns
 - Exclude `scripts/` from `tsconfig.json`.
 - Add to `.gitignore`: `bench/`, `.logs/`, `macos/build/`, `macos/Pods/`.
 
-### 2b. In parallel: a Claude Code session in `focusline/` writes the TS skeleton (≈ 10 min)
+### 2b. In parallel: a Claude Code session in `larpless/` writes the TS skeleton (≈ 10 min)
 
 Prompt it with this:
 
-> Read /CLAUDE.md and docs/macos/CONTRACTS.md. In focusline/, create exactly the following, copying code blocks verbatim where CONTRACTS.md gives them:
+> Read /CLAUDE.md and docs/macos/CONTRACTS.md. In larpless/, create exactly the following, copying code blocks verbatim where CONTRACTS.md gives them:
 > - src/contracts/{domain,native,store}.ts
 > - src/config.ts
 > - src/native/index.ts
@@ -75,9 +75,9 @@ Prompt it with this:
 ### 2c. Meanwhile you, in Xcode (≈ 10 min)
 
 1. Open `macos/Focusline.xcworkspace` and select the `Focusline-macOS` target.
-2. **Signing:** your team, bundle id `com.focusline.app`, "Automatically manage signing". Turn off App Sandbox and Hardened Runtime if the template enabled them.
+2. **Signing:** your team, bundle id `com.larpless.app`, "Automatically manage signing". Turn off App Sandbox and Hardened Runtime if the template enabled them.
 3. **Deployment target:** macOS 14.0. Swift Language Version: 5.
-4. **Info.plist:** add `NSCameraUsageDescription` ("Focusline checks whether you're at your desk or on your phone. Frames are analysed on this Mac and never stored."), `NSAppTransportSecurity → NSAllowsLocalNetworking = YES`, `ATSApplicationFontsPath = Fonts`, `LSMinimumSystemVersion = 14.0`.
+4. **Info.plist:** add `NSCameraUsageDescription` ("LarpLess checks whether you're at your desk or on your phone. Frames are analysed on this Mac and never stored."), `NSAppTransportSecurity → NSAllowsLocalNetworking = YES`, `ATSApplicationFontsPath = Fonts`, `LSMinimumSystemVersion = 14.0`.
 5. **Fonts:**
    - Copy the TTFs into `macos/Focusline-macOS/Fonts/`.
    - Add that folder to the target as a **folder reference** (blue folder) so it lands in `Contents/Resources/Fonts`.
@@ -85,10 +85,10 @@ Prompt it with this:
 6. **Native folder:**
    - Create `macos/Focusline-macOS/Native/{Shared,Capture,Shell,Social}/` on disk, each with a `.gitkeep`.
    - In Xcode, add `Native` to the target. Xcode 16+ creates a **synchronized folder**; check that the icon is a folder, not a yellow group.
-7. **Bridging header:** create `Native/Shared/Focusline-Bridging-Header.h` (contents in CONTRACTS.md §7). Set `SWIFT_OBJC_BRIDGING_HEADER = Focusline-macOS/Native/Shared/Focusline-Bridging-Header.h`.
+7. **Bridging header:** create `Native/Shared/LarpLess-Bridging-Header.h` (contents in CONTRACTS.md §7). Set `SWIFT_OBJC_BRIDGING_HEADER = Focusline-macOS/Native/Shared/LarpLess-Bridging-Header.h`.
 8. **Ping module:** add `Native/Shared/FLPing.swift` and `FLPing.m` from CONTRACTS.md §7.
 9. **AppDelegate:**
-   - Main window 1100×720, minimum 900×600, title "Focusline".
+   - Main window 1100×720, minimum 900×600, title "LarpLess".
    - `applicationShouldTerminateAfterLastWindowClosed` returns `NO`, so the panel keeps running.
    - Reopening from the Dock shows the main window.
 10. **YOLO model:** copy it into `Native/Capture/Models/`. It's a `.mlpackage` (or `.mlmodel`); Xcode compiles it automatically.
@@ -146,7 +146,7 @@ for ws in a-native-capture b-native-shell c-core d-ui; do git worktree add "../f
 ```
 
 ```bash
-for d in ../fl-a ../fl-b ../fl-c ../fl-d; do (cd "$d/focusline" && scripts/setup-worktree.sh) & done; wait
+for d in ../fl-a ../fl-b ../fl-c ../fl-d; do (cd "$d/larpless" && scripts/setup-worktree.sh) & done; wait
 ```
 
 **Shortcut if Phase 0 overruns:** WS-C only needs the TS skeleton and Jest. Commit as soon as 2b is green, tag `p0a`, create `../fl-c` from `p0a` and launch WS-C first. Start the others from `p0` once the native checks pass.
@@ -180,10 +180,10 @@ Open one Claude Code session per worktree (`cd ../fl-a && claude`, etc.) and pas
 **Optional ownership guard.** In each worktree, add `.claude/settings.local.json` (it stays uncommitted):
 
 ```json
-{ "hooks": { "PreToolUse": [ { "matcher": "Edit|Write|MultiEdit", "hooks": [ { "type": "command", "command": "focusline/scripts/guard-ownership.sh WS-A" } ] } ] } }
+{ "hooks": { "PreToolUse": [ { "matcher": "Edit|Write|MultiEdit", "hooks": [ { "type": "command", "command": "larpless/scripts/guard-ownership.sh WS-A" } ] } ] } }
 ```
 
-`focusline/scripts/guard-ownership.sh`:
+`larpless/scripts/guard-ownership.sh`:
 
 ```bash
 #!/usr/bin/env bash
@@ -192,12 +192,12 @@ ws="$1"
 file=$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("tool_input",{}).get("file_path",""))')
 root=$(git rev-parse --show-toplevel)
 rel="${file#"$root"/}"
-N='focusline/macos/Focusline-macOS/Native'
+N='larpless/macos/Focusline-macOS/Native'
 case "$ws" in
-  WS-A) re="^($N/Capture/|focusline/src/native/(screen|webcam|permissions)\.ts$|focusline/src/dev/HarnessA\.tsx$|docs/macos/status/WS-A\.md$)";;
-  WS-B) re="^($N/Shell/|focusline/src/native/(panel|notifications|sound|appShell)\.ts$|focusline/src/dev/HarnessB\.tsx$|docs/macos/status/WS-B\.md$)";;
-  WS-C) re="^(focusline/src/core/|focusline/src/store/(sessionStore|appStore)\.ts$|focusline/__tests__/core/|focusline/scripts/bench-classifier\.ts$|docs/macos/status/WS-C\.md$)";;
-  WS-D) re="^(focusline/src/ui/|focusline/src/App\.tsx$|focusline/src/store/navStore\.ts$|focusline/__tests__/ui/|docs/macos/status/WS-D\.md$)";;
+  WS-A) re="^($N/Capture/|larpless/src/native/(screen|webcam|permissions)\.ts$|larpless/src/dev/HarnessA\.tsx$|docs/macos/status/WS-A\.md$)";;
+  WS-B) re="^($N/Shell/|larpless/src/native/(panel|notifications|sound|appShell)\.ts$|larpless/src/dev/HarnessB\.tsx$|docs/macos/status/WS-B\.md$)";;
+  WS-C) re="^(larpless/src/core/|larpless/src/store/(sessionStore|appStore)\.ts$|larpless/__tests__/core/|larpless/scripts/bench-classifier\.ts$|docs/macos/status/WS-C\.md$)";;
+  WS-D) re="^(larpless/src/ui/|larpless/src/App\.tsx$|larpless/src/store/navStore\.ts$|larpless/__tests__/ui/|docs/macos/status/WS-D\.md$)";;
   *) exit 0;;
 esac
 [[ "$rel" =~ $re ]] && exit 0
@@ -216,7 +216,7 @@ exit 2
 git checkout main && for b in a-native-capture b-native-shell c-core d-ui; do git merge --no-ff "ws/$b" -m "Merge ws/$b (cp1)" || break; done
 ```
 
-3. Verify from `focusline/`: `npm run typecheck && npm test && scripts/run-mac.sh 8081`.
+3. Verify from `larpless/`: `npm run typecheck && npm test && scripts/run-mac.sh 8081`.
 4. Apply any approved contract or dependency requests on `main`, commit, then run `git tag cp1`.
 5. Tell each agent: "Checkpoint 1 merged. Run `git merge main`, resolve conflicts only in files you own, re-run your checks, then continue with Sprint 2."
 
