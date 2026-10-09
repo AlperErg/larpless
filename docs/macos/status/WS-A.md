@@ -2,7 +2,7 @@
 
 > Updated by the WS-A agent after every task. The orchestrator reads this at each checkpoint.
 
-**Current:** Sprint 1 done (A1–A4), A5 next · **Sprint:** 2 · **Last commit:** WS-A: A4 HarnessA
+**Current:** Sprint 1 + Sprint 2 done (A1–A7); remaining acceptance items need a human in front of the camera · **Sprint:** 2 · **Last commit:** WS-A: A5+A6 FLWebcam
 
 ## Done
 
@@ -10,6 +10,9 @@
 - A2 `FLScreenCapture.getActiveWindow()`: `NSWorkspace.frontmostApplication` + first named layer-0 window of that pid from `CGWindowListCopyWindowInfo`. Native 0.3 ms avg / 2.6 ms max (50 runs), JS round trip 0.5 ms avg.
 - A3 `FLScreenCapture.capture()`: ScreenCaptureKit `SCScreenshotManager.captureImage`, main display, own app excluded, no cursor, in-memory JPEG (ImageIO) → base64. 1280×831, ~250 KB, cold 81 ms, warm ~25 ms.
 - A4 `src/dev/HarnessA.tsx`: buttons for permissions (status/request/settings/relaunch), active window ×10 over 10 s, Capture (320 px preview, cleared on next press), webcam start/stop + live readout, 5× start/stop. Calls the real facades (`src/native/{screen,permissions,webcam}`) directly and shows a warning while `USE_MOCK_NATIVE` is true. Headless runners registered: `A`, `A.perm`, `A.window10`, `A.capture`, `A.webcam`, `A.webcamCycle` (results carry sizes/counts/timings only).
+- A5 `FLWebcam` (`RCTEventEmitter`, event `FLWebcamSample`): `AVCaptureSession` (VGA preset, built-in camera preferred), `AVCaptureVideoDataOutput` (BGRA, discards late frames) on a private serial queue, 1/fps gate (frames outside the gate are dropped at once), one `perform([...])` with `VNDetectHumanRectanglesRequest(upperBodyOnly)` + YOLO `VNCoreMLRequest`. `stop()` stops, detaches the delegate, removes inputs/outputs and releases the session (idempotent). Bridge `invalidate()` also tears the camera down. `capturePhoto()` is a stub that rejects `E_NOT_RUNNING` (A9, Phase 2).
+- A6 YOLO: `FLWebcamModel` loads `yolo11n(configuration:)` (`computeUnits = .all`) once, on a background queue when `start()` is first called (≈1.2 s); frames before it's ready are presence-only. Labels checked: 80 COCO labels, `'cell phone'` at index 67 (full list logged once in Debug). The NMS pipeline's `iouThreshold`/`confidenceThreshold` inputs are supplied via `VNCoreMLModel.featureProvider` (0.6 / 0.2).
+- A7 Harness webcam section (was built in A4): Start/Stop webcam with live readout (`present`, `phone`, `score`, samples/s over the last 5 s), 5× start/stop button; headless runners `A.webcam` (8 s summary) and `A.webcamCycle`.
 
 ## Acceptance checklist
 
@@ -25,14 +28,22 @@
   - `touch marker` → 9 captures → `find ~/Library -newer marker -type f | grep -iE 'focusline|\.jpe?g$|\.heic$'` empty; `find` on Caches/Containers/Application Support/HTTPStorages/Group Containers/`$TMPDIR`/`/tmp`/`/private/var/tmp` for `focusline|jpe?g|png|heic` empty; `lsof -p <pid>` shows no image/tmp files open for writing. (`sudo fs_usage` not available headlessly.)
 
 ### Sprint 2
-- [ ] Sitting in front of the camera → `personPresent:true`. Leaving the frame → false within 2 s.
-- [ ] Phone held up in view → `phoneVisible:true` within 2 s; phone down → false.
-- [ ] CPU stays reasonable at 1 fps (Activity Monitor < 15% on the M4 Pro).
-- [ ] Repeated start/stop doesn't crash, and the camera light turns off after `stop()`.
+- [~] Sitting in front of the camera → `personPresent:true`. Leaving the frame → false within 2 s.
+  - `A.webcam` (8 s): `{"samples":8,"perSec":1,"meanGapMs":922,"presentCount":8,"phoneCount":0}`: present in 8/8 samples with the user at the desk. Start 416 ms (cold) / ~25 ms (warm); per-frame Vision + YOLO 14 ms (first frame 500 ms while YOLO warms up). **Human check for "leave → false within 2 s":** run `node scripts/js-eval.mjs 8082 "__FL.harness['A.webcam']()"` and step out of frame after ~3 s; or use Harness A → Start webcam and watch `present`.
+- [ ] Phone held up in view → `phoneVisible:true` within 2 s; phone down → false. **Needs human** (hold a phone up during `A.webcam` / the live readout; `maxPhoneScore` and `phoneCount` show the result). With no phone in view: `phoneCount 0`, `maxPhoneScore 0`.
+- [x] CPU stays reasonable at 1 fps (Activity Monitor < 15% on the M4 Pro).
+  - `top -pid` every 2 s: app idle 0–1.6 %; webcam at 1 fps 6.8–9.9 % (avg ≈ 8.6 %).
+- [x] Repeated start/stop doesn't crash, and the camera light turns off after `stop()`.
+  - `A.webcamCycle`: 5× (start, 1.5 s, stop, 0.3 s) + 2 extra stops → `{"ok":true,"cycles":5,"events":9,"errors":[]}`, process still alive. Start ~25 ms warm, stop 43–83 ms.
+  - Camera released: after every stop, ControlCenter logs `Frame publisher cameras changed to [:]` (the camera-in-use indicator source) within ~25 ms (`log show --predicate 'process == "ControlCenter" AND eventMessage CONTAINS "Frame publisher cameras changed"'`).
 
 ## Deviations from the plan
 
 - **Native logging:** `NSLog` lines appear as `<private>` in `log show`, so Capture code logs through `FLCaptureLog.log(...)` (an `os.Logger`, subsystem `com.focusline.app`, category `capture`, public interpolation, `notice` level). Lines still start with `[FLxxx]`, so `log show --last 3m --style compact --predicate 'process == "Focusline" AND eventMessage CONTAINS "[FL"'` finds them. Only sizes/counts/timings are logged. (Note for CLAUDE.md: the same `<private>` problem applies to every agent using `NSLog`.)
+- **Camera choice:** `FLWebcam` prefers the built-in camera (`.builtInWideAngleCamera`) and only falls back to `AVCaptureDevice.default(for: .video)`. This Mac also exposes a Continuity Camera (iPhone); using the phone as the webcam would defeat phone detection.
+- **Presence fallback:** besides `VNDetectHumanRectanglesRequest(upperBodyOnly)` > 0.5, a YOLO `person` detection > 0.5 also counts as present (helps when the upper-body detector misses at odd angles). Absence still needs both to miss.
+- **YOLO crop:** `imageCropAndScaleOption = .scaleFit` (letterbox, matches YOLO training) rather than stretching 4:3 → 1:1.
+- **JPEG encoding** uses ImageIO (`CGImageDestinationCreateWithData` into `NSMutableData`) instead of `NSBitmapImageRep`; still in memory only, encode ≈ 4 ms.
 - `relaunch()` rejection code is `E_NOT_RUNNING` (no better code in the list); `openSettings` failure is `E_INVALID_ARG`.
 
 ## Requests to the orchestrator
