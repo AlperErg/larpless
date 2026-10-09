@@ -23,7 +23,7 @@ export function Switch({ value, onChange, disabled, testID, accessibilityLabel }
       toValue: value ? 1 : 0,
       duration: motion.fast,
       easing: Easing.out(Easing.quad),
-      useNativeDriver: true,
+      useNativeDriver: false,
     }).start();
   }, [value, t]);
   const translateX = t.interpolate({ inputRange: [0, 1], outputRange: [2, W - KNOB - 2] });

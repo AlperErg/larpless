@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { useWindowDimensions } from 'react-native';
 import { layout, space } from '../theme';
+import { useViewport } from './viewport';
 
 /** Content side padding: 48 px, or 32 px when the window is near its 900 px minimum. */
 export function useGutter(): number {
-  const { width } = useWindowDimensions();
+  const width = useViewport((s) => s.w);
   return width < 1000 ? space.xxl : layout.contentPadding;
 }
 

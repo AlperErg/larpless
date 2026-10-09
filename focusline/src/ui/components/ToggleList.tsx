@@ -49,7 +49,7 @@ export function ToggleRow({ item, open, onToggle }: { item: ToggleItem; open: bo
       toValue: open ? 1 : 0,
       duration: motion.fast,
       easing: Easing.out(Easing.quad),
-      useNativeDriver: true,
+      useNativeDriver: false,
     }).start();
     if (open) {
       fade.setValue(0);
@@ -57,7 +57,7 @@ export function ToggleRow({ item, open, onToggle }: { item: ToggleItem; open: bo
         toValue: 1,
         duration: motion.base,
         easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
+        useNativeDriver: false,
       }).start();
     }
   }, [open, rot, fade]);

@@ -33,7 +33,7 @@ export function PageHeader({ icon, title, cover, subtitle, right, testID }: Page
       toValue: 1,
       duration: motion.slow,
       easing: Easing.out(Easing.quad),
-      useNativeDriver: true,
+      useNativeDriver: false,
     }).start();
   }, [target]); // eslint-disable-line react-hooks/exhaustive-deps
 

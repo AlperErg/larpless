@@ -18,6 +18,7 @@ import { CommandPalette } from './ui/layout/CommandPalette';
 import { AppLayout } from './ui/layout/AppLayout';
 import { ErrorBoundary } from './ui/layout/ErrorBoundary';
 import { endSession, isLive, startSession } from './ui/lib/actions';
+import { useViewport } from './ui/lib/viewport';
 import { DevToolsPage, installUiIntrospection } from './ui/pages/DevToolsPage';
 import { HistoryPage } from './ui/pages/HistoryPage';
 import { HomePage } from './ui/pages/HomePage';
@@ -114,9 +115,12 @@ function App() {
     if (__DEV__) installUiIntrospection();
   }, []);
   const route = useNavStore((s) => s.route);
+  const emulate = useViewport((s) => s.emulate);
 
   return (
-    <View style={styles.root}>
+    <View
+      style={[styles.root, emulate ? { flex: 0, width: emulate.w, height: emulate.h } : null]}
+      onLayout={(e) => useViewport.getState().setSize(e.nativeEvent.layout.width, e.nativeEvent.layout.height)}>
       {!booted ? null : route === 'onboarding' ? (
         <ErrorBoundary where="onboarding">
           <OnboardingPage />

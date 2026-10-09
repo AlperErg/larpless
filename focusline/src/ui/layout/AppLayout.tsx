@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { Animated, Easing, StyleSheet, View } from 'react-native';
 import type { Route } from '../../store/navStore';
@@ -20,10 +20,10 @@ export function AppLayout({ route, children }: AppLayoutProps) {
       toValue: 1,
       duration: motion.base,
       easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
+      useNativeDriver: false,
     }).start();
   }, [route, t]);
-  const translateY = t.interpolate({ inputRange: [0, 1], outputRange: [8, 0] });
+  const translateY = useMemo(() => t.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }), [t]);
   return (
     <View style={styles.root}>
       <Sidebar />

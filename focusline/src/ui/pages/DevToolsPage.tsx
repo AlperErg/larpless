@@ -17,7 +17,9 @@ import { useNavStore } from '../../store/navStore';
 import type { Route } from '../../store/navStore';
 import { useSessionStore } from '../../store/sessionStore';
 import { Button, Callout, Strong, Text } from '../components';
+import { uiLabel, uiMeasure, uiOverflow, uiStyle, uiText } from '../dev/introspect';
 import { caughtErrors } from '../layout/ErrorBoundary';
+import { useViewport } from '../lib/viewport';
 import { Page } from '../layout/Page';
 import { colors, space } from '../theme';
 
@@ -112,6 +114,16 @@ export function installUiIntrospection(): void {
       return { status: useSessionStore.getState().status, route: useNavStore.getState().route };
     },
     errors: () => caughtErrors.slice(),
+    text: uiText,
+    label: uiLabel,
+    measure: uiMeasure,
+    overflow: uiOverflow,
+    style: uiStyle,
+    /** Pin the root to w×h (dev layout checks); call with no args to reset. */
+    viewport: (w?: number, h?: number) => {
+      useViewport.getState().setEmulate(w && h ? { w, h } : null);
+      return useViewport.getState().emulate;
+    },
     state: () => {
       const s = useSessionStore.getState();
       const a = useAppStore.getState();

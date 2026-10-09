@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, StyleSheet, Text as RNText, View } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 import { colors, fonts, motion } from '../theme';
@@ -68,7 +68,7 @@ export function SerifTimer({ timer, size = 88, color = colors.text, testID, styl
             </View>
           );
         }
-        return <RollingDigit key={`d${k}`} digit={Number(ch)} size={size} line={line} color={color} />;
+        return <RollingDigit key={`d${k}`} slot={k} digit={Number(ch)} size={size} line={line} color={color} />;
       })}
     </View>
   );
@@ -76,7 +76,7 @@ export function SerifTimer({ timer, size = 88, color = colors.text, testID, styl
 
 const COLUMN = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0'];
 
-function RollingDigit({ digit, size, line, color }: { digit: number; size: number; line: number; color: string }) {
+function RollingDigit({ slot, digit, size, line, color }: { slot: number; digit: number; size: number; line: number; color: string }) {
   const pos = useRef(new Animated.Value(digit)).current;
   const prev = useRef(digit);
 
@@ -84,7 +84,7 @@ function RollingDigit({ digit, size, line, color }: { digit: number; size: numbe
     const from = prev.current;
     prev.current = digit;
     if (from === digit) return;
-    const cfg = { duration: motion.slow, easing: Easing.out(Easing.cubic), useNativeDriver: true };
+    const cfg = { duration: motion.slow, easing: Easing.out(Easing.cubic), useNativeDriver: false };
     if (from === 9 && digit === 0) {
       // Roll forward onto the trailing 0, then snap back to the top (seamless wrap).
       Animated.timing(pos, { ...cfg, toValue: 10 }).start(({ finished }) => {
@@ -95,10 +95,11 @@ function RollingDigit({ digit, size, line, color }: { digit: number; size: numbe
     }
   }, [digit, pos]);
 
-  const translateY = pos.interpolate({ inputRange: [0, 10], outputRange: [0, -10 * line] });
+  // Memoised so re-renders (every second) reuse the same animated node.
+  const translateY = useMemo(() => pos.interpolate({ inputRange: [0, 10], outputRange: [0, -10 * line] }), [pos, line]);
   return (
     <View style={{ width: size * DIGIT_EM, height: line, overflow: 'hidden' }}>
-      <Animated.View style={{ transform: [{ translateY }] }}>
+      <Animated.View testID={`timer-digit-${slot}`} style={{ transform: [{ translateY }] }}>
         {COLUMN.map((d, i) => (
           <RNText key={i} style={[styles.glyph, { fontSize: size, lineHeight: line, height: line, color }]}>
             {d}
