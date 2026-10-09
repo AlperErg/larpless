@@ -16,10 +16,17 @@ export const SYSTEM = [
   '- Use the module keywords to pick the subject. If it\'s clearly study content but matches no module, pick the closest module and lower your confidence.',
   '- The window title is a strong hint; if it conflicts with the screenshot, trust the screenshot.',
   '- "activity": at most 6 words describing what is visible, e.g. "Reading cell division slides", "Scrolling Instagram feed".',
-  '- "confidence": 0 to 1.',
+  '- "confidence": 0 to 1, how sure you are about this label (for "Not study" too).',
   '',
-  'Reply with JSON only, matching the schema.',
+  'Reply with JSON only, matching the schema: {"studying": true or false, "subject": one of the module names or "Not study", "activity": "...", "confidence": 0.0 to 1.0}',
 ].join('\n');
+
+/**
+ * Qwen3-VL in Ollama 0.30.7 ignores `think:false` and always reasons first (2–30 s). Ending the
+ * conversation with an empty think block as an assistant prefill skips the reasoning. Ollama then
+ * stops enforcing `format`, so the schema is also spelled out in SYSTEM and parseVerdict validates.
+ */
+export const NO_THINK_PREFILL = '<think>\n\n</think>\n\n';
 
 export interface VerdictSchema {
   type: 'object';
@@ -46,7 +53,7 @@ export function buildSchema(moduleNames: string[]): VerdictSchema {
 }
 
 export interface ChatMessage {
-  role: 'system' | 'user';
+  role: 'system' | 'user' | 'assistant';
   content: string;
   images?: string[];
 }
@@ -56,6 +63,8 @@ export interface PromptInput {
   windowTitle: string | null;
   modules: Pick<StudyModule, 'name' | 'keywords'>[];
   imageBase64: string;
+  /** Append the empty-think assistant prefill (see NO_THINK_PREFILL). */
+  prefillNoThink?: boolean;
 }
 
 export function buildUserText(
@@ -72,11 +81,34 @@ export function buildUserText(
   return lines.join('\n');
 }
 
-export function buildMessages({ appName, windowTitle, modules, imageBase64 }: PromptInput): ChatMessage[] {
-  return [
+export function buildMessages({ appName, windowTitle, modules, imageBase64, prefillNoThink }: PromptInput): ChatMessage[] {
+  const msgs: ChatMessage[] = [
     { role: 'system', content: SYSTEM },
     { role: 'user', content: buildUserText(appName, windowTitle, modules), images: [imageBase64] },
   ];
+  if (prefillNoThink) msgs.push({ role: 'assistant', content: NO_THINK_PREFILL });
+  return msgs;
+}
+
+/**
+ * Pull the first JSON object out of a model reply (tolerates code fences or stray text, which can
+ * happen when `format` isn't enforced). Returns the parsed value or null.
+ */
+export function extractJson(text: string): unknown {
+  const trimmed = text.trim();
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    // fall through
+  }
+  const start = trimmed.indexOf('{');
+  const end = trimmed.lastIndexOf('}');
+  if (start < 0 || end <= start) return null;
+  try {
+    return JSON.parse(trimmed.slice(start, end + 1));
+  } catch {
+    return null;
+  }
 }
 
 function findModule<M extends Pick<StudyModule, 'id' | 'name'>>(subject: string, modules: M[]): M | null {
