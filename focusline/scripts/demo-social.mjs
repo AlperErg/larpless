@@ -23,7 +23,7 @@ const subj = (label, color, minutes) => ({ label, color, seconds: minutes * 60 }
 
 const DEMO = [
   {
-    username: 'maya_chen',
+    username: 'carlos_cejas',
     posts: [
       { daysAgo: 0, hour: 10, caption: 'Krebs cycle finally clicked 🧬', pomodoros: 4, streak: 6, parts: [subj('Biology', 'green', 95), subj('Organic Chemistry', 'orange', 25), subj('Distracted', 'red', 10)] },
       { daysAgo: 1, hour: 20, caption: 'Late one before the lab report', pomodoros: 3, streak: 5, parts: [subj('Organic Chemistry', 'orange', 70), subj('Biology', 'green', 15), subj('Distracted', 'red', 12)] },
@@ -31,14 +31,14 @@ const DEMO = [
     ],
   },
   {
-    username: 'theo_park',
+    username: 'kacper_kotwica',
     posts: [
       { daysAgo: 0, hour: 9, caption: 'Morning calc grind ☕️', pomodoros: 2, streak: 3, parts: [subj('Calculus', 'blue', 55), subj('Physics', 'purple', 20), subj('Distracted', 'red', 18)] },
       { daysAgo: 2, hour: 16, caption: 'Problem set 4 done', pomodoros: 3, streak: 1, parts: [subj('Physics', 'purple', 80), subj('Calculus', 'blue', 10), subj('Distracted', 'red', 25)] },
     ],
   },
   {
-    username: 'priya_k',
+    username: 'guillermo_garcia',
     posts: [
       { daysAgo: 0, hour: 13, caption: 'Essay outline ✍️ 2,000 words to go', pomodoros: 5, streak: 12, parts: [subj('History', 'brown', 110), subj('Computer Science', 'pink', 30), subj('Distracted', 'red', 6)] },
       { daysAgo: 1, hour: 11, caption: null, pomodoros: 4, streak: 11, parts: [subj('Computer Science', 'pink', 90), subj('History', 'brown', 20), subj('Distracted', 'red', 9)] },
