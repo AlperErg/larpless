@@ -15,6 +15,12 @@
 
   [super applicationDidFinishLaunching:notification];
 
+  // Dock, window chrome and notification banners all read the AppIcon asset catalog entry.
+  NSImage *appIcon = [NSImage imageNamed:@"AppIcon"];
+  if (appIcon != nil) {
+    [NSApp setApplicationIconImage:appIcon];
+  }
+
   // Focusline main window: 1100x720 by default (unless a saved frame exists), min 900x600.
   NSWindow *window = self.window;
   window.title = @"Focusline";

@@ -104,7 +104,7 @@ export function SettingsPage() {
       <Row label="Pomodoro" hint="Default for new sessions.">
         <Segmented testID="settings-pomodoro" options={POMODORO_OPTIONS} value={s.pomodoroDefault} onChange={(v) => update({ pomodoroDefault: v })} />
       </Row>
-      <Row label="Demo fast mode" hint="10 s checks, alerts after 20 s, 2-minute pomodoros.">
+      <Row label="Demo fast mode" hint="10 s checks and alerts after 20 s. The Pomodoro length stays whatever you picked.">
         <Switch testID="settings-demoFast" accessibilityLabel="Demo fast mode" value={s.demoFast} onChange={(v) => update({ demoFast: v })} />
       </Row>
       <Row label="Webcam" hint="Presence and phone detection, on device at 1 fps.">

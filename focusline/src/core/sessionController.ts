@@ -343,7 +343,6 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
 
   function fallbackPreset(): PomodoroPreset {
     const s = deps.getSettings();
-    if (s.demoFast) return 'demo';
     return s.pomodoroDefault !== 'off' ? s.pomodoroDefault : '25/5';
   }
 
@@ -400,7 +399,8 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
       chunkIndex = 0;
       suspendedAt = null;
       pomoRemaining = null;
-      const preset: PomodoroPreset | null = opts.pomodoro === 'off' ? null : settings.demoFast ? 'demo' : opts.pomodoro;
+      // The preset the user picked is the length they get. demoFast only shortens checks and alerts.
+      const preset: PomodoroPreset | null = opts.pomodoro === 'off' ? null : opts.pomodoro;
 
       set({
         status: 'running',

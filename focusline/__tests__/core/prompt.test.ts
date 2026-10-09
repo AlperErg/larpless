@@ -5,7 +5,8 @@ describe('prompt', () => {
   it('buildSchema lists every module plus "Not study", all fields required', () => {
     const s = buildSchema(['Biology', 'Maths']);
     expect(s.properties.subject.enum).toEqual(['Biology', 'Maths', NOT_STUDY]);
-    expect(s.required.sort()).toEqual(['activity', 'confidence', 'studying', 'subject']);
+    expect(s.required.sort()).toEqual(['confidence', 'studying', 'subject']);
+    expect(SYSTEM).not.toContain('"activity"');
     expect(s.properties.studying.type).toBe('boolean');
     expect(s.properties.confidence.type).toBe('number');
   });
@@ -37,7 +38,7 @@ describe('prompt', () => {
     it('maps the subject to the module id (exact)', () => {
       expect(
         parseVerdict({ studying: true, subject: 'Biology', activity: 'Reading slides', confidence: 0.9 }, fixtureModules),
-      ).toEqual({ studying: true, moduleId: 'mod_biology', activity: 'Reading slides', confidence: 0.9, source: 'vlm' });
+      ).toEqual({ studying: true, moduleId: 'mod_biology', activity: '', confidence: 0.9, source: 'vlm' });
     });
 
     it('falls back to a case-insensitive match', () => {
@@ -47,7 +48,7 @@ describe('prompt', () => {
 
     it('"Not study" → studying false, no module', () => {
       const v = parseVerdict({ studying: true, subject: 'Not study', activity: 'Instagram feed', confidence: 0.95 }, fixtureModules);
-      expect(v).toEqual({ studying: false, moduleId: null, activity: 'Instagram feed', confidence: 0.95, source: 'vlm' });
+      expect(v).toEqual({ studying: false, moduleId: null, activity: '', confidence: 0.95, source: 'vlm' });
     });
 
     it('module subject with studying:false → not studying', () => {
@@ -55,11 +56,10 @@ describe('prompt', () => {
       expect(v).toMatchObject({ studying: false, moduleId: null });
     });
 
-    it('clamps confidence and truncates activity to 60 chars', () => {
-      const long = 'word '.repeat(30);
-      const v = parseVerdict({ studying: true, subject: 'Biology', activity: long, confidence: 7 }, fixtureModules)!;
+    it('clamps confidence and ignores any description the model still sends', () => {
+      const v = parseVerdict({ studying: true, subject: 'Biology', activity: 'word '.repeat(30), confidence: 7 }, fixtureModules)!;
       expect(v.confidence).toBe(1);
-      expect(v.activity.length).toBeLessThanOrEqual(60);
+      expect(v.activity).toBe('');
       expect(parseVerdict({ studying: true, subject: 'Biology', activity: 'a', confidence: -3 }, fixtureModules)!.confidence).toBe(0);
       expect(parseVerdict({ studying: true, subject: 'Biology', activity: 'a', confidence: 'x' }, fixtureModules)!.confidence).toBe(0.5);
     });

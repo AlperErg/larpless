@@ -15,10 +15,10 @@ export const SYSTEM = [
   '- Social media, messaging, games, shopping, entertainment video and unrelated news are "Not study".',
   '- Use the module keywords to pick the subject. The list covers many fields: pick the most specific module that fits (e.g. Calculus over Maths, Digital Logic over Coding). If it\'s clearly study content but matches no module, pick the closest one and lower your confidence.',
   '- The window title is a strong hint; if it conflicts with the screenshot, trust the screenshot.',
-  '- "activity": at most 6 words describing what is visible, e.g. "Reading cell division slides", "Scrolling Instagram feed".',
   '- "confidence": 0 to 1, how certain you are that the subject you chose is correct. It is NOT the probability of studying: a clear social feed is "Not study" with confidence 0.9 or more; use low values only when you are unsure which label fits.',
+  '- Do not describe the screen. The subject is the whole answer.',
   '',
-  'Reply with JSON only, matching the schema: {"studying": true or false, "subject": one of the module names or "Not study", "activity": "...", "confidence": 0.0 to 1.0}',
+  'Reply with JSON only, matching the schema: {"studying": true or false, "subject": one of the module names or "Not study", "confidence": 0.0 to 1.0}',
 ].join('\n');
 
 /**
@@ -33,7 +33,6 @@ export interface VerdictSchema {
   properties: {
     studying: { type: 'boolean' };
     subject: { type: 'string'; enum: string[] };
-    activity: { type: 'string' };
     confidence: { type: 'number' };
   };
   required: string[];
@@ -45,10 +44,9 @@ export function buildSchema(moduleNames: string[]): VerdictSchema {
     properties: {
       studying: { type: 'boolean' },
       subject: { type: 'string', enum: [...moduleNames, NOT_STUDY] },
-      activity: { type: 'string' },
       confidence: { type: 'number' },
     },
-    required: ['studying', 'subject', 'activity', 'confidence'],
+    required: ['studying', 'subject', 'confidence'],
   };
 }
 
@@ -131,12 +129,6 @@ function clamp01(x: unknown): number {
   return Math.min(1, Math.max(0, n));
 }
 
-function cleanActivity(x: unknown): string {
-  if (typeof x !== 'string') return '';
-  const one = x.replace(/\s+/g, ' ').trim();
-  return one.length > MAX_ACTIVITY_CHARS ? one.slice(0, MAX_ACTIVITY_CHARS).trimEnd() : one;
-}
-
 /**
  * Turn the model's JSON (already parsed, or a JSON string) into a ScreenVerdict.
  * Returns null when the shape is unusable; the chunk then becomes `unknown`.
@@ -157,7 +149,8 @@ export function parseVerdict(
   const r = obj as Record<string, unknown>;
   if (typeof r.subject !== 'string') return null;
 
-  const activity = cleanActivity(r.activity);
+  // The model only picks a subject. A description costs output tokens and the UI already shows the subject.
+  const activity = '';
   const confidence = clamp01(r.confidence);
   const subject = r.subject.trim();
 

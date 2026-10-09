@@ -44,6 +44,26 @@ final class FLShellNotificationDelegate: NSObject, UNUserNotificationCenterDeleg
   }
 }
 
+/// Bundled logo for notification banners (also used when the asset-catalog app icon is missing in dev builds).
+enum FLNotificationAssets {
+  static func attachLogo(to content: UNMutableNotificationContent) {
+    guard let url = Bundle.main.url(forResource: "FLNotificationIcon", withExtension: "png") else {
+      flShellLog("[FLNotifications] FLNotificationIcon.png missing from bundle")
+      return
+    }
+    do {
+      let attachment = try UNNotificationAttachment(
+        identifier: "focusline-logo",
+        url: url,
+        options: [UNNotificationAttachmentOptionsTypeHintKey: "public.png"]
+      )
+      content.attachments = [attachment]
+    } catch {
+      flShellLog("[FLNotifications] logo attachment failed: \(error.localizedDescription)")
+    }
+  }
+}
+
 /// JS module `FLNotifications` (CONTRACTS.md §2).
 @objc(FLNotifications)
 final class FLNotifications: NSObject {
@@ -74,6 +94,7 @@ final class FLNotifications: NSObject {
     content.title = title
     content.body = n["body"] as? String ?? ""
     if (n["sound"] as? NSNumber)?.boolValue ?? false { content.sound = .default }
+    FLNotificationAssets.attachLogo(to: content)
     let request = UNNotificationRequest(identifier: id, content: content, trigger: nil)
     UNUserNotificationCenter.current().add(request) { error in
       if let error {

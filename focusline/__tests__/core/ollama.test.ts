@@ -35,7 +35,7 @@ describe('ollama', () => {
     );
     const o = createOllama({ baseUrl: 'http://127.0.0.1:11434/', model: 'qwen3-vl:4b', fetchImpl, log });
     const v = await o.classify(SNAP, fixtureModules);
-    expect(v).toEqual({ studying: true, moduleId: 'mod_biology', activity: 'Reading cell slides', confidence: 0.91, source: 'vlm' });
+    expect(v).toEqual({ studying: true, moduleId: 'mod_biology', activity: '', confidence: 0.91, source: 'vlm' });
 
     expect(fetchImpl).toHaveBeenCalledTimes(1);
     const [url, init] = fetchImpl.mock.calls[0];
@@ -50,6 +50,7 @@ describe('ollama', () => {
       options: { temperature: 0 },
     });
     expect(body.format.properties.subject.enum).toEqual(['Biology', 'Maths', 'History', 'Not study']);
+    expect(body.format.required).not.toContain('activity');
     expect(body.messages[1].images).toEqual(['SECRET_IMAGE_DATA']);
     expect(body.messages[1].content).toContain('Window title: BIO101 Lecture 4');
     expect(init?.signal).toBeDefined();

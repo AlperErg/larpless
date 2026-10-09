@@ -211,9 +211,16 @@ describe('sessionController', () => {
     expect(s!.totalS).toBe(60);
   });
 
+  it('the pomodoro preset you pick is the length you get, even in demo fast mode', async () => {
+    const h = setup({ settings: { demoFast: true } });
+    await h.ctrl.start({ pomodoro: '25/5' });
+    expect(h.state.pomodoro).toMatchObject({ preset: '25/5', phase: 'focus', phaseEndsAtMs: T0 + 25 * 60_000 });
+    await h.ctrl.end();
+  });
+
   it('a pomodoro break stops capture and the webcam, ducks sound, then focus resumes', async () => {
     const h = setup({ settings: { demoFast: true } });
-    await h.ctrl.start({ pomodoro: '25/5' }); // demoFast → 'demo' preset: 2 min focus / 1 min break
+    await h.ctrl.start({ pomodoro: 'demo' }); // 2 min focus / 1 min break, so the test doesn't wait 25 min
     expect(h.state.pomodoro).toMatchObject({ preset: 'demo', phase: 'focus' });
     await advance(120_000);
     expect(h.state.status).toBe('break');

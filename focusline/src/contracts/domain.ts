@@ -75,7 +75,7 @@ export interface Settings {
   model: string;                        // 'qwen3-vl:4b'
   ollamaUrl: string;                    // 'http://127.0.0.1:11434'
   strictness: Strictness;
-  demoFast: boolean;                    // 10 s chunks, 20 s/50 s alerts, 'demo' pomodoro
+  demoFast: boolean;                    // 10 s chunks, 20 s/50 s alerts
   webcamEnabled: boolean;
   soundsEnabled: boolean;               // chimes + notification sound
   defaultSound: SoundId;
