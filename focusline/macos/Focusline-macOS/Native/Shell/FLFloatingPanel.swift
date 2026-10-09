@@ -115,7 +115,20 @@ final class FLFloatingPanel: RCTEventEmitter {
   @objc func debugDeactivateApp(_ resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
     DispatchQueue.main.async {
       NSApp.deactivate()
-      DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { resolve(["appIsActive": NSApp.isActive]) }
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+        if !NSApp.isActive {
+          resolve(["appIsActive": false, "method": "deactivate"])
+          return
+        }
+        // macOS may ignore deactivate(); hiding hands focus to the next app, then the windows come back unfocused.
+        NSApp.hide(nil)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+          NSApp.unhideWithoutActivation()
+          DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            resolve(["appIsActive": NSApp.isActive, "method": "hide+unhideWithoutActivation"])
+          }
+        }
+      }
     }
   }
 
