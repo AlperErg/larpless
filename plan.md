@@ -43,6 +43,8 @@ isProject: false
 
 # Focusline: Strava for studying (fully local analysis)
 
+> **macOS / React Native build:** this file is the product spec. The technical plan for the native Mac app (react-native-macos, built by parallel agents) is in [docs/macos/PLAN.md](docs/macos/PLAN.md), and its rules for agents are in [CLAUDE.md](CLAUDE.md). Where this file mentions web tech (Vite, getDisplayMedia, MediaPipe, PiP, Dexie), the macOS docs replace it.
+
 ## Goals and non-negotiables
 
 - Every screenshot and webcam frame is analysed on the device: Ollama on `localhost:11434` for the screen, MediaPipe in the browser for the webcam.
