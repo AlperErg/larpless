@@ -2,7 +2,7 @@
 
 > Updated by the WS-C agent after every task. The orchestrator reads this at each checkpoint.
 
-**Current:** C4 rules · **Sprint:** 1 · **Last commit:** C3 close-out
+**Current:** C5 classifier · **Sprint:** 1 · **Last commit:** C4 rules
 
 ## Done
 
@@ -10,6 +10,7 @@
 - C2 `src/core/ollama.ts`: `createOllama({baseUrl, model, fetchImpl, timeoutMs})` → `checkHealth()` (ok | down | modelMissing, `:latest`-tolerant) and `classify(snapshot, modules)` (never throws; null on timeout/HTTP/parse error; logs latency + verdict only). `baseUrl`/`model` may be getters so Settings changes apply live.
 - C3 `scripts/bench-classifier.ts` + prompt tuning. Results below. `ollama.classify` now sends the empty-think assistant prefill (as benched) and parses the reply with `extractJson` (Ollama stops enforcing `format` once a prefill is present). Synthetic images in `focusline/bench/` deleted.
 
+- C4 `src/core/rules.ts`: `DISTRACTION_RULES` (14 rules, word-boundary regexes so "netflix.com" is not "x.com" and "mainstream" is not "steam"; also matches `youtube.com/shorts`) and `matchDistraction(appName, windowTitle)`.
 ## C3 bench results (synthetic screenshots, 4b only; 8b/gemma4 skipped to save memory)
 
 10 synthetic 1440×900 mock-ups rendered with headless Chrome (Biology slides, Maths problem set, Maths YouTube lecture, Maths code editor, History essay notes; Instagram feed, YouTube music, shopping, chat, online game), downscaled to 1280 px JPEG q70, with window titles.
