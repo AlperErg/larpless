@@ -53,6 +53,16 @@ describe('ollama', () => {
     expect(body.messages[1].images).toEqual(['SECRET_IMAGE_DATA']);
     expect(body.messages[1].content).toContain('Window title: BIO101 Lecture 4');
     expect(init?.signal).toBeDefined();
+    // Empty-think assistant prefill (Qwen3-VL ignores think:false).
+    expect(body.messages).toHaveLength(3);
+    expect(body.messages[2]).toEqual({ role: 'assistant', content: '<think>\n\n</think>\n\n' });
+  });
+
+  it('tolerates code fences / stray text around the JSON reply', async () => {
+    const fetchImpl: FetchLike = () =>
+      chatRes('```json\n{"studying":true,"subject":"Maths","activity":"Problem set","confidence":0.8}\n```');
+    const o = createOllama({ baseUrl: 'http://x', model: 'm', fetchImpl, log });
+    await expect(o.classify(SNAP, fixtureModules)).resolves.toMatchObject({ studying: true, moduleId: 'mod_maths' });
   });
 
   it('never logs the image or the request body', async () => {

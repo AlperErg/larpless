@@ -16,7 +16,7 @@ export const SYSTEM = [
   '- Use the module keywords to pick the subject. If it\'s clearly study content but matches no module, pick the closest module and lower your confidence.',
   '- The window title is a strong hint; if it conflicts with the screenshot, trust the screenshot.',
   '- "activity": at most 6 words describing what is visible, e.g. "Reading cell division slides", "Scrolling Instagram feed".',
-  '- "confidence": 0 to 1, how sure you are about this label (for "Not study" too).',
+  '- "confidence": 0 to 1, how certain you are that the subject you chose is correct. It is NOT the probability of studying: a clear social feed is "Not study" with confidence 0.9 or more; use low values only when you are unsure which label fits.',
   '',
   'Reply with JSON only, matching the schema: {"studying": true or false, "subject": one of the module names or "Not study", "activity": "...", "confidence": 0.0 to 1.0}',
 ].join('\n');

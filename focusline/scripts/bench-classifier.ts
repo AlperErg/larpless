@@ -3,6 +3,7 @@
  *
  *   node scripts/bench-classifier.ts --model qwen3-vl:4b
  *   node scripts/bench-classifier.ts --model qwen3-vl:8b --no-title
+ *   node scripts/bench-classifier.ts --no-prefill      # let Qwen3-VL reason first (slow)
  *   node scripts/bench-classifier.ts --clean          # delete bench/ images afterwards
  *
  * Reads bench/*.png|jpg. The expected label is the filename prefix before "__"
@@ -40,7 +41,7 @@ const CLEAN = flag('clean');
 const ONLY_GENERATE = flag('generate-only');
 const TIMEOUT_MS = Number(arg('timeout', '120000'));
 const ONLY = arg('only', '');
-const PREFILL = flag('prefill');
+const PREFILL = !flag('no-prefill'); // empty-think assistant prefill, as the app sends it
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const BENCH = path.resolve(HERE, '..', 'bench');

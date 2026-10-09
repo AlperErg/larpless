@@ -6,7 +6,7 @@
 import type { ScreenVerdict, StudyModule } from '../contracts/domain';
 import type { ScreenSnapshot } from '../contracts/native';
 import type { OllamaStatus } from '../contracts/store';
-import { buildMessages, buildSchema, parseVerdict } from './prompt';
+import { buildMessages, buildSchema, extractJson, parseVerdict } from './prompt';
 
 export type OllamaHealth = Exclude<OllamaStatus, 'unknown'>;
 
@@ -103,6 +103,8 @@ export function createOllama(opts: OllamaOptions): OllamaClient {
           windowTitle: snapshot.windowTitle,
           modules,
           imageBase64: snapshot.jpegBase64,
+          // Qwen3-VL ignores think:false; the empty-think prefill skips reasoning (bench: p50 3.2 s).
+          prefillNoThink: true,
         }),
       });
       try {
@@ -119,7 +121,10 @@ export function createOllama(opts: OllamaOptions): OllamaClient {
         });
         const content = (data as { message?: { content?: unknown } } | null)?.message?.content;
         if (typeof content !== 'string') throw new Error('no content');
-        const verdict = parseVerdict(JSON.parse(content), modules);
+        // With the prefill Ollama no longer enforces `format`, so tolerate fences / stray text.
+        const parsed = extractJson(content);
+        if (parsed === null) throw new Error('bad json');
+        const verdict = parseVerdict(parsed, modules);
         const ms = Date.now() - t0;
         if (verdict) {
           const label = verdict.studying
