@@ -1,8 +1,8 @@
 import type { Settings } from './contracts/domain';
 
 export const config = {
-  USE_MOCK_NATIVE: true,          // flip to false at the 4:00 checkpoint
-  USE_MOCK_CLASSIFIER: true,      // true → classifier derives the verdict from windowTitle, no Ollama
+  USE_MOCK_NATIVE: false,          // flip to false at the 4:00 checkpoint
+  USE_MOCK_CLASSIFIER: false,      // true → classifier derives the verdict from windowTitle, no Ollama
   CHUNK_S: 30,
   DEMO_CHUNK_S: 10,
   CAPTURE: { maxWidth: 1280, jpegQuality: 0.7 },

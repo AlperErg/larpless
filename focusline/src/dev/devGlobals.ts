@@ -13,6 +13,7 @@ import { native } from '../native';
 import { useSessionStore } from '../store/sessionStore';
 import { useAppStore } from '../store/appStore';
 import { applyFixture } from '../fixtures/apply';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type Runner = () => Promise<unknown>;
 
@@ -32,6 +33,7 @@ export function installDevGlobals(): void {
     useAppStore,
     applyFixture,
     harness,
+    storage: AsyncStorage,
     ping: (): Promise<string> => NativeModules.FLPing?.ping() ?? Promise.resolve('FLPing missing'),
     pingRoundTrip,
   };
