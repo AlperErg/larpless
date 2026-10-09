@@ -2,7 +2,7 @@
 
 > Updated by the WS-C agent after every task. The orchestrator reads this at each checkpoint.
 
-**Current:** C14 demoMode · **Sprint:** 2 · **Last commit:** C13 store wiring
+**Current:** C15 tests · **Sprint:** 2 · **Last commit:** C14 demoMode
 
 ## Done
 
@@ -19,6 +19,7 @@
 - C11 `src/core/db.ts`: `createDb(kv)` with load/save modules, `loadSettings` (merged over `DEFAULT_SETTINGS`, corrupt → defaults)/`saveSettings`, `listSessions` (newest first)/`saveSession` (upsert), `appendChunk`/`getChunks`/`updateChunk(chunk)`. Read-modify-write ops are serialised. Chunks are whitelisted to the `Chunk` fields before writing. `createMemoryKv()` for tests.
 - C12 `src/core/sessionController.ts`: `createSessionController({native, db, store, getModules, getSettings, classifier, ollama, now, config, onSessionSaved?, demoChunks?, demoIntervalMs?, log?})` returns the `SessionStoreActions` plus `handlePanelAction`, `setPomodoroPreset` and `dispose`. Pure `toPanelState(state, modules, flash)`; the panel is pushed only when the JSON changes. A single 1 s tick closes due chunk windows (`windowStart + chunkS`, drift-free) first, then runs the pomodoro. Away is decided from the webcam before any classifier call. Pause and break shift the open window rather than cutting a partial chunk, so no screenshot is taken at a pause or break. End finalises a partial ≥ 10 s, awaits in-flight chunks, saves the summary and tears everything down (0 timers left). Webcam reject → `webcam.enabled=false`. E_PERMISSION → unknown chunk plus a one-time notification. Breaks: webcam stopped, `duck(0.3)`, timer frozen, alert reset, "Break time"/"Back to focus" notifications plus `chime(phase)`. Ships with a minimal `src/core/demoMode.ts` replayer (finished in C14).
 - C13 stores: `appStore.ts` exports `appDb = createDb(AsyncStorage)` and implements `load` (modules/settings/sessions; no modules → `onboarded=false`), `saveModules`, `updateSettings` (merge + persist) and `getChunks`, plus `upsertSessionSummary()`. `sessionStore.ts` keeps the Phase 0 initial state; its actions delegate to a lazily created controller (`getSessionController()`, exported for dev tools/tests) built with `createOllama` (url/model read live from settings), `createClassifier(config)`, `appDb`, `fixtureChunks` for demo. Store test drives start → chunks → end through the real zustand stores with mock native, and checks the `fl:*` values contain no base64 or window titles.
+- C14 `src/core/demoMode.ts`: `startDemo({chunks, sessionId, startedAt, intervalMs=2000, canAdvance, onChunk, onDone?})` and `rebaseChunks`. `start({pomodoro, demo:true})` replays `fixtureChunks` (from `fixtures/data.ts` only) via the controller's own `applyChunk` (same store updates, alerts, notifications, panel pushes, db writes), one chunk per 2 s, `timer.baseS += 30` per chunk (`runningSinceMs: null`, so the panel clock steps). It never calls screen or webcam (asserted). Pause holds the replay. The privacy counters follow the recorded sources.
 
 ## C3 bench results (synthetic screenshots, 4b only; 8b/gemma4 skipped to save memory)
 

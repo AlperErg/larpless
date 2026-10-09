@@ -397,5 +397,45 @@ describe('sessionController', () => {
     const out = spy.mock.calls.flat().map(String).join('\n');
     expect(out).not.toContain('/9j/');
   });
-});
 
+  it('demo mode replays fixtureChunks through the same store/alerts/panel path, never touching screen or webcam', async () => {
+    const h = setup();
+    const getWin = jest.spyOn(h.native.screen, 'getActiveWindow');
+    await h.ctrl.start({ pomodoro: 'off', demo: true });
+    expect(h.state.status).toBe('running');
+    expect(h.state.webcam.enabled).toBe(false);
+    expect(h.state.timer).toEqual({ baseS: 0, runningSinceMs: null });
+
+    await advance(2_000);
+    expect(h.state.chunks).toHaveLength(1);
+    expect(h.state.timer.baseS).toBe(30);
+    expect(h.state.current).toMatchObject({ kind: 'subject', moduleId: 'mod_biology' });
+    expect(h.panelUpdates.at(-1)).toMatchObject({ status: 'studying', title: 'Biology', timer: { baseS: 30, runningSinceMs: null } });
+
+    // Chunks 12–15 are Instagram: 4 × 30 s → level 2 notification (strictness 2) through the real alerts.
+    await advance(30_000);
+    expect(h.state.chunks).toHaveLength(16);
+    expect(h.state.alert.level).toBe(2);
+    expect((h.native.notifications.post as jest.Mock).mock.calls.map((c) => c[0].title)).toContain("You've been on Instagram for 2 min");
+
+    // Pause holds the replay.
+    h.ctrl.pause();
+    await advance(10_000);
+    expect(h.state.chunks).toHaveLength(16);
+    h.ctrl.resume();
+    expect(h.state.timer.runningSinceMs).toBeNull();
+
+    await advance(64_000);
+    expect(h.state.chunks).toHaveLength(48);
+    expect(h.state.privacy).toEqual({ framesAnalysed: fixtureChunks.filter((c) => c.source === 'vlm').length, checksWithoutScreenshot: fixtureChunks.filter((c) => c.source !== 'vlm').length, framesStored: 0 });
+
+    const summary = await h.ctrl.end();
+    expect(summary!.totalS).toBe(48 * 30);
+    expect(summary!.focusS).toBe(fixtureChunks.filter((c) => c.kind === 'subject').length * 30);
+    expect(getWin).not.toHaveBeenCalled();
+    expect(h.capture).not.toHaveBeenCalled();
+    expect(h.webcamStart).not.toHaveBeenCalled();
+    expect(await h.db.getChunks(summary!.id)).toHaveLength(48);
+    expect(jest.getTimerCount()).toBe(0);
+  });
+});
