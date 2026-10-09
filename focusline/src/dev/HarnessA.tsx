@@ -11,6 +11,7 @@
  *   A.capture         3 captures (cold + warm timings)
  *   A.webcam          webcam 8 s run summary
  *   A.webcamCycle     5× start/stop
+ *   A.webcamWatch     20 s per-sample timeline (for "leave the frame" / "hold a phone up" checks)
  *
  * PRIVACY: results contain sizes, counts and timings only, never image data.
  */
@@ -175,6 +176,40 @@ async function webcamRun(seconds: number) {
   return { ok: true, startMs, seconds, ...summariseSamples(samples, seconds) };
 }
 
+/**
+ * Per-sample timeline for human-in-the-loop checks (step out of frame / hold a phone up while it runs).
+ * One char per sample: P present, F present + phone, . absent, f absent + phone.
+ */
+async function webcamWatch(seconds: number) {
+  if (!NativeModules.FLWebcam) return { ok: false, error: 'FLWebcam missing' };
+  const samples: WebcamSample[] = [];
+  let unsub: Unsubscribe | null = null;
+  try {
+    unsub = webcam.onSample((s) => samples.push(s));
+    await webcam.start({ fps: config.WEBCAM_FPS });
+    await sleep(seconds * 1000);
+  } catch (e) {
+    return { ok: false, ...errInfo(e) };
+  } finally {
+    unsub?.();
+    await webcam.stop().catch(() => undefined);
+  }
+  const t0 = samples[0]?.t ?? 0;
+  const timeline = samples
+    .map((s) => (s.personPresent ? (s.phoneVisible ? 'F' : 'P') : s.phoneVisible ? 'f' : '.'))
+    .join('');
+  const changes = samples
+    .map((s, i) => ({ s, prev: samples[i - 1] }))
+    .filter(({ s, prev }) => !prev || prev.personPresent !== s.personPresent || prev.phoneVisible !== s.phoneVisible)
+    .map(({ s }) => ({
+      atS: r1((s.t - t0) / 1000),
+      present: s.personPresent,
+      phone: s.phoneVisible,
+      score: Math.round(s.phoneScore * 100) / 100,
+    }));
+  return { ok: true, seconds, timeline, changes, ...summariseSamples(samples, seconds), last: undefined };
+}
+
 async function webcamCycle(times: number) {
   if (!NativeModules.FLWebcam) return { ok: false, error: 'FLWebcam missing' };
   let events = 0;
@@ -225,6 +260,7 @@ registerHarness('A.window10', () => activeWindowSeries(10, 1000));
 registerHarness('A.capture', () => captureSeries(3));
 registerHarness('A.webcam', () => webcamRun(8));
 registerHarness('A.webcamCycle', () => webcamCycle(5));
+registerHarness('A.webcamWatch', () => webcamWatch(20));
 
 /* ---------------------------------------------------------------- UI */
 

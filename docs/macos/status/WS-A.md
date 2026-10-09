@@ -2,7 +2,7 @@
 
 > Updated by the WS-A agent after every task. The orchestrator reads this at each checkpoint.
 
-**Current:** Sprint 1 + Sprint 2 done (A1–A7); remaining acceptance items need a human in front of the camera · **Sprint:** 2 · **Last commit:** WS-A: A5+A6 FLWebcam
+**Current:** Sprint 1 + Sprint 2 done (A1–A7); remaining acceptance items need a human in front of the camera · **Sprint:** 2 · **Last commit:** WS-A: A7 webcam harness timeline
 
 ## Done
 
@@ -12,7 +12,7 @@
 - A4 `src/dev/HarnessA.tsx`: buttons for permissions (status/request/settings/relaunch), active window ×10 over 10 s, Capture (320 px preview, cleared on next press), webcam start/stop + live readout, 5× start/stop. Calls the real facades (`src/native/{screen,permissions,webcam}`) directly and shows a warning while `USE_MOCK_NATIVE` is true. Headless runners registered: `A`, `A.perm`, `A.window10`, `A.capture`, `A.webcam`, `A.webcamCycle` (results carry sizes/counts/timings only).
 - A5 `FLWebcam` (`RCTEventEmitter`, event `FLWebcamSample`): `AVCaptureSession` (VGA preset, built-in camera preferred), `AVCaptureVideoDataOutput` (BGRA, discards late frames) on a private serial queue, 1/fps gate (frames outside the gate are dropped at once), one `perform([...])` with `VNDetectHumanRectanglesRequest(upperBodyOnly)` + YOLO `VNCoreMLRequest`. `stop()` stops, detaches the delegate, removes inputs/outputs and releases the session (idempotent). Bridge `invalidate()` also tears the camera down. `capturePhoto()` is a stub that rejects `E_NOT_RUNNING` (A9, Phase 2).
 - A6 YOLO: `FLWebcamModel` loads `yolo11n(configuration:)` (`computeUnits = .all`) once, on a background queue when `start()` is first called (≈1.2 s); frames before it's ready are presence-only. Labels checked: 80 COCO labels, `'cell phone'` at index 67 (full list logged once in Debug). The NMS pipeline's `iouThreshold`/`confidenceThreshold` inputs are supplied via `VNCoreMLModel.featureProvider` (0.6 / 0.2).
-- A7 Harness webcam section (was built in A4): Start/Stop webcam with live readout (`present`, `phone`, `score`, samples/s over the last 5 s), 5× start/stop button; headless runners `A.webcam` (8 s summary) and `A.webcamCycle`.
+- A7 Harness webcam section (was built in A4): Start/Stop webcam with live readout (`present`, `phone`, `score`, samples/s over the last 5 s), 5× start/stop button; headless runners `A.webcam` (8 s summary), `A.webcamCycle`, and `A.webcamWatch` (20 s per-sample timeline `P/F/./f` + transition times, for the human checks below). Sample run: `{"timeline":"PPPPPPPPPPPPPPPPPPPP","samples":20,"perSec":1,"meanGapMs":994,"phoneCount":0}`.
 
 ## Acceptance checklist
 
@@ -29,8 +29,8 @@
 
 ### Sprint 2
 - [~] Sitting in front of the camera → `personPresent:true`. Leaving the frame → false within 2 s.
-  - `A.webcam` (8 s): `{"samples":8,"perSec":1,"meanGapMs":922,"presentCount":8,"phoneCount":0}`: present in 8/8 samples with the user at the desk. Start 416 ms (cold) / ~25 ms (warm); per-frame Vision + YOLO 14 ms (first frame 500 ms while YOLO warms up). **Human check for "leave → false within 2 s":** run `node scripts/js-eval.mjs 8082 "__FL.harness['A.webcam']()"` and step out of frame after ~3 s; or use Harness A → Start webcam and watch `present`.
-- [ ] Phone held up in view → `phoneVisible:true` within 2 s; phone down → false. **Needs human** (hold a phone up during `A.webcam` / the live readout; `maxPhoneScore` and `phoneCount` show the result). With no phone in view: `phoneCount 0`, `maxPhoneScore 0`.
+  - `A.webcam` (8 s): `{"samples":8,"perSec":1,"meanGapMs":922,"presentCount":8,"phoneCount":0}`: present in 8/8 samples with the user at the desk. Start 416 ms (cold) / ~25 ms (warm); per-frame Vision + YOLO 14 ms (first frame 500 ms while YOLO warms up). **Human check for "leave → false within 2 s":** run `node scripts/js-eval.mjs 8082 "__FL.harness['A.webcamWatch']()"`, step out of frame after ~5 s and back after ~12 s; `changes[].atS` shows when `present` flipped. Or use Harness A → Start webcam and watch `present`.
+- [ ] Phone held up in view → `phoneVisible:true` within 2 s; phone down → false. **Needs human:** run `A.webcamWatch`, hold a phone up (screen or back towards the camera) for ~5 s, then put it down; the timeline should show `F` then `P` again, and `maxPhoneScore` > 0.4. With no phone in view: `phoneCount 0`, `maxPhoneScore 0`.
 - [x] CPU stays reasonable at 1 fps (Activity Monitor < 15% on the M4 Pro).
   - `top -pid` every 2 s: app idle 0–1.6 %; webcam at 1 fps 6.8–9.9 % (avg ≈ 8.6 %).
 - [x] Repeated start/stop doesn't crash, and the camera light turns off after `stop()`.
