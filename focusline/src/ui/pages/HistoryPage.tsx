@@ -8,10 +8,11 @@ import { Page } from '../layout/Page';
 import { groupByWeek, totalsBySubject } from '../lib/derive';
 import { formatDuration, formatHours } from '../lib/format';
 import { colors, space } from '../theme';
+import { useAllModules } from '../lib/useAllModules';
 
 export function HistoryPage() {
   const sessions = useAppStore((s) => s.sessions);
-  const modules = useAppStore((s) => s.modules);
+  const modules = useAllModules();
   const go = useNavStore((s) => s.go);
   const weeks = useMemo(() => groupByWeek(sessions), [sessions]);
   const totals = useMemo(() => totalsBySubject(sessions, modules), [sessions, modules]);

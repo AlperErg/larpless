@@ -65,3 +65,4 @@ export function freshColor(used: TagColor[]): TagColor {
 export function blankDraft(used: TagColor[]): ModuleDraft {
   return { id: newModuleId(), name: '', color: freshColor(used), keywordsText: '' };
 }
+

@@ -14,11 +14,11 @@ beforeEach(async () => {
 });
 
 describe('appStore (AsyncStorage)', () => {
-  it('load with no modules keeps onboarded false; save/update persist under fl:* keys', async () => {
+  it('load keeps stored onboarded (own courses optional); save/update persist under fl:* keys', async () => {
     await AsyncStorage.setItem('fl:settings', JSON.stringify({ onboarded: true, volume: 0.8 }));
     await useAppStore.getState().load();
     expect(useAppStore.getState()).toMatchObject({ loaded: true, modules: [], sessions: [] });
-    expect(useAppStore.getState().settings).toMatchObject({ onboarded: false, volume: 0.8, model: 'qwen3-vl:4b' });
+    expect(useAppStore.getState().settings).toMatchObject({ onboarded: true, volume: 0.8, model: 'qwen3-vl:4b' });
 
     await useAppStore.getState().saveModules(fixtureModules);
     await useAppStore.getState().updateSettings({ onboarded: true, strictness: 5 });

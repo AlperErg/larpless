@@ -12,11 +12,12 @@ import { native } from '../../native';
 import { useAppStore } from '../../store/appStore';
 import { useNavStore } from '../../store/navStore';
 import { useSessionStore } from '../../store/sessionStore';
-import { Button, Callout, CodeBlock, EditableTable, Muted, PageHeader, Strong, Tag, Text } from '../components';
+import { Button, Callout, CodeBlock, EditableTable, Muted, SubjectLibrary, PageHeader, Strong, Tag, Text } from '../components';
 import { PageBody } from '../layout/Page';
-import { blankDraft, draftsFromModules, duplicateNames, modulesFromDrafts } from '../lib/modules';
+import { draftsFromModules, duplicateNames, modulesFromDrafts } from '../lib/modules';
 import type { ModuleDraft } from '../lib/modules';
 import { colors, motion, radius, space, tag } from '../theme';
+import { LIBRARY_MODULES } from '../../core/subjectLibrary';
 
 const STEPS = ['Your modules', 'Permissions', 'Local AI'] as const;
 
@@ -81,21 +82,18 @@ function Progress({ step }: { step: number }) {
 function ModulesStep({ onNext }: { onNext: () => void }) {
   const stored = useAppStore((s) => s.modules);
   const saveModules = useAppStore((s) => s.saveModules);
-  const [drafts, setDrafts] = useState<ModuleDraft[]>(() =>
-    stored.length
-      ? draftsFromModules(stored)
-      : [{ ...blankDraft([]), name: 'Biology', color: 'green', keywordsText: 'cell, mitosis' }],
-  );
+  const [drafts, setDrafts] = useState<ModuleDraft[]>(() => draftsFromModules(stored));
   const mods = modulesFromDrafts(drafts);
   const dups = duplicateNames(drafts);
 
   return (
     <View testID="onboarding-modules">
       <Text variant="h2" style={styles.h}>
-        What are you studying?
+        Your subjects
       </Text>
       <Text muted style={styles.lead}>
-        Add a row per module. Keywords (course codes, topics) help the on-device model pick the right subject.
+        Nothing to pick: Focusline recognises {LIBRARY_MODULES.length} subjects automatically and tracks whichever you
+        study. Optionally add your own courses (course codes, topics, lecturer names) for sharper labels.
       </Text>
       <EditableTable rows={drafts} onChange={setDrafts} />
       {dups.length ? (
@@ -106,20 +104,18 @@ function ModulesStep({ onNext }: { onNext: () => void }) {
       <View style={styles.actions}>
         <Button
           testID="onboarding-next"
-          title="Continue"
+          title={mods.length ? 'Continue' : 'Skip for now'}
           variant="primary"
-          disabled={mods.length === 0}
           onPress={() => {
-            saveModules(mods).catch(() => {});
+            if (mods.length || stored.length) saveModules(mods).catch(() => {});
             onNext();
           }}
         />
-        {mods.length === 0 ? (
-          <Text variant="small" style={styles.hint}>
-            Add at least one module to continue.
-          </Text>
-        ) : null}
       </View>
+      <Text variant="small" weight="medium" style={styles.presets}>
+        Recognised automatically
+      </Text>
+      <SubjectLibrary testID="onboarding-library" overriddenNames={drafts.map((d) => d.name)} />
     </View>
   );
 }
@@ -350,6 +346,7 @@ function OllamaStep({ onBack, onFinish }: { onBack: () => void; onFinish: () => 
 }
 
 const styles = StyleSheet.create({
+  presets: { marginTop: space.lg },
   scroll: { flex: 1, backgroundColor: colors.bg },
   scrollContent: { paddingBottom: 96 },
   progress: { flexDirection: 'row', marginBottom: space.xl },

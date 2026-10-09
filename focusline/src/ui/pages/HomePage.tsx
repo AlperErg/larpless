@@ -12,12 +12,13 @@ import { streakDays } from '../lib/derive';
 import { formatDuration, greeting } from '../lib/format';
 import { POMODORO_OPTIONS } from '../lib/labels';
 import { space } from '../theme';
+import { useAllModules } from '../lib/useAllModules';
 
 const RECENT = 7;
 
 export function HomePage() {
   const sessions = useAppStore((s) => s.sessions);
-  const modules = useAppStore((s) => s.modules);
+  const modules = useAllModules();
   const pomodoroDefault = useAppStore((s) => s.settings.pomodoroDefault);
   const updateSettings = useAppStore((s) => s.updateSettings);
   const status = useSessionStore((s) => s.status);
@@ -82,14 +83,6 @@ export function HomePage() {
         </View>
       )}
 
-      {modules.length === 0 ? (
-        <Callout testID="home-no-modules" emoji="📚" style={styles.block}>
-          <View style={styles.liveRow}>
-            <Text style={styles.flex}>Add your modules so Focusline knows what you're studying.</Text>
-            <Button title="Add modules" variant="secondary" onPress={() => go('modules')} />
-          </View>
-        </Callout>
-      ) : null}
 
       <View style={styles.section}>
         <View style={styles.streakRow}>

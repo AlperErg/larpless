@@ -27,6 +27,7 @@ import { formatCountdown, formatDuration, formatTime, timeAgo } from '../lib/for
 import { useNow } from '../lib/hooks';
 import { POMODORO_OPTIONS, SOUND_ICON, SOUND_LABEL, nextSound } from '../lib/labels';
 import { space } from '../theme';
+import { useAllModules } from '../lib/useAllModules';
 
 export function SessionPage() {
   const status = useSessionStore((s) => s.status);
@@ -51,7 +52,7 @@ function LiveSession({ status }: { status: SessionStatus }) {
   const sound = useSessionStore((s) => s.sound);
   const setSound = useSessionStore((s) => s.setSound);
   const skipPomodoroPhase = useSessionStore((s) => s.skipPomodoroPhase);
-  const modules = useAppStore((s) => s.modules);
+  const modules = useAllModules();
 
   const breakdown = useMemo(() => breakdownFromChunks(chunks, modules), [chunks, modules]);
   const line = statusLine(status, current, modules);
