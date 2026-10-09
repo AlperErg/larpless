@@ -14,17 +14,19 @@ import { useAppStore } from './store/appStore';
 import { useNavStore } from './store/navStore';
 import type { Route } from './store/navStore';
 import { useSessionStore } from './store/sessionStore';
+import { useSocialStore } from './store/socialStore';
 import { CommandPalette } from './ui/layout/CommandPalette';
 import { AppLayout } from './ui/layout/AppLayout';
 import { ErrorBoundary } from './ui/layout/ErrorBoundary';
 import { endSession, isLive, startSession } from './ui/lib/actions';
 import { useViewport } from './ui/lib/viewport';
 import { DevToolsPage, installUiIntrospection } from './ui/pages/DevToolsPage';
+import { FriendsPage } from './ui/pages/FriendsPage';
 import { HistoryPage } from './ui/pages/HistoryPage';
 import { HomePage } from './ui/pages/HomePage';
+import { LoginPage } from './ui/pages/LoginPage';
 import { ModulesPage } from './ui/pages/ModulesPage';
 import { OnboardingPage } from './ui/pages/OnboardingPage';
-import { PlaceholderPage } from './ui/pages/PlaceholderPage';
 import { SessionPage } from './ui/pages/SessionPage';
 import { SettingsPage } from './ui/pages/SettingsPage';
 import { SummaryPage } from './ui/pages/SummaryPage';
@@ -45,11 +47,10 @@ function renderPage(route: Route) {
     case 'settings':
       return <SettingsPage />;
     case 'feed':
-      return <PlaceholderPage icon="📰" title="Feed" note="Friends' sessions arrive in Phase 2." />;
     case 'profile':
-      return <PlaceholderPage icon="🙂" title="Profile" note="Your profile arrives in Phase 2." />;
+      return <FriendsPage />;
     case 'login':
-      return <PlaceholderPage icon="🔑" title="Login" note="Accounts arrive in Phase 2." />;
+      return <LoginPage />;
     default:
       // 'dev' is rendered by the persistent overlay below; 'onboarding' outside the layout.
       return null;
@@ -60,6 +61,7 @@ function useBootRouting(): boolean {
   const [booted, setBooted] = useState(false);
   useEffect(() => {
     let alive = true;
+    useSocialStore.getState().init();
     useAppStore
       .getState()
       .load()

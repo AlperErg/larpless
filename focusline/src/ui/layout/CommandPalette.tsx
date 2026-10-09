@@ -31,6 +31,7 @@ const NAV: Array<{ route: Route; icon: string; title: string }> = [
   { route: 'session', icon: '⏱', title: 'Go to Session' },
   { route: 'history', icon: '🗓', title: 'Go to History' },
   { route: 'modules', icon: '📚', title: 'Go to Modules' },
+  { route: 'feed', icon: '👥', title: 'Go to Friends' },
   { route: 'settings', icon: '⚙️', title: 'Go to Settings' },
 ];
 

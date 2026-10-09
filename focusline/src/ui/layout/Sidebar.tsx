@@ -23,6 +23,7 @@ const ITEMS: NavItem[] = [
   { route: 'session', icon: '⏱', label: 'Session' },
   { route: 'modules', icon: '📚', label: 'Modules' },
   { route: 'history', icon: '🗓', label: 'History' },
+  { route: 'feed', icon: '👥', label: 'Friends' },
   { route: 'settings', icon: '⚙️', label: 'Settings' },
 ];
 
@@ -83,7 +84,11 @@ export function Sidebar() {
           testID={`nav-${it.route}`}
           icon={it.icon}
           label={it.label}
-          active={route === it.route || (it.route === 'session' && route === 'summary')}
+          active={
+            route === it.route ||
+            (it.route === 'session' && route === 'summary') ||
+            (it.route === 'feed' && (route === 'profile' || route === 'login'))
+          }
           onPress={() => go(it.route)}
           trailing={it.route === 'session' && dot ? <StatusDot kind={dot.kind} pulsing={dot.pulsing} size={7} /> : null}
         />

@@ -10,6 +10,7 @@ import { useNavStore } from '../../store/navStore';
 import { useSessionStore } from '../../store/sessionStore';
 import { BreakdownBar, Button, Callout, PrivacyBadge, Tag, Text, ToggleList, ToggleRow } from '../components';
 import type { ToggleItem } from '../components';
+import { SharePanel } from '../components/SharePanel';
 import { Page } from '../layout/Page';
 import { breakdownFromChunks, focusPctFromChunks, lookChunk, relookBreakdown } from '../lib/derive';
 import { formatDuration, formatLongDate, formatTime, formatTimeS } from '../lib/format';
@@ -99,6 +100,8 @@ export function SummaryPage() {
       <View style={styles.block}>
         <BreakdownBar testID="summary-breakdown" entries={breakdown} legend legendTime />
       </View>
+
+      <SharePanel summary={summary} breakdown={breakdown} focusPct={focusPct} style={styles.section} />
 
       {isCurrent ? (
         <PrivacyBadge
