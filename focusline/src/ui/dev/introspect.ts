@@ -174,10 +174,21 @@ export function uiStyle(testID: string): Record<string, unknown> | null {
 
 /** Call the onPress of the first visible element with this testID (dev flow checks). `alt` simulates ⌥-click. */
 export function uiPress(testID: string, alt = false): boolean {
-  const f = findByTestID(testID);
-  const p = f?.memoizedProps as { onPress?: (e: unknown) => void } | undefined;
-  if (!p || typeof p.onPress !== 'function') return false;
-  p.onPress({ nativeEvent: { altKey: alt } });
+  let hit: ((e: unknown) => void) | null = null;
+  for (const r of roots()) {
+    walk(r, (f) => {
+      if (hit) return false;
+      if (isHidden(f)) return false;
+      const p = f.memoizedProps as { testID?: string; onPress?: unknown } | null;
+      if (p && typeof p === 'object' && p.testID === testID && typeof p.onPress === 'function') {
+        hit = p.onPress as (e: unknown) => void;
+        return false;
+      }
+      return true;
+    });
+  }
+  if (!hit) return false;
+  (hit as (e: unknown) => void)({ nativeEvent: { altKey: alt } });
   return true;
 }
 
