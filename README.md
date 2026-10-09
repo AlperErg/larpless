@@ -4,11 +4,11 @@
 
 <p align="center"><img src="docs/images/home-screen.webp" alt="LarpLess home screen: Start session, Pomodoro presets, streak heatmap and recent sessions" width="800"></p>
 
-**Strava for studying, as a native Mac app.** LarpLess watches your screen and webcam *on your own Mac*, works out which subject you are studying every 30 seconds, keeps a floating timer above every app, nudges you when you drift to Instagram or your phone, and gives you a per-subject breakdown when you finish. If you want, you can then share the session stats with friends.
+**Strava for studying, as a native Mac app.** LarpLess watches your screen and webcam *on your own Mac*, works out which subject you are studying every 10 seconds, keeps a floating timer above every app, nudges you when you drift to Instagram or your phone, and gives you a per-subject breakdown when you finish. If you want, you can then share the session stats with friends.
 
 It was built in one hackathon day with **react-native-macos**: one orchestrator ran four parallel Claude Code agents (plus a fifth for the social features), each in its own git worktree.
 
-> **Privacy first.** Frames are analysed in memory and dropped right away. Nothing is written to disk, and the only network call involving a frame goes to Ollama on `127.0.0.1`. Only labels such as "Biology, 30 s" are stored. The in-app privacy badge shows `Screenshots analysed: N · checks without a screenshot: M · stored: 0`, and on Pomodoro breaks the app stops capturing.
+> **Privacy first.** Frames are analysed in memory and dropped right away. Nothing is written to disk, and the only network call involving a frame goes to Ollama on `127.0.0.1`. Only labels such as "Biology, 10 s" are stored. The in-app privacy badge shows `Screenshots analysed: N · checks without a screenshot: M · stored: 0`, and on Pomodoro breaks the app stops capturing.
 
 ---
 
@@ -56,7 +56,7 @@ flowchart LR
   UI -->|store actions| CTRL
 ```
 
-At every **chunk boundary** (30 s, or 10 s in demo-fast mode) the session controller resolves one label, stopping at the cheapest step that gives an answer:
+At every **chunk boundary** (every 10 s) the session controller resolves one label, stopping at the cheapest step that gives an answer:
 
 1. **Webcam:** absent for more than ⅔ of the chunk → `away`. No screenshot.
 2. **Active window:** if LarpLess itself is in front, reuse the previous verdict.
@@ -131,12 +131,12 @@ Switches in [`larpless/src/config.ts`](larpless/src/config.ts):
 |---|---|
 | `USE_MOCK_NATIVE` | `true` uses the JS mocks in `src/native/mock/` instead of the Swift modules |
 | `USE_MOCK_CLASSIFIER` | `true` derives verdicts from the window title, with no Ollama |
-| `CHUNK_S` / `DEMO_CHUNK_S` | Chunk length (30 s / 10 s) |
+| `CHUNK_S` / `DEMO_CHUNK_S` | Chunk length, normal / demo-fast (both 10 s) |
 
 ### Demo mode
 
 - **⌥-click Start** on Home, or ⌘K → *Start demo session*: replays fixture chunks through the real store and floating panel.
-- ⌘K → *Toggle demo fast mode*: 10 s chunks and short alert thresholds (20 s / 50 s).
+- ⌘K → *Toggle demo fast mode*: short alert thresholds (20 s / 50 s instead of minutes).
 - `node scripts/demo-social.mjs seed`: creates demo accounts with friendships and sample posts. Also `accept`, `request <user>` and `status`.
 
 ## Development
