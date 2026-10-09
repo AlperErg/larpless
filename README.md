@@ -2,6 +2,8 @@
 
 # LarpLess
 
+<p align="center"><img src="docs/images/home-screen.webp" alt="LarpLess home screen: Start session, Pomodoro presets, streak heatmap and recent sessions" width="800"></p>
+
 **Strava for studying, as a native Mac app.** LarpLess watches your screen and webcam *on your own Mac*, works out which subject you are studying every 30 seconds, keeps a floating timer above every app, nudges you when you drift to Instagram or your phone, and gives you a per-subject breakdown when you finish. If you want, you can then share the session stats with friends.
 
 It was built in one hackathon day with **react-native-macos**: one orchestrator ran four parallel Claude Code agents (plus a fifth for the social features), each in its own git worktree.
@@ -29,6 +31,8 @@ It was built in one hackathon day with **react-native-macos**: one orchestrator 
 The UI is styled after Notion: Inter + Instrument Serif, the Notion tag palette, callouts, toggle lists, and a ⌘K command palette.
 
 ## How it works
+
+![How LarpLess works: screen and webcam are analysed on your Mac, fused into one label per chunk, and only the post you choose leaves the device](docs/images/how-it-works.png)
 
 ```mermaid
 flowchart LR
