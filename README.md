@@ -1,4 +1,4 @@
-<p align="center"><img src="brand/larpless-wordmark.png" alt="LarpLess" width="360"></p>
+<p align="center"><img src="brand/larpless-logo.png" alt="LarpLess logo" width="180"></p>
 
 # LarpLess
 
@@ -188,7 +188,7 @@ log show --last 5m --style compact --predicate 'subsystem == "com.focusline.app"
 ├── README.md                 this file
 ├── CLAUDE.md                 rules for every agent: privacy, ownership, architecture
 ├── plan.md                   original product spec (written for a web app; the behaviour still applies)
-├── brand/                    LarpLess icon and wordmark
+├── brand/                    LarpLess logo, icon and wordmark
 ├── docs/macos/
 │   ├── PLAN.md               macOS technical plan: stack, runtime loop, thresholds, demo script
 │   ├── CONTRACTS.md          frozen types, native module APIs, store shape, design tokens
