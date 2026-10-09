@@ -2,7 +2,7 @@
 
 > Updated by the WS-C agent after every task. The orchestrator reads this at each checkpoint.
 
-**Current:** C10 alerts · **Sprint:** 2 · **Last commit:** C9 pomodoro
+**Current:** C11 db · **Sprint:** 2 · **Last commit:** C10 alerts
 
 ## Done
 
@@ -15,6 +15,7 @@
 - C7 `src/core/focus.ts`: `computeSummary(session, chunks, modules, pomodoros, totalS?, endedAt?)`, `focusPct`, `breakdown` (module order, then an "Other module" bucket for deleted modules, then Distracted), `streak(sessions, today)` (local start day, ≥ 900 s, ending today or yesterday), `heatmap(sessions, today, weeks=12)` (weeks×7 days, oldest first). Matches the fixture summary numbers.
 - C8 tests (`__tests__/core/`): rules, prompt (parseVerdict), ollama (mocked fetch only: ok body incl. prefill, code fences, timeout with and without signal support, bad JSON/HTTP/network, health), classifier (every path; screenshot only on the VLM path; single flight; capture errors; privacy: no image data logged), chunkFuser (every rule, 10- and 30-sample thresholds, zero samples), focus (pct, breakdown, fixture parity, streak across midnight, heatmap length). 62 tests green.
 - C9 `src/core/pomodoro.ts`: `initPomodoro`, `tick` (drift-free from `phaseEndsAtMs`, catches up after sleep, event spans the jump), `skip` (skipped focus is not counted as completed), `toggle(state|null, now, fallbackPreset)` (disable keeps counters; enable starts a fresh focus), `remainingMs`/`resumeWith` for pause. Presets 25/5/15, 50/10 (no long break), demo 2/1/1; long break after round 4, then round 1.
+- C10 `src/core/alerts.ts`: `evaluate(prev, chunk, settings, now, modules?)` → `{next, effects}`. `AlertState` adds `lastSubjectName` (the store keeps only `{level, distractedSinceMs}`). Effects: tint / notify (with `level`) / chime / pulse / flash. Away/unknown chunks shift `distractedSinceMs` forward, so their time is not counted towards the next level. Copy: "You've been on {activity|your phone} for {n min|n s}" / "Back to {subject}?" (falls back to "Back to studying?"). Seconds are shown under a minute, so demoFast doesn't say "0 min". Chimes only when `soundsEnabled`.
 
 ## C3 bench results (synthetic screenshots, 4b only; 8b/gemma4 skipped to save memory)
 
