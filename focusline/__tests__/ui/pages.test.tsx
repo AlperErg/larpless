@@ -11,6 +11,7 @@ import { initialAppState, useAppStore } from '../../src/store/appStore';
 import { useNavStore } from '../../src/store/navStore';
 import type { Route } from '../../src/store/navStore';
 import { initialSessionState, useSessionStore } from '../../src/store/sessionStore';
+import { EditableTable } from '../../src/ui/components';
 import { buildCommands, filterCommands } from '../../src/ui/layout/CommandPalette';
 import { useViewport } from '../../src/ui/lib/viewport';
 
@@ -85,11 +86,11 @@ describe('every page renders in every fixture state', () => {
     const r = await mountApp();
     act(() => useNavStore.getState().go('home'));
     expect(textOf(r)).toContain('No sessions yet');
-    expect(textOf(r)).toContain('Add your modules');
     act(() => useNavStore.getState().go('history'));
     expect(textOf(r)).toContain('Nothing here yet');
     act(() => useNavStore.getState().go('modules'));
-    expect(textOf(r)).toContain('No modules yet');
+    expect(textOf(r)).toContain('Your own courses (optional)');
+    expect(textOf(r)).toContain('Recognised automatically');
     act(() => useNavStore.getState().go('summary'));
     expect(textOf(r)).toContain('No finished session yet');
     act(() => r.unmount());
@@ -174,9 +175,15 @@ describe('full flow with fake store actions (stand-in for WS-C)', () => {
 
     const r = await mountApp();
     expect(useNavStore.getState().route).toBe('onboarding');
-    // Step 1: example row is pre-filled; rename it to match the fixture ids' names.
+    // Step 1: a built-in subject name is refused; a more specific course name is kept.
+    const table = () => r.root.findByType(EditableTable);
+    const row = (name: string) => ({ id: 'mod_custom', name, color: 'green' as const, keywordsText: 'BIO101' });
+    act(() => table().props.onChange([row('biology')]));
+    expect(textOf(r)).toContain('Biology is already built in');
+    act(() => table().props.onChange([row('Biology BIO101')]));
+    expect(r.root.findAll((n) => n.props.testID === 'onboarding-name-problem')).toHaveLength(0);
     act(() => byTestID(r, 'onboarding-next').props.onPress());
-    expect(useAppStore.getState().modules.map((m) => m.name)).toEqual(['Biology']);
+    expect(useAppStore.getState().modules.map((m) => m.name)).toEqual(['Biology BIO101']);
     act(() => byTestID(r, 'onboarding-next').props.onPress()); // permissions
     await act(async () => byTestID(r, 'onboarding-finish').props.onPress()); // ollama
     expect(useAppStore.getState().settings.onboarded).toBe(true);

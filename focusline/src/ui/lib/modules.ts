@@ -1,5 +1,6 @@
 /** Module table drafts ⇄ StudyModule (pure). */
 import type { StudyModule, TagColor } from '../../contracts/domain';
+import { librarySubjectName } from '../../core/subjectLibrary';
 import { TAG_COLORS } from '../theme';
 
 export interface ModuleDraft {
@@ -25,7 +26,7 @@ export function parseKeywords(text: string): string[] {
     .filter(Boolean);
 }
 
-/** Trimmed, non-empty, unique (case-insensitive) names; the first row with a name wins. */
+/** Trimmed, non-empty, unique (case-insensitive) names that aren't built-in subjects; the first row with a name wins. */
 export function modulesFromDrafts(drafts: ModuleDraft[]): StudyModule[] {
   const seen = new Set<string>();
   const out: StudyModule[] = [];
@@ -33,7 +34,7 @@ export function modulesFromDrafts(drafts: ModuleDraft[]): StudyModule[] {
     const name = d.name.trim();
     if (!name) continue;
     const k = name.toLowerCase();
-    if (seen.has(k) || k === 'not study') continue;
+    if (seen.has(k) || k === 'not study' || librarySubjectName(name)) continue;
     seen.add(k);
     out.push({ id: d.id, name, color: d.color, keywords: parseKeywords(d.keywordsText) });
   }
@@ -50,6 +51,27 @@ export function duplicateNames(drafts: ModuleDraft[]): string[] {
   return Array.from(count.entries())
     .filter(([, n]) => n > 1)
     .map(([k]) => k);
+}
+
+/** Draft names that are already built-in subjects, in the library's spelling, for an inline warning. */
+export function builtInNames(drafts: ModuleDraft[]): string[] {
+  const out: string[] = [];
+  for (const d of drafts) {
+    const lib = librarySubjectName(d.name);
+    if (lib && !out.includes(lib)) out.push(lib);
+  }
+  return out;
+}
+
+/** The warning under the course table: built-in clashes first, then duplicates. Null when all names are fine. */
+export function courseNameProblem(drafts: ModuleDraft[]): string | null {
+  const builtIn = builtInNames(drafts);
+  if (builtIn.length) {
+    const one = builtIn.length === 1;
+    return `${builtIn.join(', ')} ${one ? 'is' : 'are'} already built in and tracked automatically. Give your course a more specific name, like "${builtIn[0]} 101".`;
+  }
+  const dups = duplicateNames(drafts);
+  return dups.length ? `Names must be unique: ${dups.join(', ')}` : null;
 }
 
 export function nextTagColor(c: TagColor): TagColor {

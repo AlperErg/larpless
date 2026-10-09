@@ -1,6 +1,6 @@
 /**
  * Built-in subject library: Focusline recognises these automatically, so users never have to pick subjects.
- * Users may add their own courses (Modules page); a user course with the same name replaces the library entry.
+ * Users may add their own courses (Modules page), but not under a library subject's name.
  * Keywords are classifier hints (topics, jargon, tools, course-code prefixes). Colours skip gray/red, which
  * mean "away"/"distracted". Pure data: no imports except types.
  */
@@ -124,6 +124,13 @@ export const LIBRARY_MODULES: StudyModule[] = (() => {
   }
   return out;
 })();
+
+const LIBRARY_NAMES = new Map(LIBRARY_MODULES.map((m) => [m.name.toLowerCase(), m.name]));
+
+/** The library's spelling of `name` when it's a built-in subject (case-insensitive), else null. */
+export function librarySubjectName(name: string): string | null {
+  return LIBRARY_NAMES.get(name.trim().toLowerCase()) ?? null;
+}
 
 /**
  * Every subject the classifier may choose: the user's own courses first, then the library minus any
