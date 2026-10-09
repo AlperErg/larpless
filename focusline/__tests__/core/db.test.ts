@@ -1,0 +1,67 @@
+import { DEFAULT_SETTINGS } from '../../src/config';
+import type { Chunk } from '../../src/contracts/domain';
+import { createDb, createMemoryKv, KEYS } from '../../src/core/db';
+import { fixtureChunks, fixtureModules, fixtureSessions } from '../../src/fixtures/data';
+
+describe('db', () => {
+  it('round-trips modules, settings, sessions and chunks through a Map', async () => {
+    const kv = createMemoryKv();
+    const db = createDb(kv);
+
+    expect(await db.loadModules()).toEqual([]);
+    await db.saveModules(fixtureModules);
+    expect(await db.loadModules()).toEqual(fixtureModules);
+
+    expect(await db.loadSettings()).toEqual(DEFAULT_SETTINGS);
+    await db.saveSettings({ ...DEFAULT_SETTINGS, strictness: 5, onboarded: true });
+    expect(await db.loadSettings()).toMatchObject({ strictness: 5, onboarded: true, model: 'qwen3-vl:4b' });
+
+    // Saved out of order → listed newest first; same id replaces.
+    const [a, b, c] = fixtureSessions;
+    await db.saveSession(c);
+    await db.saveSession(a);
+    await db.saveSession(b);
+    await db.saveSession({ ...a, focusPct: 1 });
+    const list = await db.listSessions();
+    expect(list.map((s) => s.id)).toEqual([a.id, b.id, c.id]);
+    expect(list[0].focusPct).toBe(1);
+
+    const chunks = fixtureChunks.slice(0, 5);
+    await Promise.all(chunks.map((ch) => db.appendChunk(ch))); // concurrent appends are serialised
+    expect(await db.getChunks(chunks[0].sessionId)).toEqual(chunks);
+    expect(await db.getChunks('nope')).toEqual([]);
+
+    expect([...kv.map.keys()].sort()).toEqual(['fl:chunks:ses_fixture', 'fl:modules', 'fl:sessions', 'fl:settings']);
+  });
+
+  it('updateChunk replaces by id; false when missing', async () => {
+    const db = createDb(createMemoryKv());
+    const ch = fixtureChunks[0];
+    await db.appendChunk(ch);
+    const relabelled: Chunk = { ...ch, kind: 'distracted', moduleId: null, reason: 'screen', source: 'user' };
+    expect(await db.updateChunk(relabelled)).toBe(true);
+    expect((await db.getChunks(ch.sessionId))[0]).toEqual(relabelled);
+    expect(await db.updateChunk({ ...ch, id: 'other' })).toBe(false);
+  });
+
+  it('settings merge over DEFAULT_SETTINGS; corrupt values fall back', async () => {
+    const kv = createMemoryKv();
+    const db = createDb(kv);
+    await kv.setItem(KEYS.settings, JSON.stringify({ volume: 0.9 }));
+    expect(await db.loadSettings()).toEqual({ ...DEFAULT_SETTINGS, volume: 0.9 });
+    await kv.setItem(KEYS.settings, '{not json');
+    expect(await db.loadSettings()).toEqual(DEFAULT_SETTINGS);
+    await kv.setItem(KEYS.modules, '"oops"');
+    expect(await db.loadModules()).toEqual([]);
+  });
+
+  it('persists only Chunk fields (no window titles or image data sneak in)', async () => {
+    const kv = createMemoryKv();
+    const db = createDb(kv);
+    const dirty = { ...fixtureChunks[0], windowTitle: 'secret.pdf', jpegBase64: 'IMG' } as unknown as Chunk;
+    await db.appendChunk(dirty);
+    const raw = kv.map.get(KEYS.chunks(dirty.sessionId))!;
+    expect(raw).not.toContain('secret.pdf');
+    expect(raw).not.toContain('IMG');
+  });
+});
