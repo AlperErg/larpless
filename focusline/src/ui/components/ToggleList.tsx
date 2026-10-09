@@ -69,6 +69,7 @@ export function ToggleRow({ item, open, onToggle }: { item: ToggleItem; open: bo
   return (
     <View>
       <MacPressable
+        testID={`toggle-${item.key}`}
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
         enableFocusRing={false}
