@@ -29,6 +29,9 @@ todos:
   - id: story
     content: Build StoryCard 1080x1920 and html-to-image export with download/share
     status: pending
+  - id: floating-timer
+    content: Build always-on-top FloatingTimer via Document Picture-in-Picture (green/red status, current subject, timer) plus escalating distraction alerts
+    status: pending
   - id: demo
     content: Add demoMode.ts replay fallback, polish motion and dark mode, rehearse demo script
     status: pending
@@ -165,6 +168,32 @@ Stored chunk: `{ sessionId, startedAt, label, reason, activity, confidence }`. L
 - `streak` = consecutive days, ending today or yesterday, with at least one session of 15+ minutes (from Dexie).
 - The user can relabel any chunk in the Summary toggle list before posting.
 
+### 6. Always-on-top floating timer ([src/components/FloatingTimer.tsx](focusline/src/components/FloatingTimer.tsx), [src/lib/pip.ts](focusline/src/lib/pip.ts))
+
+A small window that stays on top of every app while the student works elsewhere.
+
+- Uses the Document Picture-in-Picture API (Chrome/Edge 116+): `await documentPictureInPicture.requestWindow({ width: 280, height: 120 })`. Chrome opens it in a screen corner, and the user can drag it.
+- `pip.ts` copies the app's stylesheets into `pipWindow.document`, then renders `<FloatingTimer />` into `pipWindow.document.body` with a React portal. It's the same JS context, so it reads the same Zustand store with no syncing.
+- Content:
+  - Serif timer.
+  - Status pill: green "Studying Biology", red "Distracted - Instagram", grey "Away".
+  - Pause and End buttons.
+  - Whole-window background tint: soft Notion green or red, fading over 300 ms.
+- It needs a user click to open. Request the PiP window first in the "Start session" click handler, then call `getDisplayMedia`. If that combined call fails, show a "Pop out timer" button on the Session page as a fallback.
+- When the session ends, call `pipWindow.close()`. Handle the `pagehide` event when the user closes it manually, and offer to reopen it.
+- Fallback for Safari and Firefox: draw the timer onto a canvas, `canvas.captureStream()` into a hidden `<video>`, and call `video.requestPictureInPicture()`. This is a stretch goal; the demo runs on Chrome.
+
+### 7. Distraction alerts ([src/lib/alerts.ts](focusline/src/lib/alerts.ts))
+
+- Ask `Notification.requestPermission()` during onboarding.
+- Escalation, based on consecutive `distracted` chunks:
+  - 1 chunk (30 s): the floating timer turns red, nothing else.
+  - 2 min: a system notification, "You've been on Instagram for 2 min - back to Biology?", plus a soft chime played in the PiP window.
+  - 5 min: a second notification, and the floating timer pulses.
+  - The alert resets as soon as a study chunk arrives. That return gets a small green "Back on track" flash.
+- No alerts for `away`. The timer just pauses and shows "Away".
+- A setting to turn sound on or off, and a "focus strictness" choice (2 / 5 / 10 min thresholds).
+
 ## Data
 
 ### Local, in Dexie ([src/lib/db.ts](focusline/src/lib/db.ts))
@@ -250,8 +279,8 @@ npx tailwindcss init -p   # then shadcn init
 | Person | Owns |
 |---|---|
 | 1 | `screenSampler.ts`, `ollama.ts`, the prompt, accuracy tests on 10 real screenshots in the first hour |
-| 2 | `webcamDetector.ts`, `chunkFuser.ts`, `focus.ts` |
-| 3 | Design system, Sidebar, Session page, BreakdownBar, SerifTimer, motion |
+| 2 | `webcamDetector.ts`, `chunkFuser.ts`, `focus.ts`, `alerts.ts` |
+| 3 | Design system, Sidebar, Session page, BreakdownBar, SerifTimer, motion, FloatingTimer (PiP) |
 | 4 | Supabase schema and RLS, auth, Feed, Profile, Summary, StoryCard and export |
 | 5 | Notion Hackathon HQ, pitch deck, demo script, `demoMode.ts`, floater help and QA |
 
@@ -268,7 +297,7 @@ npx tailwindcss init -p   # then shadcn init
 
 1. Start a session with Biology slides open, and the callout shows Biology.
 2. Switch to a maths PDF, and a new colour grows in the breakdown bar.
-3. Open Instagram, and the status changes to distracted (screen).
+3. Open Instagram. The floating timer in the corner turns red and reads "Distracted - Instagram", and a notification fires after a short demo threshold.
 4. Pick up your phone, and it's flagged as distracted (phone).
 5. End the session, relabel one chunk, take the live photo, post it, and it appears in a teammate's feed. Download the story card.
 6. Closing line: "Every frame was analysed on this laptop and deleted within seconds. Screenshots stored: 0. Only the post you chose to share left the device."
@@ -279,5 +308,6 @@ npx tailwindcss init -p   # then shadcn init
 - **Classification is slow:** move to a 60 s interval, downscale to 1024 px, and keep the model warm with `keep_alive`.
 - **CORS or local-network access is blocked:** check `OLLAMA_ORIGINS`, and accept Chrome's local network prompt.
 - **Frame grabs fail in background tabs:** test in the first hour. Use `ImageCapture` from the track, which doesn't depend on rendering.
+- **The PiP window doesn't open on Start:** the click's user activation may already be used up by `getDisplayMedia`. Use the separate "Pop out timer" button, and test this before 3:30.
 - **Something breaks live:** a hidden toggle (`?demo=1`) starts `demoMode.ts`, which replays a recorded chunk list.
 - **Supabase is down or the venue Wi-Fi is bad:** the feed shows cached posts, and the local session flow still works fully offline.
