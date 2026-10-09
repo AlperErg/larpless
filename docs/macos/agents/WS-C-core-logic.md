@@ -73,7 +73,7 @@ Read: [PLAN.md §6–8](../PLAN.md) (runtime loop, classification, thresholds) a
 ```
 
   - Mark the results "synthetic" in your status file.
-- Models available in Ollama: `qwen3-vl:4b`, `qwen3-vl:8b`, plus `gemma4:e4b`. Bench gemma4 too only if it accepts images; skip it otherwise.
+- Model: `qwen3-vl:4b` only. Never use `qwen3-vl:8b` in this project (decided 2026-10-09). Run `ollama stop qwen3-vl:4b` after benching to free memory.
 - Downscale first with the built-in `sips`, into a temp dir under `bench/.tmp/` (deleted at the end):
 
 ```bash
@@ -82,8 +82,8 @@ sips -s format jpeg -s formatOptions 70 --resampleWidth 1280 in --out out
 
 - Fixture modules: Biology, Maths, History (as in `src/fixtures`).
 - Print a table: file | expected | got | confidence | ms. Then accuracy and p50/p90 latency.
-- Run it for `qwen3-vl:4b` and `qwen3-vl:8b`.
-- Write the results and your recommendation in `status/WS-C.md`: 8b if p50 < 6 s and it's more accurate, otherwise 4b.
+- Run it for `qwen3-vl:4b`.
+- Write the results in `status/WS-C.md`. The model is fixed to `qwen3-vl:4b`.
 - Tune `SYSTEM` until accuracy is ≥ 8/10, then **delete `bench/`** screenshots.
 - Also confirm that `think:false` + `format` + `images` work together on Ollama 0.30.7. If `think` is rejected, drop it and note that.
 

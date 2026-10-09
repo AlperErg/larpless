@@ -45,7 +45,7 @@
   - Modules are legacy-style (`RCT_EXTERN_MODULE` + `RCTEventEmitter`) and run under the New Architecture interop layer. Fallback: `RCT_NEW_ARCH_ENABLED=0 pod install`.
 - **Native file layout:** `macos/Focusline-macOS/Native/{Shared,Capture,Shell,Social}/` is an Xcode **synchronized folder**, so agents add files without touching `project.pbxproj`.
 - **Models:**
-  - Ollama **`qwen3-vl:4b`** is the default; the WS-C bench compares it with `qwen3-vl:8b`.
+  - Ollama **`qwen3-vl:4b`** only. 8b is excluded from the project (memory). Bench: 10/10 on synthetic screenshots, p50 3.2 s.
   - **YOLO11n CoreML** (`nms=True`). Fallback: Apple's YOLOv3-Tiny CoreML model.
 - **Signing:** Apple Development certificate (personal team), bundle id `com.focusline.app`. The stable signature keeps the Screen Recording and Camera grants across rebuilds.
 - **Info.plist:**
@@ -275,7 +275,7 @@ No alerts fire during breaks or while away.
 | TCC grants reset on every build | Stable Apple Development signing; `tccutil reset ScreenCapture com.focusline.app`; Screen Recording needs a **relaunch** (`permissions.relaunch()`) |
 | Interop module or events fail under the New Architecture | `RCT_NEW_ARCH_ENABLED=0 pod install` |
 | App Nap throttles JS timers | `beginSessionActivity()` during sessions |
-| VLM too slow | 4b → 1024 px → 60 s chunks; rules and cache already skip most calls |
+| VLM too slow | 1024 px → 60 s chunks; rules and cache already skip most calls |
 | YOLO export fails (Python 3.14) | `uvx --python 3.12 …`, or Apple YOLOv3-Tiny |
 | Panel buttons need focus | `.nonactivatingPanel` + an `NSHostingView` subclass with `acceptsFirstMouse = true` |
 | No banner while the app is in the foreground | `UNUserNotificationCenterDelegate.willPresent → [.banner, .sound]` |

@@ -15,10 +15,6 @@ Times assume the 2:20 start from [PLAN.md §9](PLAN.md).
 ollama pull qwen3-vl:4b
 ```
 
-```bash
-ollama pull qwen3-vl:8b
-```
-
 - [ ] Xcode → Settings → Accounts: sign in with an Apple ID so an **Apple Development** certificate exists (a personal team is fine).
 - [ ] Download the **Inter** static TTFs (Regular, Medium, SemiBold) and **Instrument Serif** (Regular, Italic) into `~/fl-assets/fonts/`.
 - [ ] Get the YOLO CoreML model into `~/fl-assets/`. Python 3.14 is too new for torch, so pin 3.12 with `uv`:
@@ -228,7 +224,7 @@ git checkout main && for b in a-native-capture b-native-shell c-core d-ui; do gi
 
 1. Merge as in checkpoint 1, then `git tag cp2`.
 2. In `src/config.ts` set `USE_MOCK_NATIVE: false` and `USE_MOCK_CLASSIFIER: false`. Commit.
-3. Warm the model: `ollama run qwen3-vl:4b "hi"` (or 8b if WS-C's bench chose it). Set `Settings.model` to match.
+3. Warm the model: `ollama run qwen3-vl:4b "hi"`. The project uses only `qwen3-vl:4b`; 8b is out of scope.
 4. Run the PLAN.md §12 demo script. Log every bug in a short list.
 5. Assign the bugs to the owning agents. Cross-cutting wiring goes to WS-C plus you.
 

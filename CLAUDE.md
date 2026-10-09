@@ -94,7 +94,7 @@ node scripts/js-eval.mjs <port> "__FL.pingRoundTrip()"
 log show --last 3m --info --debug --style compact --predicate 'process == "Focusline"'
 ```
 
-  Use `NSLog("[FLxxx] …")` in Swift.
+  In Swift, log with `os.Logger` and `privacy: .public` interpolation (plain `NSLog` strings show as `<private>`). Copy the pattern in `Native/Capture/FLCaptureLog.swift` and keep the `[FLxxx]` prefix.
 - **Results never contain image data.** Report sizes, counts and milliseconds only.
 - **System permission prompts** (Screen Recording, Camera, Notifications) need a human click.
   - Never try to change TCC or System Settings yourself.
