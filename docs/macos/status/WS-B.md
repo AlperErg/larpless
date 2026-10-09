@@ -2,11 +2,11 @@
 
 > Updated by the WS-B agent after every task. The orchestrator reads this at each checkpoint.
 
-**Current:** B1–B8 done + B10 (partial polish). Only the notification banner check is open (blocked: permission). · **Sprint:** 2 done · **Last commit:** WS-B: B10 polish (Pomodoro ring, spring hub, deterministic debug hover)
+**Current:** done: B1–B8 all acceptance items pass, plus B10 (partial polish). · **Sprint:** 2 done · **Last commit:** WS-B: notifications verified after permission grant
 
 Environment check: app launches on Metro 8083; `node scripts/js-eval.mjs 8083 "__FL.pingRoundTrip()"` → `{"result":"pong","event":{...}}`.
 
-**One-shot verification:** `node scripts/js-eval.mjs 8083 "__FL.harness.B()"` (~40 s) → panel / sound / shell `pass: true`; notifications `blocked: permission`. It leaves the panel hidden, sound off (speakers muted during the run), and hands focus back.
+**One-shot verification:** `node scripts/js-eval.mjs 8083 "__FL.harness.B()"` (~40 s) → panel / sound / shell / notifications `pass: true`. It leaves the panel hidden, sound off (speakers muted during the run), and hands focus back.
 
 ## Done
 
@@ -34,8 +34,8 @@ Sprint 1 (`__FL.harness.Bpanel()` → `pass: true`, all 13 checks):
   - `BtimerStart` → 65 s → `BtimerCheck`: 0 updates, rendered `01:05`, OCR of the live panel `01:05`, last render 31 ms old.
 - [x] Tint changes animate; pulse and flash work.
   - Pixel samples of the live view: green→red passes through intermediate colours over ~300 ms; pulse varies the bg over time; flash visible (OCR "Back on track") then gone after 1.2 s; fires once per change to `backOnTrack`, again after `null` → `backOnTrack`.
-- [ ] A notification banner appears both while Focusline is in front and while it's in the background. **blocked: permission**
-  - `requestPermission()` was called once (10 s timeout, no answer); authorization now reads `denied`. Code path verified: delegate installed, `post` accepted by the system (`deliveredIds` contains the id). Once allowed, `__FL.harness.Bnotif()` checks the foreground (`willPresent` → banner) and background cases.
+- [x] A notification banner appears both while Focusline is in front and while it's in the background.
+  - After the human allowed notifications: `__FL.harness.Bnotif()` → `pass: true`. Foreground (Focusline active): delivered and `willPresent` fired once for that id (→ banner + sound). Background (Focusline inactive): delivered by the system without `willPresent`. Note: the current System Settings style for Focusline is **Alerts** (stay on screen until dismissed); switch it to Banners if the persistent style is unwanted in the demo.
 
 Sprint 2 (`__FL.harness.Bsound()` → `pass: true`, 8 checks; `__FL.harness.Bshell()` → `pass: true`, 4 checks). Sound checks run with the speakers muted (main mixer at 0) and meter each voice through taps:
 - [x] All three noises play with no clicks or pops; switching crossfades over ~400 ms.
@@ -62,7 +62,7 @@ Sprint 2 (`__FL.harness.Bsound()` → `pass: true`, 8 checks; `__FL.harness.Bshe
 
 ## Requests to the orchestrator
 
-- **NEEDS HUMAN: allow notifications for Focusline** (System Settings › Notifications › Focusline › Allow notifications, style Banners). Then run `node scripts/js-eval.mjs 8083 "__FL.harness.Bnotif()"` (or "Run all (B)" in Harness B). Note the prompt was requested from the fl-b build (`com.focusline.app`), so the grant applies to every worktree's build.
+- Done: notifications were allowed by the human and verified (`Bnotif` pass). Optional: set the Focusline notification style to Banners (currently Alerts).
 - **NEEDS HUMAN (optional, 1 min):** Harness B › Show, then put Safari in full screen and check the timer floats over it; drag it; hover it; click a sound chip; Harness B › Sound (audible) › chimes to judge "pleasant".
 - FYI for all agents: on this macOS, `NSLog` text appears as `<private>` in `log show`. WS-B logs through `os.Logger` with `privacy: .public` (`flShellLog`, subsystem `com.focusline.app`, category `shell`): `/usr/bin/log show --last 5m --style compact --predicate 'subsystem == "com.focusline.app"'`. zsh has a `log` builtin, so call `/usr/bin/log`.
 - FYI: with `USE_MOCK_NATIVE = true`, WS-D's `native.appShell.onMenuCommand` subscribes to the mock, so ⌘K/⌘↩/⌘. reach only Harness B's listener until the flag flips (the native menu exists either way).
