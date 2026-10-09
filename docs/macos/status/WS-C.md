@@ -2,24 +2,32 @@
 
 > Updated by the WS-C agent after every task. The orchestrator reads this at each checkpoint.
 
-**Current:** not started · **Sprint:** - · **Last commit:** -
+**Current:** C2 ollama client · **Sprint:** 1 · **Last commit:** C1 prompt
 
 ## Done
 
-- (task id: one line, e.g. "A1 FLPermissions: status/request/openSettings/relaunch")
+- C1 `src/core/prompt.ts`: `SYSTEM`, `buildSchema`, `buildUserText`, `buildMessages`, `parseVerdict` (type-only imports; Node 26 imports it directly).
 
 ## Acceptance checklist
 
-Copy the checklist from your brief here and tick items as they pass.
+### Sprint 1
+- [ ] `npm test` is green, and the bench results are in your status file.
+- [ ] Bench accuracy is ≥ 8/10 with the chosen model; latency is recorded.
+- [ ] The classifier takes a screenshot **only** on the VLM path (asserted in tests).
+
+### Sprint 2
+- [ ] `npm test` is green.
+- [ ] A full session (start → chunks → alert → break → end → summary) passes against the mock native APIs in tests.
+- [ ] `framesAnalysed` doesn't increase during breaks or on rule/cache paths (asserted).
 
 ## Deviations from the plan
 
-- (what you did differently and why)
+- `parseVerdict` also accepts a JSON string, and treats a module subject with `studying:false` as not studying (moduleId null). An unknown subject (not in the enum) returns null → `unknown` chunk.
 
 ## Requests to the orchestrator
 
-- (contract changes, npm/pod dependencies, Info.plist keys, files outside your ownership; say exactly what and why)
+- (none yet)
 
 ## Notes for integration
 
-- (how to exercise your work, known limitations, anything the orchestrator must know when wiring)
+- (filled in as tasks land)
