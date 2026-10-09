@@ -50,13 +50,14 @@ describe('sessionStore wiring (mock native, mock classifier)', () => {
     await useSessionStore.getState().start({ pomodoro: 'off' });
     expect(useSessionStore.getState().status).toBe('running');
     await jest.advanceTimersByTimeAsync(60_000);
-    expect(useSessionStore.getState().chunks).toHaveLength(2);
+    expect(config.CHUNK_S).toBe(10);
+    expect(useSessionStore.getState().chunks).toHaveLength(6);
     expect(useSessionStore.getState().chunks[0]).toMatchObject({ kind: 'subject', moduleId: 'mod_biology' });
 
     const summary = await useSessionStore.getState().end();
     expect(useSessionStore.getState().status).toBe('ended');
     expect(useAppStore.getState().sessions[0]).toEqual(summary);
-    expect(await useAppStore.getState().getChunks(summary!.id)).toHaveLength(2);
+    expect(await useAppStore.getState().getChunks(summary!.id)).toHaveLength(6);
 
     // Stored values are labels only: no base64 JPEG and no window title fields.
     const keys = await AsyncStorage.getAllKeys();
