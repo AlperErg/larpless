@@ -64,6 +64,16 @@ Read: [PLAN.md §6–8](../PLAN.md) (runtime loop, classification, thresholds) a
 **C3. `scripts/bench-classifier.ts`** (run with `node scripts/bench-classifier.ts --model qwen3-vl:4b`):
 - Import `../src/core/prompt.ts` with the explicit `.ts` extension.
 - Read `bench/*.png|jpg`. The expected label is the filename prefix before `__` (`notstudy` means "Not study").
+- **If `bench/` is empty (no human screenshots yet), make 10 synthetic ones.** Never capture the real screen.
+  - Write small local HTML mock-ups of: lecture slides (Biology), a PDF-style problem set (Maths), a history essay in a notes app, an Instagram-like feed, a YouTube lecture page, a YouTube music video, a shopping page, a chat app, a code editor, and an online game page.
+  - Render each with headless Chrome:
+
+```bash
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --disable-gpu --hide-scrollbars --window-size=1440,900 --screenshot=bench/<label>__<desc>.png file:///abs/path.html
+```
+
+  - Mark the results "synthetic" in your status file.
+- Models available in Ollama: `qwen3-vl:4b`, `qwen3-vl:8b`, plus `gemma4:e4b`. Bench gemma4 too only if it accepts images; skip it otherwise.
 - Downscale first with the built-in `sips`, into a temp dir under `bench/.tmp/` (deleted at the end):
 
 ```bash

@@ -27,7 +27,16 @@
 - **App:** `react-native-macos` **0.81.x** (latest patch) + matching `react-native` 0.81.x, TypeScript, Hermes.
   - Find the versions with `npm view react-native-macos@0.81 version` and `npm view react-native-macos@<ver> peerDependencies`.
   - If the Xcode 27 build is still broken after 20 minutes, switch to **0.83.x**.
-- **JS dependencies (Phase 0 only):** `zustand`, `@react-native-async-storage/async-storage`, `date-fns`. Jest (template).
+- **Phase 0 findings (2026-10-09):**
+  - **Versions:** react-native **0.81.6** + react-native-macos **0.81.9**.
+  - **Architecture:** the macOS Podfile only enables Fabric when `RCT_NEW_ARCH_ENABLED=1`, so we run the **legacy architecture (bridge)** by default. That's the best fit for our `RCT_EXTERN_MODULE` modules.
+  - **CocoaPods:** needs `LANG=en_US.UTF-8` (it crashes with an ASCII locale).
+  - **Project format:** the Xcode project was upgraded to objectVersion 77 for the synchronized `Native/` folder, and it survives `pod install`.
+  - **Xcode 27:** needs a pod deployment target ≥ 12, so the Podfile `post_install` forces 14.0.
+  - **Debug code location:** in Debug builds the app code lives in `Focusline.debug.dylib`.
+  - **YOLO11n export:** needed pinned versions (`ultralytics==8.3.170`, `coremltools==8.3.0`, `torch==2.6.0`, `numpy==1.26.4`). With the latest versions coremltools fails.
+  - **JS logs:** they no longer reach the Metro terminal. Agents use `scripts/js-eval.mjs` (a CDP client) and `globalThis.__FL` for headless checks.
+- **JS dependencies (Phase 0 only):** `zustand` 5, `@react-native-async-storage/async-storage` **2.2.0** (pinned; v3 vendors a new binary framework), `date-fns` 4. Jest (template).
 - **Phase 2 adds:** `@supabase/supabase-js`, `react-native-url-polyfill`, `base64-arraybuffer`.
 - **Banned:** react-navigation, NativeWind/Tailwind, reanimated, react-native-svg/lucide, expo-*. Their macOS or New Architecture support is uncertain; we use a route store, `StyleSheet` + tokens, core `Animated`, and emoji + Views instead.
 - **Native:**

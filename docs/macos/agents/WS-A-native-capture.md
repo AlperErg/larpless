@@ -86,7 +86,7 @@ Contracts: `ScreenCaptureApi`, `PermissionsApi` and `WebcamApi` in [CONTRACTS.md
 - Never keep a `CVPixelBuffer` past the delegate callback.
 
 **A6. YOLO model:**
-- The orchestrator puts the model in `Native/Capture/Models/` (yolo11n `.mlpackage`, or the Apple YOLOv3-Tiny fallback). Xcode compiles it and generates a class.
+- **Already done in Phase 0:** `Native/Capture/Models/yolo11n.mlpackage` (YOLO11n, `nms=True`, 640 px, COCO labels) is in place. Xcode compiles it to `yolo11n.mlmodelc` and generates the Swift class `yolo11n`. Don't re-export it.
 - Load it once, lazily: `VNCoreMLModel(for: yolo11n(configuration: MLModelConfiguration()).model)`, with `computeUnits = .all`.
 - If loading fails → log once and set `phoneVisible:false` (presence keeps working). Note it in your status file.
 - Check the class labels: COCO calls it `"cell phone"`. Print the model's labels once in debug.

@@ -23,7 +23,7 @@ Read these before doing anything:
 
 - Edit **only** the paths your brief says you own. If you need a change elsewhere, write it under "Requests" in `docs/macos/status/WS-X.md` and continue with a local workaround or mock.
 - Only the orchestrator may change:
-  - `src/contracts/**`, `src/config.ts`, `src/native/index.ts`, `src/native/mock/**`, `src/fixtures/**`
+  - `src/contracts/**`, `src/config.ts`, `src/native/index.ts`, `src/native/mock/**`, `src/fixtures/**`, `src/dev/devGlobals.ts`, `index.js`, `scripts/*` (except `bench-classifier.ts`, which WS-C owns), `jest.config.js`, `jest.setup.js`
   - `package.json`, lockfile, `Podfile`, `Info.plist`, `*.pbxproj`, `AppDelegate*`
   - `CLAUDE.md`, `docs/macos/{PLAN,CONTRACTS,ORCHESTRATOR}.md`
 - **No new npm packages, pods or entitlements.** List what you need in your status file.
@@ -43,6 +43,9 @@ Read these before doing anything:
 
 - Swift 5 language mode, macOS 14.0 deployment target. Do UI and AppKit work on the main thread (`DispatchQueue.main`), and capture and vision work on private serial queues.
 - Native code lives in `focusline/macos/Focusline-macOS/Native/{Shared,Capture,Shell,Social}/`. This is an Xcode **synchronized folder**: just add files there and never edit `project.pbxproj`.
+  - Every file in it joins the app target, and resources are **flattened** into `Contents/Resources/`. So every Swift type name and every resource file name must be unique across all subfolders: prefix them (`FLCapture…`, `FLShell…`). Never add `.gitkeep`, `README.md` or other generic file names there.
+- The app runs on the **legacy architecture (bridge)**, which is the react-native-macos default here. Don't enable `RCT_NEW_ARCH_ENABLED`.
+- Run `pod install` with a UTF-8 locale (`export LANG=en_US.UTF-8`). You only need it after native dependency changes, not for new Swift files.
 - Promise rejections use codes `E_PERMISSION`, `E_CAPTURE`, `E_CAMERA`, `E_NOT_RUNNING`, `E_INVALID_ARG`.
 
 ## Commands (run from `focusline/`)
@@ -65,6 +68,38 @@ xcodebuild -workspace macos/Focusline.xcworkspace -scheme Focusline-macOS -confi
 
 - Metro ports: WS-D uses 8081, WS-A uses 8082, WS-B uses 8083. WS-C only needs Jest.
 - `src/config.ts` → `USE_MOCK_NATIVE` / `USE_MOCK_CLASSIFIER` switch between mocks and the real Swift modules and Ollama.
+
+## Headless verification (you can't see the screen or click)
+
+- `scripts/run-mac.sh <port>` builds and launches a **new** app instance each time. Quit your previous one first:
+
+```bash
+pkill -f "<your-worktree>/focusline/macos/build/Build/Products/Debug/Focusline.app"
+```
+
+- **Drive the running app from the shell** through Metro's inspector:
+
+```bash
+node scripts/js-eval.mjs <port> "__FL.pingRoundTrip()"
+```
+
+  - It evaluates JS in the app, awaits promises and prints JSON.
+  - `globalThis.__FL` (`src/dev/devGlobals.ts`) exposes `native`, the stores, `applyFixture`, `config`, and `harness`.
+  - Register your harness checks with `registerHarness('A', async () => ({...}))` and run them with `node scripts/js-eval.mjs 8082 "__FL.harness.A()"`.
+  - Hermes eval doesn't accept `async` functions inside the expression. Use `.then()` chains or call registered runners.
+- **JS console:** `node scripts/js-eval.mjs <port> --console 20` streams `console.*` for 20 s. React Native 0.81 no longer prints JS logs in the Metro terminal.
+- **Native logs:**
+
+```bash
+log show --last 3m --info --debug --style compact --predicate 'process == "Focusline"'
+```
+
+  Use `NSLog("[FLxxx] …")` in Swift.
+- **Results never contain image data.** Report sizes, counts and milliseconds only.
+- **System permission prompts** (Screen Recording, Camera, Notifications) need a human click.
+  - Never try to change TCC or System Settings yourself.
+  - If a check needs a permission, write `NEEDS HUMAN: <what>` under Requests in your status file, mark that acceptance item `blocked: permission`, and move on to the next task.
+- **Don't get stuck.** If one problem eats more than ~20 minutes, write up what you tried and the exact error in your status file, then move on.
 
 ## Definition of done for any task
 
