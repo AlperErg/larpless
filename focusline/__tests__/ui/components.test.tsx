@@ -20,7 +20,7 @@ import {
 } from '../../src/ui/components';
 import { fixtureSessions, fixtureSummary } from '../../src/fixtures/data';
 import { formatClock, formatDuration, timeAgo } from '../../src/ui/lib/format';
-import { draftsFromModules, modulesFromDrafts } from '../../src/ui/lib/modules';
+import { builtInNames, courseNameProblem, draftsFromModules, modulesFromDrafts } from '../../src/ui/lib/modules';
 import { fixtureModules } from '../../src/fixtures/data';
 
 function render(el: React.ReactElement): ReactTestRenderer {
@@ -63,10 +63,24 @@ describe('UI primitives', () => {
   });
 
   it('module drafts round-trip, drop blanks and duplicates', () => {
-    const drafts = draftsFromModules(fixtureModules);
-    expect(modulesFromDrafts(drafts)).toEqual(fixtureModules);
-    const dup = [...drafts, { ...drafts[0], id: 'x', name: ' biology ' }, { ...drafts[0], id: 'y', name: '  ' }];
+    const courses = fixtureModules.map((m) => ({ ...m, name: `${m.name} 101` }));
+    const drafts = draftsFromModules(courses);
+    expect(modulesFromDrafts(drafts)).toEqual(courses);
+    const dup = [...drafts, { ...drafts[0], id: 'x', name: ' biology 101 ' }, { ...drafts[0], id: 'y', name: '  ' }];
     expect(modulesFromDrafts(dup)).toHaveLength(3);
+    expect(courseNameProblem(dup)).toBe('Names must be unique: biology 101');
+  });
+
+  it('built-in subject names are refused as course names', () => {
+    const drafts = draftsFromModules([
+      { id: 'a', name: ' biology ', color: 'green', keywords: [] },
+      { id: 'b', name: 'Signals & systems', color: 'blue', keywords: [] },
+      { id: 'c', name: 'Biology BIO101', color: 'green', keywords: ['cell'] },
+    ]);
+    expect(modulesFromDrafts(drafts).map((m) => m.name)).toEqual(['Biology BIO101']);
+    expect(builtInNames(drafts)).toEqual(['Biology', 'Signals & Systems']);
+    expect(courseNameProblem(drafts)).toMatch(/^Biology, Signals & Systems are already built in/);
+    expect(courseNameProblem(drafts.slice(2))).toBeNull();
   });
 
   it('renders every primitive', () => {

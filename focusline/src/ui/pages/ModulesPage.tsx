@@ -3,7 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { useAppStore } from '../../store/appStore';
 import { EditableTable, SubjectLibrary, Text } from '../components';
 import { Page } from '../layout/Page';
-import { draftsFromModules, duplicateNames, modulesFromDrafts } from '../lib/modules';
+import { courseNameProblem, draftsFromModules, modulesFromDrafts } from '../lib/modules';
 import type { ModuleDraft } from '../lib/modules';
 import { space, tag } from '../theme';
 
@@ -64,21 +64,23 @@ export function ModulesPage() {
     [], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
-  const dups = duplicateNames(drafts);
+  const problem = courseNameProblem(drafts);
   return (
     <Page testID="page-modules" header={{ icon: '📚', title: 'Subjects' }}>
       <Text muted style={styles.lead}>
         Focusline recognises the subjects below automatically. Nothing to set up. If you want sharper labels for a
-        specific course, add it here with its course code, topics or lecturer names. Your course replaces a built-in
-        subject with the same name. Changes save automatically.
+        specific course, add it here with its course code, topics or lecturer names. Built-in subject names are
+        taken, so give your course its own name. Changes save automatically.
       </Text>
       <Text variant="h2" style={styles.h}>
         Your own courses (optional)
       </Text>
       <EditableTable testID="modules-table" rows={drafts} onChange={onChange} onCommit={() => flush(latest.current)} />
       <View style={styles.footer}>
-        {dups.length ? (
-          <Text variant="small" color={tag.red.text}>{`Names must be unique: ${dups.join(', ')}`}</Text>
+        {problem ? (
+          <Text testID="modules-name-problem" variant="small" color={tag.red.text}>
+            {problem}
+          </Text>
         ) : (
           <Text variant="small" testID="modules-save-state">
             {saved === 'pending' ? 'Saving…' : saved === 'saved' ? 'Saved' : ' '}
@@ -88,7 +90,7 @@ export function ModulesPage() {
       <Text variant="h2" style={[styles.h, styles.libraryTitle]}>
         Recognised automatically
       </Text>
-      <SubjectLibrary testID="modules-library" overriddenNames={drafts.map((d) => d.name)} />
+      <SubjectLibrary testID="modules-library" />
     </Page>
   );
 }

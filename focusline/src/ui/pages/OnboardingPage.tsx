@@ -14,7 +14,7 @@ import { useNavStore } from '../../store/navStore';
 import { useSessionStore } from '../../store/sessionStore';
 import { Button, Callout, CodeBlock, EditableTable, Muted, SubjectLibrary, PageHeader, Strong, Tag, Text } from '../components';
 import { PageBody } from '../layout/Page';
-import { draftsFromModules, duplicateNames, modulesFromDrafts } from '../lib/modules';
+import { courseNameProblem, draftsFromModules, modulesFromDrafts } from '../lib/modules';
 import type { ModuleDraft } from '../lib/modules';
 import { colors, motion, radius, space, tag } from '../theme';
 import { LIBRARY_MODULES } from '../../core/subjectLibrary';
@@ -84,7 +84,7 @@ function ModulesStep({ onNext }: { onNext: () => void }) {
   const saveModules = useAppStore((s) => s.saveModules);
   const [drafts, setDrafts] = useState<ModuleDraft[]>(() => draftsFromModules(stored));
   const mods = modulesFromDrafts(drafts);
-  const dups = duplicateNames(drafts);
+  const problem = courseNameProblem(drafts);
 
   return (
     <View testID="onboarding-modules">
@@ -96,9 +96,9 @@ function ModulesStep({ onNext }: { onNext: () => void }) {
         study. Optionally add your own courses (course codes, topics, lecturer names) for sharper labels.
       </Text>
       <EditableTable rows={drafts} onChange={setDrafts} />
-      {dups.length ? (
-        <Text variant="small" color={tag.red.text} style={styles.warn}>
-          {`Names must be unique: ${dups.join(', ')}`}
+      {problem ? (
+        <Text testID="onboarding-name-problem" variant="small" color={tag.red.text} style={styles.warn}>
+          {problem}
         </Text>
       ) : null}
       <View style={styles.actions}>
@@ -115,7 +115,7 @@ function ModulesStep({ onNext }: { onNext: () => void }) {
       <Text variant="small" weight="medium" style={styles.presets}>
         Recognised automatically
       </Text>
-      <SubjectLibrary testID="onboarding-library" overriddenNames={drafts.map((d) => d.name)} />
+      <SubjectLibrary testID="onboarding-library" />
     </View>
   );
 }
