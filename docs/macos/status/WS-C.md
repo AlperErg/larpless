@@ -2,11 +2,12 @@
 
 > Updated by the WS-C agent after every task. The orchestrator reads this at each checkpoint.
 
-**Current:** C2 ollama client · **Sprint:** 1 · **Last commit:** C1 prompt
+**Current:** C3 bench · **Sprint:** 1 · **Last commit:** C2 ollama
 
 ## Done
 
 - C1 `src/core/prompt.ts`: `SYSTEM`, `buildSchema`, `buildUserText`, `buildMessages`, `parseVerdict` (type-only imports; Node 26 imports it directly).
+- C2 `src/core/ollama.ts`: `createOllama({baseUrl, model, fetchImpl, timeoutMs})` → `checkHealth()` (ok | down | modelMissing, `:latest`-tolerant) and `classify(snapshot, modules)` (never throws; null on timeout/HTTP/parse error; logs latency + verdict only). `baseUrl`/`model` may be getters so Settings changes apply live.
 
 ## Acceptance checklist
 
