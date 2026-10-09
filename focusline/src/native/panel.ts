@@ -7,8 +7,8 @@ const emitter = M ? new NativeEventEmitter(M) : null;
 export const panel: FloatingPanelApi = {
   show: () => M.show(),
   hide: () => M.hide(),
-  update: (state) => M.update(state),
-  onAction: (cb) => {
+  update: state => M.update(state),
+  onAction: cb => {
     const sub = emitter!.addListener('FLPanelAction', cb);
     return () => sub.remove();
   },
@@ -25,12 +25,19 @@ export const panelDebug = {
   /** Same Swift path as a hub button (model.perform), minus hit testing. */
   perform: (action: PanelAction): void => M.debugPerform(action),
   /** Synthesized mouse down/up on a hub control, e.g. 'pause', 'end', 'sound:pink', 'preset:25/5', 'volume'. */
-  click: (buttonId: string): Promise<Record<string, unknown>> => M.debugClick(buttonId),
-  drag: (dx: number, dy: number): Promise<Record<string, unknown>> => M.debugDrag(dx, dy),
+  click: (buttonId: string): Promise<Record<string, unknown>> =>
+    M.debugClick(buttonId),
+  drag: (dx: number, dy: number): Promise<Record<string, unknown>> =>
+    M.debugDrag(dx, dy),
   /** Renders the live panel offscreen and OCRs it; returns text lines + a background colour sample. */
   renderText: (): Promise<Record<string, unknown>> => M.debugRenderText(),
   /** Background colour of the live panel (right edge, mid height). */
-  sampleBg: (): Promise<{ ok: boolean; rgb?: [number, number, number]; t?: number }> => M.debugSampleBg(),
-  deactivateApp: (): Promise<{ appIsActive: boolean }> => M.debugDeactivateApp(),
+  sampleBg: (): Promise<{
+    ok: boolean;
+    rgb?: [number, number, number];
+    t?: number;
+  }> => M.debugSampleBg(),
+  deactivateApp: (): Promise<{ appIsActive: boolean }> =>
+    M.debugDeactivateApp(),
   activateApp: (): Promise<{ appIsActive: boolean }> => M.debugActivateApp(),
 };

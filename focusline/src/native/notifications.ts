@@ -6,11 +6,16 @@ const M = NativeModules.FLNotifications;
 export const notifications: NotificationsApi = {
   requestPermission: () => M.requestPermission(),
   /** Resolves even when the system refuses to show it (e.g. permission denied); the reason is NSLogged. */
-  post: (n) => M.post(n),
+  post: n => M.post(n),
 };
 
 export interface NotificationsDebugStatus {
-  authorization: 'authorized' | 'denied' | 'notDetermined' | 'provisional' | 'other';
+  authorization:
+    | 'authorized'
+    | 'denied'
+    | 'notDetermined'
+    | 'provisional'
+    | 'other';
   alertSetting: string;
   soundSetting: string;
   alertStyle: 'banner' | 'alert' | 'none';

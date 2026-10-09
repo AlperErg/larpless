@@ -67,7 +67,7 @@ final class FLFloatingPanel: RCTEventEmitter {
 
   @objc func debugSetHover(_ on: Bool) {
     DispatchQueue.main.async {
-      MainActor.assumeIsolated { FLShellPanelController.shared.model.setHovering(on) }
+      MainActor.assumeIsolated { FLShellPanelController.shared.debugSetHover(on) }
     }
   }
 

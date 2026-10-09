@@ -6,19 +6,19 @@ const M = NativeModules.FLSound;
 
 export const sound: SoundApi = {
   play: (id, fadeMs = 400) => M.play(id, fadeMs),
-  setVolume: (v) => M.setVolume(v),
+  setVolume: v => M.setVolume(v),
   duck: (factor, fadeMs = 400) => M.duck(factor, fadeMs),
-  chime: (kind) => M.chime(kind),
+  chime: kind => M.chime(kind),
 };
 
 export interface SoundDebugState {
   configured: boolean;
   engineRunning: boolean;
   currentId: SoundId;
-  voice: string | null;            // voice actually playing ('brown' for rain/cafe without their loop file)
+  voice: string | null; // voice actually playing ('brown' for rain/cafe without their loop file)
   volume: number;
   duck: number;
-  gains: Record<string, number>;   // current per-voice gain
+  gains: Record<string, number>; // current per-voice gain
   rampsInFlight: Record<string, number>;
   sampleRate: number;
   loops: string[];
