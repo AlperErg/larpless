@@ -438,4 +438,24 @@ describe('sessionController', () => {
     expect(await h.db.getChunks(summary!.id)).toHaveLength(48);
     expect(jest.getTimerCount()).toBe(0);
   });
+
+  it('framesAnalysed does not increase on rule or cache paths', async () => {
+    let title = 'Instagram';
+    const win = async () => ({ appName: 'Safari', bundleId: 'com.apple.Safari', windowTitle: title, isSelf: false });
+    const h = setup({ settings: { webcamEnabled: false } });
+    h.native.screen.getActiveWindow = win;
+    h.capture.mockImplementation(async () => ({ ...(await win()), jpegBase64: 'x', width: 1, height: 1, capturedAt: Date.now() }));
+    await h.ctrl.start({ pomodoro: 'off' });
+    await advance(90_000);
+    expect(h.state.chunks.map((c) => c.source)).toEqual(['rule', 'rule', 'rule']);
+    expect(h.state.privacy).toEqual({ framesAnalysed: 0, checksWithoutScreenshot: 3, framesStored: 0 });
+    expect(h.capture).not.toHaveBeenCalled();
+
+    title = 'BIO101 cell biology notes';
+    await advance(90_000);
+    expect(h.state.chunks.slice(3).map((c) => c.source)).toEqual(['vlm', 'cache', 'cache']);
+    expect(h.state.privacy).toEqual({ framesAnalysed: 1, checksWithoutScreenshot: 5, framesStored: 0 });
+    expect(h.capture).toHaveBeenCalledTimes(1);
+    await h.ctrl.end();
+  });
 });

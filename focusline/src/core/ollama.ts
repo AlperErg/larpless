@@ -63,7 +63,6 @@ export function createOllama(opts: OllamaOptions): OllamaClient {
   const fetchImpl: FetchLike = opts.fetchImpl ?? (globalThis.fetch as unknown as FetchLike);
   const timeoutMs = opts.timeoutMs ?? 20_000;
   const healthTimeoutMs = opts.healthTimeoutMs ?? 3_000;
-  // eslint-disable-next-line no-console
   const log = opts.log ?? ((line: string) => console.log(line));
 
   return {

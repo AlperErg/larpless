@@ -122,7 +122,6 @@ const noop = () => {};
 
 export function createSessionController(deps: SessionControllerDeps): SessionController {
   const { native, db, store, now, config } = deps;
-  // eslint-disable-next-line no-console
   const log = deps.log ?? ((line: string) => console.log(line));
   const get = () => store.getState();
   const set = (p: Partial<SessionStoreState>) => store.setState(p);
