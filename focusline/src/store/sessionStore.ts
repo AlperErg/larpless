@@ -8,6 +8,7 @@ import type { SessionController } from '../core/sessionController';
 import { fixtureChunks } from '../fixtures/data';
 import { native } from '../native';
 import { appDb, upsertSessionSummary, useAppStore } from './appStore';
+import { allSubjects } from '../core/subjectLibrary';
 
 export const initialSessionState: SessionStoreState = {
   status: 'idle',
@@ -41,7 +42,7 @@ export function getSessionController(): SessionController {
       native,
       db: appDb,
       store: useSessionStore,
-      getModules: () => useAppStore.getState().modules,
+      getModules: () => allSubjects(useAppStore.getState().modules),
       getSettings: settings,
       classifier,
       ollama,

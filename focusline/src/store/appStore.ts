@@ -22,8 +22,8 @@ export const useAppStore = create<AppStore>()((set, get) => ({
   load: async () => {
     try {
       const [modules, settings, sessions] = await Promise.all([appDb.loadModules(), appDb.loadSettings(), appDb.listSessions()]);
-      // No modules yet → onboarding isn't finished, whatever was stored.
-      set({ loaded: true, modules, sessions, settings: modules.length ? settings : { ...settings, onboarded: false } });
+      // Own courses are optional (the built-in subject library is always on), so onboarding doesn't depend on them.
+      set({ loaded: true, modules, sessions, settings });
     } catch {
       console.warn('[appStore] load failed, using defaults');
       set({ loaded: true });

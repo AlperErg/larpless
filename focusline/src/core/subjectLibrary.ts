@@ -1,23 +1,24 @@
 /**
- * Suggested modules: one click adds a row to the modules table (fully editable afterwards).
- * Keywords are prompt hints for the on-device classifier: topics, jargon, tools and typical course-code
- * prefixes that show up on screen or in window titles. Colours skip gray/red ("away"/"distracted").
+ * Built-in subject library: Focusline recognises these automatically, so users never have to pick subjects.
+ * Users may add their own courses (Modules page); a user course with the same name replaces the library entry.
+ * Keywords are classifier hints (topics, jargon, tools, course-code prefixes). Colours skip gray/red, which
+ * mean "away"/"distracted". Pure data: no imports except types.
  */
-import type { TagColor } from '../../contracts/domain';
+import type { StudyModule, TagColor } from '../contracts/domain';
 
-export interface ModulePreset {
+export interface LibrarySubject {
   name: string;
   emoji: string;
   color: TagColor;
   keywords: string[];
 }
 
-export interface PresetGroup {
+export interface SubjectGroup {
   title: string;
-  presets: ModulePreset[];
+  presets: LibrarySubject[];
 }
 
-export const MODULE_PRESET_GROUPS: PresetGroup[] = [
+export const SUBJECT_GROUPS: SubjectGroup[] = [
   {
     title: 'Sciences',
     presets: [
@@ -104,18 +105,31 @@ export const MODULE_PRESET_GROUPS: PresetGroup[] = [
   },
 ];
 
-/** All presets, flattened (first occurrence of a name wins). */
-export const MODULE_PRESETS: ModulePreset[] = (() => {
+/** Stable id for a library subject, e.g. "Signals & Systems" → "lib_signals_systems". */
+export function librarySubjectId(name: string): string {
+  return `lib_${name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')}`;
+}
+
+/** The library as modules (first occurrence of a name wins). */
+export const LIBRARY_MODULES: StudyModule[] = (() => {
   const seen = new Set<string>();
-  const out: ModulePreset[] = [];
-  for (const g of MODULE_PRESET_GROUPS) {
-    for (const p of g.presets) {
-      const k = p.name.toLowerCase();
-      if (!seen.has(k)) {
-        seen.add(k);
-        out.push(p);
-      }
+  const out: StudyModule[] = [];
+  for (const g of SUBJECT_GROUPS) {
+    for (const s of g.presets) {
+      const k = s.name.toLowerCase();
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push({ id: librarySubjectId(s.name), name: s.name, color: s.color, keywords: s.keywords });
     }
   }
   return out;
 })();
+
+/**
+ * Every subject the classifier may choose: the user's own courses first, then the library minus any
+ * subject whose name a user course already uses (case-insensitive).
+ */
+export function allSubjects(userCourses: readonly StudyModule[]): StudyModule[] {
+  const taken = new Set(userCourses.map((m) => m.name.trim().toLowerCase()));
+  return [...userCourses, ...LIBRARY_MODULES.filter((m) => !taken.has(m.name.toLowerCase()))];
+}

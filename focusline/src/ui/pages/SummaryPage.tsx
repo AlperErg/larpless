@@ -14,6 +14,7 @@ import { Page } from '../layout/Page';
 import { breakdownFromChunks, focusPctFromChunks, lookChunk, relookBreakdown } from '../lib/derive';
 import { formatDuration, formatLongDate, formatTime, formatTimeS } from '../lib/format';
 import { colors, fonts, space } from '../theme';
+import { useAllModules } from '../lib/useAllModules';
 
 type Patch = Pick<Chunk, 'kind' | 'moduleId' | 'reason'>;
 
@@ -26,7 +27,7 @@ export function SummaryPage() {
   const privacy = useSessionStore((s) => s.privacy);
   const relabelChunk = useSessionStore((s) => s.relabelChunk);
   const sessions = useAppStore((s) => s.sessions);
-  const modules = useAppStore((s) => s.modules);
+  const modules = useAllModules();
   const getChunks = useAppStore((s) => s.getChunks);
 
   const wantedId = params.sessionId ?? lastSummary?.id ?? null;

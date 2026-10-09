@@ -13,7 +13,7 @@ export const SYSTEM = [
   'You label what a student is doing on their Mac for a study tracker. You get a screenshot of the main display, the frontmost app name, and its window title. Decide whether the visible content is studying for one of the student\'s modules.',
   '- Judge the content, not the app: a lecture on YouTube, slides in Preview, notes in Notion, a problem set in a browser or an IDE exercise all count as studying if they match a module.',
   '- Social media, messaging, games, shopping, entertainment video and unrelated news are "Not study".',
-  '- Use the module keywords to pick the subject. If it\'s clearly study content but matches no module, pick the closest module and lower your confidence.',
+  '- Use the module keywords to pick the subject. The list covers many fields: pick the most specific module that fits (e.g. Calculus over Maths, Digital Logic over Coding). If it\'s clearly study content but matches no module, pick the closest one and lower your confidence.',
   '- The window title is a strong hint; if it conflicts with the screenshot, trust the screenshot.',
   '- "activity": at most 6 words describing what is visible, e.g. "Reading cell division slides", "Scrolling Instagram feed".',
   '- "confidence": 0 to 1, how certain you are that the subject you chose is correct. It is NOT the probability of studying: a clear social feed is "Not study" with confidence 0.9 or more; use low values only when you are unsure which label fits.',
@@ -67,6 +67,9 @@ export interface PromptInput {
   prefillNoThink?: boolean;
 }
 
+/** Max keywords per subject sent to the model. */
+export const PROMPT_KEYWORDS_PER_SUBJECT = 8;
+
 export function buildUserText(
   appName: string | null,
   windowTitle: string | null,
@@ -76,7 +79,11 @@ export function buildUserText(
     `Frontmost app: ${appName ?? 'unknown'}`,
     `Window title: ${windowTitle ?? 'unknown'}`,
     'Modules:',
-    ...modules.map((m) => (m.keywords.length ? `- ${m.name}: ${m.keywords.join(', ')}` : `- ${m.name}`)),
+    ...modules.map((m) => {
+      // Cap hints per subject: the built-in library has ~44 subjects, and a long prompt costs latency.
+      const kws = m.keywords.slice(0, PROMPT_KEYWORDS_PER_SUBJECT);
+      return kws.length ? `- ${m.name}: ${kws.join(', ')}` : `- ${m.name}`;
+    }),
   ];
   return lines.join('\n');
 }

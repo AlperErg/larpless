@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useAppStore } from '../../store/appStore';
-import { Callout, EditableTable, ModulePresets, Text } from '../components';
+import { EditableTable, SubjectLibrary, Text } from '../components';
 import { Page } from '../layout/Page';
-import { addPresetDraft, draftsFromModules, duplicateNames, modulesFromDrafts } from '../lib/modules';
+import { draftsFromModules, duplicateNames, modulesFromDrafts } from '../lib/modules';
 import type { ModuleDraft } from '../lib/modules';
 import { space, tag } from '../theme';
 
@@ -66,16 +66,15 @@ export function ModulesPage() {
 
   const dups = duplicateNames(drafts);
   return (
-    <Page testID="page-modules" header={{ icon: '📚', title: 'Modules' }}>
+    <Page testID="page-modules" header={{ icon: '📚', title: 'Subjects' }}>
       <Text muted style={styles.lead}>
-        Each module is a subject the model can recognise. Keywords — course codes, topics, lecturer names — make it more
-        accurate. Changes save automatically.
+        Focusline recognises the subjects below automatically. Nothing to set up. If you want sharper labels for a
+        specific course, add it here with its course code, topics or lecturer names. Your course replaces a built-in
+        subject with the same name. Changes save automatically.
       </Text>
-      {drafts.length === 0 ? (
-        <Callout testID="modules-empty" emoji="📚" style={styles.callout}>
-          <Text>No modules yet. Click “＋ New” to add your first subject.</Text>
-        </Callout>
-      ) : null}
+      <Text variant="h2" style={styles.h}>
+        Your own courses (optional)
+      </Text>
       <EditableTable testID="modules-table" rows={drafts} onChange={onChange} onCommit={() => flush(latest.current)} />
       <View style={styles.footer}>
         {dups.length ? (
@@ -86,19 +85,17 @@ export function ModulesPage() {
           </Text>
         )}
       </View>
-      <ModulePresets
-        testID="modules-presets"
-        existingNames={drafts.map((d) => d.name)}
-        onAdd={(p) => onChange(addPresetDraft(latest.current, p))}
-        style={styles.presets}
-      />
+      <Text variant="h2" style={[styles.h, styles.libraryTitle]}>
+        Recognised automatically
+      </Text>
+      <SubjectLibrary testID="modules-library" overriddenNames={drafts.map((d) => d.name)} />
     </Page>
   );
 }
 
 const styles = StyleSheet.create({
   lead: { marginBottom: space.lg },
-  callout: { marginBottom: space.lg },
   footer: { marginTop: space.sm, minHeight: 18 },
-  presets: { marginTop: space.xl },
+  h: { marginBottom: space.sm },
+  libraryTitle: { marginTop: space.xl },
 });
