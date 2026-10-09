@@ -1,6 +1,6 @@
 ---
-name: Focusline study app
-overview: Build "Focusline", a Notion-styled "Strava for studying" web app (Vite + React + TS). It analyses screen and webcam fully locally (Ollama qwen2.5vl on the Mac plus MediaPipe in the browser), deletes every frame right after analysis, breaks study time down by subject, and shares opt-in session posts (photo + stats) to a Supabase friends feed with streaks and an Instagram Story export.
+name: LarpLess study app
+overview: Build "LarpLess", a Notion-styled "Strava for studying" web app (Vite + React + TS). It analyses screen and webcam fully locally (Ollama qwen2.5vl on the Mac plus MediaPipe in the browser), deletes every frame right after analysis, breaks study time down by subject, and shares opt-in session posts (photo + stats) to a Supabase friends feed with streaks and an Instagram Story export.
 todos:
   - id: scaffold
     content: Scaffold Vite React TS app, Tailwind + shadcn, Notion design tokens, fonts, router, sidebar layout
@@ -41,7 +41,7 @@ todos:
 isProject: false
 ---
 
-# Focusline: Strava for studying (fully local analysis)
+# LarpLess: Strava for studying (fully local analysis)
 
 > **macOS / React Native build:** this file is the product spec. The technical plan for the native Mac app (react-native-macos, built by parallel agents) is in [docs/macos/PLAN.md](docs/macos/PLAN.md), and its rules for agents are in [CLAUDE.md](CLAUDE.md). Where this file mentions web tech (Vite, getDisplayMedia, MediaPipe, PiP, Dexie), the macOS docs replace it.
 
@@ -89,7 +89,7 @@ flowchart LR
 ## Repo layout
 
 ```
-focusline/
+LarpLess/
   index.html
   .env.example                 VITE_OLLAMA_URL, VITE_OLLAMA_MODEL, VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
   tailwind.config.ts           Notion palette + fonts
@@ -120,14 +120,14 @@ focusline/
 
 ## Core logic
 
-### 1. Screen sampler ([src/lib/screenSampler.ts](focusline/src/lib/screenSampler.ts))
+### 1. Screen sampler ([src/lib/screenSampler.ts](LarpLess/src/lib/screenSampler.ts))
 
 - `start()` calls `getDisplayMedia({ video: { displaySurface: "monitor" }, audio: false })`. If the user stops sharing (`track.onended`), pause the session.
 - Every 30 s, if no request is already running: `new ImageCapture(track).grabFrame()` gives an `ImageBitmap`. Draw it onto a reusable `OffscreenCanvas` scaled to 1280 px wide, then `convertToBlob({ type: "image/jpeg", quality: 0.7 })` and convert to base64.
 - In a `finally` block: `bitmap.close()`, `ctx.clearRect(...)`, and set the base64 and blob variables to null. A counter tracks `framesAnalysed`, and `framesStored` always stays 0 for the privacy badge.
 - If `ImageCapture` is missing (Safari), fall back to a hidden `<video>` element plus `drawImage`.
 
-### 2. Ollama classifier ([src/lib/ollama.ts](focusline/src/lib/ollama.ts))
+### 2. Ollama classifier ([src/lib/ollama.ts](LarpLess/src/lib/ollama.ts))
 
 - `checkHealth()` calls `GET /api/tags` and confirms the model is pulled. Its result drives `OllamaStatus.tsx` (green or red dot, with setup instructions).
 - `classifyScreen(base64, modules)` calls `POST /api/chat` with `stream: false`, `format: <JSON schema>`, `options: { temperature: 0 }` and `keep_alive: "30m"` so the model stays warm.
@@ -148,13 +148,13 @@ const schema = {
 - The prompt lists each module with its keywords (entered during onboarding) and says to judge content, not the app. For example, a lecture on YouTube counts as that subject, and social media, games or shopping count as "Not study".
 - 20 s timeout through `AbortController`. On error the chunk is labelled `unknown`, which is left out of the focus score.
 
-### 3. Webcam detector ([src/lib/webcamDetector.ts](focusline/src/lib/webcamDetector.ts))
+### 3. Webcam detector ([src/lib/webcamDetector.ts](LarpLess/src/lib/webcamDetector.ts))
 
 - Load `ObjectDetector` from `@mediapipe/tasks-vision` (EfficientDet-Lite0 float16, GPU delegate, `runningMode: "VIDEO"`, `scoreThreshold: 0.4`).
 - Run at 1 fps on a small preview `<video>`. Emit `{ present: hasPerson, phoneVisible: hasCellPhone }`.
 - Keep a rolling 30 s window: the share of seconds the person was present and the share with a phone visible.
 
-### 4. Chunk fuser ([src/lib/chunkFuser.ts](focusline/src/lib/chunkFuser.ts))
+### 4. Chunk fuser ([src/lib/chunkFuser.ts](LarpLess/src/lib/chunkFuser.ts))
 
 Each 30 s chunk gets one label:
 
@@ -166,14 +166,14 @@ Each 30 s chunk gets one label:
 
 Stored chunk: `{ sessionId, startedAt, label, reason, activity, confidence }`. Labels only, never images.
 
-### 5. Metrics ([src/lib/focus.ts](focusline/src/lib/focus.ts))
+### 5. Metrics ([src/lib/focus.ts](LarpLess/src/lib/focus.ts))
 
 - `focusPct` = subject chunks divided by (all chunks minus `away` and `unknown`).
 - `breakdown` = minutes per subject plus distracted minutes, shown as percentages.
 - `streak` = consecutive days, ending today or yesterday, with at least one session of 15+ minutes (from Dexie).
 - The user can relabel any chunk in the Summary toggle list before posting.
 
-### 6. Always-on-top floating timer ([src/components/FloatingTimer.tsx](focusline/src/components/FloatingTimer.tsx), [src/lib/pip.ts](focusline/src/lib/pip.ts))
+### 6. Always-on-top floating timer ([src/components/FloatingTimer.tsx](LarpLess/src/components/FloatingTimer.tsx), [src/lib/pip.ts](LarpLess/src/lib/pip.ts))
 
 A small window that stays on top of every app while the student works elsewhere.
 
@@ -197,7 +197,7 @@ A small window that stays on top of every app while the student works elsewhere.
   - `mouseleave` hides the panel after 600 ms, so it doesn't flicker when the mouse brushes past.
   - Optional: an "Expand" button calls `pipWindow.resizeTo(360, 420)` on click for a fuller hub (today's breakdown bar, session log). Shrink back on the next click.
 
-### 7. Distraction alerts ([src/lib/alerts.ts](focusline/src/lib/alerts.ts))
+### 7. Distraction alerts ([src/lib/alerts.ts](LarpLess/src/lib/alerts.ts))
 
 - Ask `Notification.requestPermission()` during onboarding.
 - Escalation, based on consecutive `distracted` chunks:
@@ -209,7 +209,7 @@ A small window that stays on top of every app while the student works elsewhere.
 - A setting to turn sound on or off, and a "focus strictness" choice (2 / 5 / 10 min thresholds).
 - During Pomodoro breaks, no alerts fire (see section 8).
 
-### 8. Pomodoro ([src/lib/pomodoro.ts](focusline/src/lib/pomodoro.ts), part of `sessionStore`)
+### 8. Pomodoro ([src/lib/pomodoro.ts](LarpLess/src/lib/pomodoro.ts), part of `sessionStore`)
 
 - Presets: 25/5 (long break 15 after 4 rounds), 50/10, and custom. Pomodoro is optional; the session can also run as a free timer.
 - Store state: `pomodoro: { enabled, phase: "focus" | "break" | "longBreak", round, phaseEndsAt, preset }`. Use `phaseEndsAt` timestamps rather than counting ticks, so the timer stays accurate when Chrome throttles background tabs.
@@ -217,7 +217,7 @@ A small window that stays on top of every app while the student works elsewhere.
 - **During breaks:** screen sampling and webcam checks pause, nothing is analysed, and break time is left out of the focus score and breakdown. This is a nice privacy line for the pitch: "On breaks, it stops looking."
 - Session totals count only focus time. Rounds completed go on the story card ("4 pomodoros").
 
-### 9. Ambient sound ([src/lib/sound.ts](focusline/src/lib/sound.ts))
+### 9. Ambient sound ([src/lib/sound.ts](LarpLess/src/lib/sound.ts))
 
 - One `AudioContext` in the main window. It keeps playing when the tab is in the background or the PiP window is focused.
 - **Generated noise, no files:** white, pink and brown noise made in code (a looping 2-second `AudioBuffer` filled with filtered random samples), feeding a `GainNode` for volume. Tiny, instant and works offline.
@@ -227,13 +227,13 @@ A small window that stays on top of every app while the student works elsewhere.
 
 ## Data
 
-### Local, in Dexie ([src/lib/db.ts](focusline/src/lib/db.ts))
+### Local, in Dexie ([src/lib/db.ts](LarpLess/src/lib/db.ts))
 
 - `modules(id, name, color, keywords[])`
 - `sessions(id, startedAt, endedAt, durationS, focusPct, breakdown)`
 - `chunks(id, sessionId, startedAt, label, reason, activity, confidence)`
 
-### Cloud, in Supabase ([supabase/schema.sql](focusline/supabase/schema.sql))
+### Cloud, in Supabase ([supabase/schema.sql](LarpLess/supabase/schema.sql))
 
 - `profiles(id uuid pk references auth.users, username text unique, avatar_url text)`
 - `friendships(user_id, friend_id, status text check in ('pending','accepted'), created_at)`
@@ -286,9 +286,9 @@ A small window that stays on top of every app while the student works elsewhere.
   - Breakdown segments animate their width with springs.
   - The status dot pulses.
   - The story card reveals with a soft scale-in.
-- **Story card:** 1080×1920, off-white Notion page look with a big serif duration ("2h 14m"), focus %, a stacked subject bar, a streak badge, the user's photo in a rounded frame, and a "Focusline" wordmark. A dark variant is optional.
+- **Story card:** 1080×1920, off-white Notion page look with a big serif duration ("2h 14m"), focus %, a stacked subject bar, a streak badge, the user's photo in a rounded frame, and a "LarpLess" wordmark. A dark variant is optional.
 
-## Story export ([src/lib/storyCard.ts](focusline/src/lib/storyCard.ts))
+## Story export ([src/lib/storyCard.ts](LarpLess/src/lib/storyCard.ts))
 
 - `toPng(node, { width: 1080, height: 1920, pixelRatio: 1 })` renders a hidden `StoryCard`.
 - On desktop, download the PNG. If the browser supports `navigator.canShare({ files })`, open the share sheet instead.
@@ -300,7 +300,7 @@ A small window that stays on top of every app while the student works elsewhere.
 ollama pull qwen2.5vl:3b
 launchctl setenv OLLAMA_ORIGINS "http://localhost:5173"
 # quit and reopen the Ollama app
-npm create vite@latest focusline -- --template react-ts
+npm create vite@latest LarpLess -- --template react-ts
 npm i @mediapipe/tasks-vision @supabase/supabase-js dexie zustand framer-motion html-to-image cmdk date-fns react-router-dom lucide-react
 npx tailwindcss init -p   # then shadcn init
 ```
