@@ -2,7 +2,7 @@
 
 > Updated by the WS-C agent after every task. The orchestrator reads this at each checkpoint.
 
-**Current:** C7 focus · **Sprint:** 1 · **Last commit:** C6 chunkFuser
+**Current:** C8 tests · **Sprint:** 1 · **Last commit:** C7 focus
 
 ## Done
 
@@ -12,6 +12,7 @@
 - C4 `src/core/rules.ts`: `DISTRACTION_RULES` (14 rules, word-boundary regexes so "netflix.com" is not "x.com" and "mainstream" is not "steam"; also matches `youtube.com/shorts`) and `matchDistraction(appName, windowTitle)`.
 - C5 `src/core/classifier.ts`: `createClassifier({native, ollama, now, config})` → `classifyCurrent(modules, ctx?)` returns `{verdict, tookScreenshot, appName, error?}` (isSelf → previous verdict as `cache`; rules; cache keyed on app+title within `CACHE_TTL_MS`, never with a null title; single-flight VLM). Extra `error: permission|capture|busy|vlm` so the controller can post the one-time permission notification. `reset()` per session. Mock classifier still goes through `capture` (so the privacy counter behaves the same) but derives the verdict from the title (name/keyword/stem match) instead of Ollama.
 - C6 `src/core/chunkFuser.ts` (+ `src/core/ids.ts`): `fuseChunk(...)`, order away → phone → unknown → distracted → subject; zero samples = presence unknown (skips away/phone, covers the camera dying mid-session per WS-A); deterministic chunk ids `chk_<session>_<nnn>`; `awayStats`/`phoneStats` exported for the controller (away is decided before the screenshot).
+- C7 `src/core/focus.ts`: `computeSummary(session, chunks, modules, pomodoros, totalS?, endedAt?)`, `focusPct`, `breakdown` (module order, then an "Other module" bucket for deleted modules, then Distracted), `streak(sessions, today)` (local start day, ≥ 900 s, ending today or yesterday), `heatmap(sessions, today, weeks=12)` (weeks×7 days, oldest first). Matches the fixture summary numbers.
 
 ## C3 bench results (synthetic screenshots, 4b only; 8b/gemma4 skipped to save memory)
 
