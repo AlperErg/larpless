@@ -1,5 +1,5 @@
 import { NativeModules, NativeEventEmitter } from 'react-native';
-import type { FloatingPanelApi } from '../contracts/native';
+import type { FloatingPanelApi, PanelAction } from '../contracts/native';
 
 const M = NativeModules.FLFloatingPanel;
 const emitter = M ? new NativeEventEmitter(M) : null;
@@ -12,4 +12,25 @@ export const panel: FloatingPanelApi = {
     const sub = emitter!.addListener('FLPanelAction', cb);
     return () => sub.remove();
   },
+};
+
+/**
+ * Dev-only helpers for headless verification (HarnessB). Not part of the contract; the app never uses these.
+ * Every call goes through the real Swift panel.
+ */
+export const panelDebug = {
+  available: (): boolean => !!M && typeof M.debugInfo === 'function',
+  info: (): Promise<Record<string, unknown>> => M.debugInfo(),
+  setHover: (on: boolean): void => M.debugSetHover(on),
+  /** Same Swift path as a hub button (model.perform), minus hit testing. */
+  perform: (action: PanelAction): void => M.debugPerform(action),
+  /** Synthesized mouse down/up on a hub control, e.g. 'pause', 'end', 'sound:pink', 'preset:25/5', 'volume'. */
+  click: (buttonId: string): Promise<Record<string, unknown>> => M.debugClick(buttonId),
+  drag: (dx: number, dy: number): Promise<Record<string, unknown>> => M.debugDrag(dx, dy),
+  /** Renders the live panel offscreen and OCRs it; returns text lines + a background colour sample. */
+  renderText: (): Promise<Record<string, unknown>> => M.debugRenderText(),
+  /** Background colour of the live panel (right edge, mid height). */
+  sampleBg: (): Promise<{ ok: boolean; rgb?: [number, number, number]; t?: number }> => M.debugSampleBg(),
+  deactivateApp: (): Promise<{ appIsActive: boolean }> => M.debugDeactivateApp(),
+  activateApp: (): Promise<{ appIsActive: boolean }> => M.debugActivateApp(),
 };
