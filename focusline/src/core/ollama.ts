@@ -20,7 +20,7 @@ export interface OllamaOptions {
   baseUrl: string | (() => string);
   model: string | (() => string);
   fetchImpl?: FetchLike;
-  /** Timeout for classify(); default 20 s. */
+  /** Timeout for classify(); default 8 s. */
   timeoutMs?: number;
   /** Timeout for checkHealth(); default 3 s. */
   healthTimeoutMs?: number;
@@ -61,7 +61,7 @@ async function withTimeout<T>(ms: number, fn: (signal: AbortSignal) => Promise<T
 
 export function createOllama(opts: OllamaOptions): OllamaClient {
   const fetchImpl: FetchLike = opts.fetchImpl ?? (globalThis.fetch as unknown as FetchLike);
-  const timeoutMs = opts.timeoutMs ?? 20_000;
+  const timeoutMs = opts.timeoutMs ?? 8_000;
   const healthTimeoutMs = opts.healthTimeoutMs ?? 3_000;
   const log = opts.log ?? ((line: string) => console.log(line));
 

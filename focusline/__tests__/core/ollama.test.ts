@@ -86,9 +86,9 @@ describe('ollama', () => {
             reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
           });
         });
-      const o = createOllama({ baseUrl: 'http://x', model: 'm', fetchImpl, timeoutMs: 20_000, log });
+      const o = createOllama({ baseUrl: 'http://x', model: 'm', fetchImpl, timeoutMs: 8_000, log });
       const p = o.classify(SNAP, fixtureModules);
-      await jest.advanceTimersByTimeAsync(20_000);
+      await jest.advanceTimersByTimeAsync(8_000);
       await expect(p).resolves.toBeNull();
       expect(aborted).toBe(true);
       expect(logs[0]).toMatch(/timeout/);
