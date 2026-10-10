@@ -1,4 +1,4 @@
-import { buildMessages, buildSchema, NOT_STUDY, parseVerdict, SYSTEM } from '../../src/core/prompt';
+import { buildMessages, buildSchema, buildSystem, NOT_STUDY, parseVerdict, SYSTEM } from '../../src/core/prompt';
 import { fixtureModules } from '../../src/fixtures/data';
 
 describe('prompt', () => {
@@ -11,7 +11,7 @@ describe('prompt', () => {
     expect(s.properties.confidence.type).toBe('number');
   });
 
-  it('buildMessages: system prompt + user text with modules and the image', () => {
+  it('buildMessages: modules in the system prompt (same every call), window + image in the user message', () => {
     const msgs = buildMessages({
       appName: 'Preview',
       windowTitle: null,
@@ -19,19 +19,23 @@ describe('prompt', () => {
       imageBase64: 'IMG',
     });
     expect(msgs).toHaveLength(2);
-    expect(msgs[0]).toEqual({ role: 'system', content: SYSTEM });
-    expect(msgs[1].role).toBe('user');
-    expect(msgs[1].images).toEqual(['IMG']);
-    expect(msgs[1].content).toBe(
-      [
-        'Frontmost app: Preview',
-        'Window title: unknown',
+    expect(msgs[0]).toEqual({
+      role: 'system',
+      content: [
+        SYSTEM,
+        '',
         'Modules:',
         '- Biology: cell, mitosis, BIO101',
         '- Maths: integral, matrix, MATH201',
         '- History: revolution, HIST110',
       ].join('\n'),
-    );
+    });
+    expect(msgs[1]).toEqual({ role: 'user', content: 'Frontmost app: Preview\nWindow title: unknown', images: ['IMG'] });
+
+    // Nothing that changes per call may reach the system prompt, or Ollama can't reuse it.
+    const other = buildMessages({ appName: 'Safari', windowTitle: 'Instagram', modules: fixtureModules, imageBase64: 'IMG2' });
+    expect(other[0]).toEqual(msgs[0]);
+    expect(buildSystem(fixtureModules)).toBe(msgs[0].content);
   });
 
   describe('parseVerdict', () => {
@@ -62,6 +66,18 @@ describe('prompt', () => {
       expect(v.activity).toBe('');
       expect(parseVerdict({ studying: true, subject: 'Biology', activity: 'a', confidence: -3 }, fixtureModules)!.confidence).toBe(0);
       expect(parseVerdict({ studying: true, subject: 'Biology', activity: 'a', confidence: 'x' }, fixtureModules)!.confidence).toBe(0.5);
+    });
+
+    it('accepts a module line copied from the prompt ("Biology: cell, mitosis")', () => {
+      expect(parseVerdict({ studying: true, subject: 'Biology: cell', confidence: 0.95 }, fixtureModules)?.moduleId).toBe('mod_biology');
+      expect(parseVerdict({ studying: true, subject: 'maths: integral, matrix', confidence: 0.9 }, fixtureModules)?.moduleId).toBe('mod_maths');
+      expect(parseVerdict({ studying: false, subject: 'Not study: feed', confidence: 0.9 }, fixtureModules)).toMatchObject({ studying: false, moduleId: null });
+      expect(parseVerdict({ studying: true, subject: 'Chemistry: acids', confidence: 0.9 }, fixtureModules)).toBeNull();
+    });
+
+    it('a course name containing ":" still matches in full', () => {
+      const mods = [...fixtureModules, { id: 'mod_cs', name: 'CS 101: Intro', color: 'blue' as const, keywords: [] }];
+      expect(parseVerdict({ studying: true, subject: 'CS 101: Intro', confidence: 0.8 }, mods)?.moduleId).toBe('mod_cs');
     });
 
     it('accepts a JSON string', () => {

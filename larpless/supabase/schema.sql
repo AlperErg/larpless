@@ -78,11 +78,13 @@ create policy "either side removes" on public.friendships
 revoke update on public.friendships from anon, authenticated;
 grant update (status) on public.friendships to authenticated;
 
+-- Security invoker, so the friendships policy above applies: the RPC can only
+-- answer for pairs that include the caller, not reveal other users' friends.
 create or replace function public.are_friends(a uuid, b uuid)
 returns boolean
 language sql
 stable
-security definer
+security invoker
 set search_path = ''
 as $$
   select exists (

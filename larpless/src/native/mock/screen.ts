@@ -11,25 +11,22 @@ const SCRIPT: readonly ActiveWindow[] = [
   { appName: 'Safari', bundleId: 'com.apple.Safari', windowTitle: 'Integration by parts – YouTube', isSelf: false },
 ];
 
-/** Number of getActiveWindow() calls so far. The script advances every 2 calls. */
-let calls = 0;
-/** Index of the window most recently returned by getActiveWindow(). */
-let currentIndex = 0;
+/** Each scripted window stays frontmost this long (like the mock webcam, the schedule follows the clock). */
+export const MOCK_WINDOW_MS = 20_000;
+let epoch = Date.now();
 
-/** Test helper: rewind the script to its first window. */
+/** Test helper: restart the script at its first window, now. */
 export function resetMockScreen(): void {
-  calls = 0;
-  currentIndex = 0;
+  epoch = Date.now();
 }
 
+const windowAt = (t: number): ActiveWindow =>
+  SCRIPT[Math.floor(Math.max(0, t - epoch) / MOCK_WINDOW_MS) % SCRIPT.length];
+
 export const mockScreen: ScreenCaptureApi = {
-  getActiveWindow: async () => {
-    currentIndex = Math.floor(calls / 2) % SCRIPT.length;
-    calls += 1;
-    return { ...SCRIPT[currentIndex] };
-  },
+  getActiveWindow: async () => ({ ...windowAt(Date.now()) }),
   capture: async (): Promise<ScreenSnapshot> => ({
-    ...SCRIPT[currentIndex],
+    ...windowAt(Date.now()),
     jpegBase64: TINY_JPEG_BASE64,
     width: 1,
     height: 1,

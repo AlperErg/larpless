@@ -65,13 +65,15 @@ function setup(opts: { settings?: Partial<Settings>; native?: Partial<NativeApis
     ...opts.native,
   };
   const db = createDb(createMemoryKv());
-  const ollama = { classify: jest.fn(async () => null), checkHealth: jest.fn(async () => 'ok' as const) };
+  const ollama = { classify: jest.fn(async () => null), checkHealth: jest.fn(async () => 'ok' as const), unload: jest.fn(async () => {}), warmUp: jest.fn(async () => {}) };
   const classifier = createClassifier({
     native,
     ollama,
     now: () => Date.now(),
     config: { USE_MOCK_CLASSIFIER: true, CACHE_TTL_MS: 120_000, CAPTURE: { maxWidth: 1280, jpegQuality: 0.7 } },
   });
+  const warmUp = jest.spyOn(classifier, 'warmUp');
+  const unload = jest.spyOn(classifier, 'unload');
   const saved: string[] = [];
   const ctrl = createSessionController({
     native,
@@ -93,6 +95,8 @@ function setup(opts: { settings?: Partial<Settings>; native?: Partial<NativeApis
     native,
     db,
     ollama,
+    warmUp,
+    unload,
     capture,
     webcamStart,
     webcamStop,
@@ -156,20 +160,26 @@ describe('sessionController', () => {
 
     await advance(180_000);
     const kinds = h.state.chunks.map((c) => `${c.kind}:${c.source}`);
-    // Mock webcam: away 35–60 s and phone 80–90 s of every 120 s; mock screen: BIO ×2, MATH ×2, …
-    expect(kinds).toEqual(['subject:vlm', 'away:webcam', 'distracted:webcam', 'subject:vlm', 'subject:cache', 'away:webcam']);
+    // Mock webcam: away 35–60 s and phone 80–90 s of every 120 s; mock screen: a new window every 20 s
+    // (BIO, MATH, Instagram, YouTube integration lecture). Live checks classify each new window, so
+    // chunk closes reuse their verdicts (cache) or match a rule.
+    expect(kinds).toEqual(['subject:cache', 'away:webcam', 'distracted:webcam', 'distracted:rule', 'subject:cache', 'away:webcam']);
     expect(h.state.chunks.map((c) => c.index)).toEqual([0, 1, 2, 3, 4, 5]);
     expect(h.state.chunks.map((c) => c.startedAt - T0)).toEqual([0, 30_000, 60_000, 90_000, 120_000, 150_000]);
     expect(h.state.chunks[2].reason).toBe('phone');
 
-    // framesAnalysed only counts real captures: away, phone-with-cache, cache and rule chunks don't.
-    expect(h.capture).toHaveBeenCalledTimes(2);
-    expect(h.state.privacy).toEqual({ framesAnalysed: 2, checksWithoutScreenshot: 4, framesStored: 0 });
+    // One capture per new non-rule window, none while away (BIO, MATH, YouTube, BIO, MATH, YouTube).
+    // framesAnalysed counts exactly those; every chunk check reused them, so none took a screenshot.
+    expect(h.capture).toHaveBeenCalledTimes(6);
+    expect(h.state.privacy).toEqual({ framesAnalysed: 6, checksWithoutScreenshot: 6, framesStored: 0 });
 
     // Persisted as it goes; panel pushed only on change (far fewer than 180 ticks).
     expect(await h.db.getChunks(h.state.session!.id)).toHaveLength(6);
     expect(h.panelUpdates.length).toBeLessThan(30);
-    expect(h.panelUpdates.at(-1)).toMatchObject({ status: 'away', title: 'Away', tint: 'gray' });
+    expect(h.panelUpdates.some((p) => p.status === 'away' && p.title === 'Away' && p.tint === 'gray')).toBe(true);
+    // The mock person is back at 180 s: the live panel has already left "Away" although the last chunk is away.
+    expect(h.state.chunks.at(-1)!.kind).toBe('away');
+    expect(h.panelUpdates.at(-1)).toMatchObject({ status: 'studying', tint: 'green' });
     expect(h.state.alert.level).toBe(0);
     await h.ctrl.end();
   });
@@ -177,7 +187,7 @@ describe('sessionController', () => {
   it('recovery after a distraction flashes "back on track" once', async () => {
     const h = setup();
     await h.ctrl.start({ pomodoro: 'off' });
-    await advance(120_000); // chunk 2 = phone (distracted), chunk 3 = Maths
+    await advance(150_000); // chunk 2 = phone, chunk 3 = Instagram (distracted), chunk 4 = YouTube lecture (Maths)
     const flashes = h.panelUpdates.filter((p) => p.flash === 'backOnTrack');
     expect(flashes).toHaveLength(1);
     expect(h.native.sound.chime).toHaveBeenCalledWith('back');
@@ -269,9 +279,11 @@ describe('sessionController', () => {
     expect(h.native.sound.play).toHaveBeenLastCalledWith('off');
     expect(h.native.appShell.endSessionActivity).toHaveBeenCalled();
     expect(h.webcamStop).toHaveBeenCalled();
+    expect(h.unload).toHaveBeenCalledTimes(1);
     expect(jest.getTimerCount()).toBe(0);
     // A second end is a no-op.
     expect(await h.ctrl.end()).toBeNull();
+    expect(h.unload).toHaveBeenCalledTimes(1);
   });
 
   it('a partial window under 10 s is dropped at end', async () => {
@@ -442,6 +454,7 @@ describe('sessionController', () => {
     expect(getWin).not.toHaveBeenCalled();
     expect(h.capture).not.toHaveBeenCalled();
     expect(h.webcamStart).not.toHaveBeenCalled();
+    expect(h.unload).not.toHaveBeenCalled();
     expect(await h.db.getChunks(summary!.id)).toHaveLength(48);
     expect(jest.getTimerCount()).toBe(0);
   });
@@ -460,9 +473,125 @@ describe('sessionController', () => {
 
     title = 'BIO101 cell biology notes';
     await advance(90_000);
-    expect(h.state.chunks.slice(3).map((c) => c.source)).toEqual(['vlm', 'cache', 'cache']);
-    expect(h.state.privacy).toEqual({ framesAnalysed: 1, checksWithoutScreenshot: 5, framesStored: 0 });
+    // The live check took the one screenshot; all three chunks reused it.
+    expect(h.state.chunks.slice(3).map((c) => c.source)).toEqual(['cache', 'cache', 'cache']);
+    expect(h.state.privacy).toEqual({ framesAnalysed: 1, checksWithoutScreenshot: 6, framesStored: 0 });
     expect(h.capture).toHaveBeenCalledTimes(1);
     await h.ctrl.end();
+  });
+
+  describe('live state between chunk closes', () => {
+    /** Controllable frontmost window; capture returns whatever is frontmost. */
+    function liveSetup(title0: string) {
+      let title = title0;
+      const win = async () => ({ appName: 'Preview', bundleId: 'com.apple.Preview', windowTitle: title, isSelf: false });
+      const h = setup({ settings: { webcamEnabled: false } });
+      h.native.screen.getActiveWindow = win;
+      h.capture.mockImplementation(async () => ({ ...(await win()), jpegBase64: 'x', width: 1, height: 1, capturedAt: Date.now() }));
+      return { h, setTitle: (t: string) => (title = t) };
+    }
+
+    it('a new window is classified once it settles (~2 s), long before the chunk closes, which then reuses it', async () => {
+      const { h, setTitle } = liveSetup('BIO101 Lecture 4.pdf');
+      await h.ctrl.start({ pomodoro: 'off' });
+      await advance(2_000);
+      expect(h.state.current).toMatchObject({ kind: 'subject', moduleId: 'mod_biology' });
+      expect(h.panelUpdates.at(-1)).toMatchObject({ status: 'studying', title: 'Biology' });
+      expect(h.capture).toHaveBeenCalledTimes(1);
+
+      setTitle('MATH201 Problem set 3.pdf');
+      await advance(2_000);
+      expect(h.state.current).toMatchObject({ kind: 'subject', moduleId: 'mod_maths' });
+      expect(h.state.chunks).toHaveLength(0); // the 30 s chunk is still open
+
+      setTitle('Instagram');
+      await advance(2_000);
+      expect(h.panelUpdates.at(-1)).toMatchObject({ status: 'distracted', title: 'Distracted', subtitle: 'Instagram', tint: 'red' });
+      expect(h.capture).toHaveBeenCalledTimes(2); // rules need no screenshot
+
+      setTitle('MATH201 Problem set 3.pdf');
+      await advance(24_000);
+      expect(h.state.chunks).toHaveLength(1);
+      expect(h.state.chunks[0]).toMatchObject({ kind: 'subject', moduleId: 'mod_maths', source: 'cache' });
+      expect(h.capture).toHaveBeenCalledTimes(2);
+      expect(h.state.privacy).toEqual({ framesAnalysed: 2, checksWithoutScreenshot: 1, framesStored: 0 });
+      await h.ctrl.end();
+    });
+
+    it('a window that is frontmost for less than a second (quick ⌘-Tab) is never classified', async () => {
+      const { h, setTitle } = liveSetup('BIO101 Lecture 4.pdf');
+      await h.ctrl.start({ pomodoro: 'off' });
+      await advance(5_000);
+      expect(h.capture).toHaveBeenCalledTimes(1);
+      await advance(500);
+      setTitle('MATH201 Problem set 3.pdf'); // seen by one tick only
+      await advance(1_000);
+      setTitle('BIO101 Lecture 4.pdf');
+      await advance(5_000);
+      expect(h.capture).toHaveBeenCalledTimes(1);
+      expect(h.state.current).toMatchObject({ moduleId: 'mod_biology' });
+      await h.ctrl.end();
+    });
+
+    it('a check whose window changed while it ran is dropped; the newer window wins', async () => {
+      const { h, setTitle } = liveSetup('BIO101 Lecture 4.pdf');
+      let release: () => void = () => {};
+      h.capture.mockImplementationOnce(
+        () =>
+          new Promise((res) => {
+            release = () => res({ appName: 'Preview', bundleId: 'com.apple.Preview', windowTitle: 'BIO101 Lecture 4.pdf', isSelf: false, jpegBase64: 'x', width: 1, height: 1, capturedAt: Date.now() });
+          }),
+      );
+      await h.ctrl.start({ pomodoro: 'off' });
+      await advance(2_000); // BIO check started, capture pending
+      setTitle('Instagram');
+      await advance(2_000);
+      expect(h.state.current).toMatchObject({ kind: 'distracted', activity: 'Instagram' });
+      release();
+      await advance(0);
+      expect(h.state.current).toMatchObject({ kind: 'distracted', activity: 'Instagram' });
+      expect(h.state.privacy.framesAnalysed).toBe(1); // the screenshot still counts
+      await h.ctrl.end();
+    });
+
+    it('webcam: away after 5 s without you and phone after 2 of 3 samples, before the chunk closes; no window checks while away', async () => {
+      const h = setup();
+      await h.ctrl.start({ pomodoro: 'off' });
+      // Mock webcam: absent from 35 s, so the 5th absent sample arrives at 39 s. Chunk 1 (30–60 s) is still open.
+      await advance(38_000);
+      expect(h.state.current?.kind).not.toBe('away');
+      await advance(1_000);
+      expect(h.state.current).toMatchObject({ kind: 'away' });
+      expect(h.panelUpdates.at(-1)).toMatchObject({ status: 'away', title: 'Away' });
+      const getWin = jest.spyOn(h.native.screen, 'getActiveWindow');
+      const captures = h.capture.mock.calls.length;
+      await advance(20_000); // to 59 s, still away
+      expect(getWin).not.toHaveBeenCalled();
+      expect(h.capture.mock.calls.length).toBe(captures);
+      expect(h.state.chunks).toHaveLength(1);
+
+      // Phone visible from 80 s: shown at 81 s, chunk 2 (60–90 s) closes at 90 s.
+      await advance(21_000);
+      expect(h.state.current?.kind).not.toBe('distracted');
+      await advance(1_000);
+      expect(h.state.current).toMatchObject({ kind: 'distracted', activity: 'Phone' });
+      expect(h.panelUpdates.at(-1)).toMatchObject({ status: 'distracted', subtitle: 'Phone', tint: 'red' });
+      expect(h.state.chunks).toHaveLength(2);
+      await h.ctrl.end();
+    });
+
+    it('warms the model up on start and unloads it on end; demo mode does neither', async () => {
+      const h = setup();
+      await h.ctrl.start({ pomodoro: 'off' });
+      expect(h.warmUp).toHaveBeenCalledWith(fixtureModules);
+      await h.ctrl.end();
+      expect(h.unload).toHaveBeenCalledTimes(1);
+
+      const d = setup();
+      await d.ctrl.start({ pomodoro: 'off', demo: true });
+      await d.ctrl.end();
+      expect(d.warmUp).not.toHaveBeenCalled();
+      expect(d.unload).not.toHaveBeenCalled();
+    });
   });
 });

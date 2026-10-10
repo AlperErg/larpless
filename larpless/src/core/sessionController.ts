@@ -6,15 +6,21 @@
  * starts exactly there (no drift). Pauses and breaks shift the open window by their length, so no
  * partial chunk (and no screenshot) is taken when they start. `end()` finalises a partial chunk ≥ 10 s.
  *
+ * Live state: between chunk closes the panel follows what's happening now. Every tick reads the
+ * frontmost window (no screenshot); once a new window has been frontmost for LIVE_SETTLE_MS it is
+ * classified straight away, and webcam samples drive away/phone (liveWebcam). The chunk closing later
+ * reuses that verdict from the classifier cache. Stored chunks and alerts keep their chunk rules.
+ *
  * PRIVACY: snapshots never pass through here (the classifier drops them); nothing image-like is logged.
  */
 import type { Chunk, PomodoroPreset, SessionSummary, Settings, SoundId, StudyModule } from '../contracts/domain';
 import type { NativeApis, PanelAction, PanelState, Unsubscribe, WebcamSample } from '../contracts/native';
-import type { SessionStoreActions, SessionStoreState, StartOptions } from '../contracts/store';
+import type { CurrentCheck, SessionStoreActions, SessionStoreState, StartOptions } from '../contracts/store';
 import { evaluate, INITIAL_ALERT } from './alerts';
 import type { AlertEffect, AlertState } from './alerts';
-import { awayStats, fuseChunk } from './chunkFuser';
-import type { Classifier } from './classifier';
+import { AWAY_ACTIVITY, awayStats, fuseChunk, labelFromVerdict, LIVE_SAMPLES, liveWebcam, PHONE_ACTIVITY } from './chunkFuser';
+import { windowKey } from './classifier';
+import type { Classifier, ClassifyResult } from './classifier';
 import type { Db } from './db';
 import { computeSummary } from './focus';
 import { newId } from './ids';
@@ -31,6 +37,15 @@ export const SAMPLE_BUFFER = 120;
 export const MIN_PARTIAL_CHUNK_S = 10;
 /** Pomodoro breaks duck the ambient sound to this factor. */
 export const BREAK_DUCK = 0.3;
+/** A new frontmost window is classified once it has stayed this long (quick ⌘-Tabs are ignored). */
+export const LIVE_SETTLE_MS = 1000;
+
+type LiveLabel = Pick<CurrentCheck, 'kind' | 'moduleId' | 'activity' | 'appName'>;
+
+const screenLabel = (r: ClassifyResult): LiveLabel => {
+  const { kind, moduleId, activity } = labelFromVerdict(r.verdict);
+  return { kind, moduleId, activity, appName: r.appName };
+};
 
 export interface StoreApi {
   getState(): SessionStoreState;
@@ -49,7 +64,7 @@ export interface SessionControllerDeps {
   store: StoreApi;
   getModules(): StudyModule[];
   getSettings(): Settings;
-  classifier: Pick<Classifier, 'classifyCurrent' | 'reset'>;
+  classifier: Pick<Classifier, 'classifyCurrent' | 'reset' | 'warmUp' | 'unload'>;
   ollama: Pick<OllamaClient, 'checkHealth'>;
   now(): number;
   config: ControllerConfig;
@@ -145,6 +160,14 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
   let flash: PanelState['flash'] = null;
   let lastPanel: string | null = null;
   const pending = new Set<Promise<void>>();
+  // Live state (not used in demo). Window keys hold titles: memory only, never stored or logged.
+  let recentSamples: WebcamSample[] = [];
+  let camLive: 'away' | 'phone' | null = null;
+  let screenNow: LiveLabel | null = null; // latest screen label, from a live check or a chunk close
+  let seenKey: string | null = null; // frontmost window at the last tick
+  let seenSince = 0;
+  let checkedKey: string | null = null; // window the last live check was started for
+  let probing = false;
 
   const isActive = () => sessionId !== null && ['running', 'paused', 'break'].includes(get().status);
 
@@ -178,6 +201,13 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
     if (w.personPresent !== s.personPresent || w.phoneVisible !== s.phoneVisible) {
       set({ webcam: { ...w, personPresent: s.personPresent, phoneVisible: s.phoneVisible } });
     }
+    recentSamples.push(s);
+    if (recentSamples.length > LIVE_SAMPLES) recentSamples.shift();
+    const cam = liveWebcam(recentSamples);
+    if (cam !== camLive) {
+      camLive = cam;
+      showLive();
+    }
   }
 
   async function startWebcam(): Promise<void> {
@@ -195,9 +225,85 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
   }
 
   function stopWebcam() {
+    recentSamples = [];
+    camLive = null;
     if (!webcamRunning) return;
     webcamRunning = false;
     native.webcam.stop().catch(noop);
+  }
+
+  /* ---------- live state ---------- */
+
+  /** What the panel should show now: webcam away/phone first, else the latest screen label. */
+  function liveLabel(): LiveLabel | null {
+    if (camLive === 'away') return { kind: 'away', moduleId: null, activity: AWAY_ACTIVITY, appName: null };
+    if (camLive === 'phone') return { kind: 'distracted', moduleId: null, activity: PHONE_ACTIVITY, appName: screenNow?.appName ?? null };
+    return screenNow;
+  }
+
+  function showLive() {
+    if (demo || !sessionId || get().status !== 'running') return;
+    const next = liveLabel();
+    if (!next) return;
+    const cur = get().current;
+    if (cur && cur.kind === next.kind && cur.moduleId === next.moduleId && cur.activity === next.activity && cur.appName === next.appName) {
+      return;
+    }
+    set({ current: { ...next, at: now() } });
+    pushPanel();
+  }
+
+  /** Forget which window was seen/checked, so the next ticks check the frontmost window again. */
+  function resetWindowWatch() {
+    seenKey = null;
+    checkedKey = null;
+  }
+
+  function track(p: Promise<void>, what: string) {
+    const q: Promise<void> = p
+      .catch((e) => log(`[session] ${what} failed: ${(e as Error)?.message ?? 'error'}`))
+      .finally(() => pending.delete(q));
+    pending.add(q);
+  }
+
+  /** Tick: classify the frontmost window once it has settled. No screenshot unless the VLM is needed. */
+  function probeWindow() {
+    if (demo || probing || ending || !sessionId || get().status !== 'running' || camLive === 'away') return;
+    const sid = sessionId;
+    probing = true;
+    native.screen
+      .getActiveWindow()
+      .then((win) => {
+        if (sid !== sessionId || win.isSelf) return;
+        const t = now();
+        const key = windowKey(win.appName ?? null, win.windowTitle);
+        if (key !== seenKey) {
+          seenKey = key;
+          seenSince = t;
+          return;
+        }
+        if (key === checkedKey || t - seenSince < LIVE_SETTLE_MS) return;
+        checkedKey = key;
+        track(liveCheck(sid), 'live check');
+      })
+      .catch(noop)
+      .finally(() => {
+        probing = false;
+      });
+  }
+
+  async function liveCheck(sid: string) {
+    const r = await deps.classifier.classifyCurrent(deps.getModules());
+    if (sid !== sessionId || ending) return;
+    if (r.tookScreenshot) {
+      const p = get().privacy;
+      set({ privacy: { ...p, framesAnalysed: p.framesAnalysed + 1 } });
+    }
+    // Paused, away or a different window by now: drop it, the next ticks check again.
+    // A failed check keeps the last label; the chunk close reports failures.
+    if (get().status !== 'running' || camLive === 'away' || r.key !== seenKey || !r.verdict) return;
+    screenNow = screenLabel(r);
+    showLive();
   }
 
   /* ---------- chunks ---------- */
@@ -230,9 +336,12 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
       alertState = r.next;
       applyEffects(r.effects, chunk, settings);
     }
+    const live = demo ? null : liveLabel();
     set({
       chunks,
-      current: { kind: chunk.kind, moduleId: chunk.moduleId, activity: chunk.activity, appName: chunk.appName, at: now() },
+      current: live
+        ? { ...live, at: now() }
+        : { kind: chunk.kind, moduleId: chunk.moduleId, activity: chunk.activity, appName: chunk.appName, at: now() },
       privacy: {
         framesAnalysed: st.privacy.framesAnalysed + (tookScreenshot ? 1 : 0),
         checksWithoutScreenshot: st.privacy.checksWithoutScreenshot + (tookScreenshot ? 0 : 1),
@@ -254,12 +363,15 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
     let verdict = null;
     let appName: string | null = null;
     let tookScreenshot = false;
+    let screen: LiveLabel | null = null;
     // 1. Away (webcam) → no screenshot at all.
     if (!awayStats(samples).away) {
       const r = await deps.classifier.classifyCurrent(modules);
       verdict = r.verdict;
       appName = r.appName;
       tookScreenshot = r.tookScreenshot;
+      // Keep a newer live label if the window changed while this check ran.
+      if (seenKey === null || r.key === null || r.key === seenKey) screen = screenLabel(r);
       if (r.error === 'permission' && !permissionNotified) {
         permissionNotified = true;
         native.notifications
@@ -273,6 +385,7 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
       }
     }
     if (sid !== sessionId) return;
+    if (screen) screenNow = screen;
     const chunk = fuseChunk({ sessionId: sid, index, startedAt: start, durationS, samples, verdict, appName });
     await applyChunk(chunk, tookScreenshot);
   }
@@ -305,6 +418,7 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
     if (suspendedAt !== null) windowStart += t - suspendedAt;
     suspendedAt = null;
     windowSamples = [];
+    resetWindowWatch();
     runTimer(t);
     native.sound.duck(1);
     set({ status: 'running' });
@@ -354,6 +468,7 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
     // Close due chunk windows first, so a focus phase ending on a boundary keeps its last chunk.
     if (!demo && get().status === 'running') {
       while (t >= windowStart + chunkS * 1000) closeWindow(windowStart + chunkS * 1000);
+      probeWindow();
     }
     const st = get();
     if (st.pomodoro?.enabled && (st.status === 'running' || st.status === 'break')) {
@@ -399,6 +514,10 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
       chunkIndex = 0;
       suspendedAt = null;
       pomoRemaining = null;
+      recentSamples = [];
+      camLive = null;
+      screenNow = null;
+      resetWindowWatch();
       // The preset the user picked is the length they get. demoFast only shortens checks and alerts.
       const preset: PomodoroPreset | null = opts.pomodoro === 'off' ? null : opts.pomodoro;
 
@@ -416,6 +535,8 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
         lastSummary: null,
       });
 
+      // Load the model and its system prompt now, so the first check doesn't pay for it.
+      if (!demo) deps.classifier.warmUp(deps.getModules()).catch(noop);
       native.appShell.beginSessionActivity();
       unsubAction = native.panel.onAction((a) => controller.handlePanelAction(a));
       await startWebcam();
@@ -458,6 +579,7 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
       if (suspendedAt !== null) windowStart += t - suspendedAt;
       suspendedAt = null;
       windowSamples = [];
+      resetWindowWatch();
       if (!demo) runTimer(t);
       const p = get().pomodoro;
       if (p?.enabled && pomoRemaining !== null) set({ pomodoro: resumeWith(p, t, pomoRemaining) });
@@ -492,6 +614,8 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
           log('[session] saveSession failed');
         }
         teardownNative();
+        // Free the model's RAM (several GB) now rather than after keep_alive. Demo never loads it.
+        if (!demo) deps.classifier.unload().catch(noop);
         native.panel.hide().catch(noop);
         native.sound.play('off').catch(noop);
         native.sound.duck(1);
