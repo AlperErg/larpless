@@ -10,7 +10,12 @@
 
 // LarpLess native modules (same names and JS contract as the Swift modules in macos/Focusline-macOS/Native).
 // Including them here registers them with AddAttributedModules below.
+#include "Native/FLAppShell.h"
+#include "Native/FLNotifications.h"
+#include "Native/FLPermissions.h"
 #include "Native/FLPing.h"
+#include "Native/FLScreenCapture.h"
+#include "Native/FLWindow.h"
 
 // A PackageProvider containing any turbo modules you define within this app project
 struct CompReactPackageProvider
@@ -81,6 +86,7 @@ _Use_decl_annotations_ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE, PSTR 
   auto appWindow{reactNativeWin32App.AppWindow()};
   appWindow.Title(L"LarpLess");
   const HWND hwnd{winrt::Microsoft::UI::GetWindowFromWindowId(appWindow.Id())};
+  LarpLess::MainWindow() = hwnd;
   const double scale{GetDpiForWindow(hwnd) / 96.0};
   const auto px = [scale](int dip) { return static_cast<int32_t>(dip * scale); };
   appWindow.ResizeClient({px(1100), px(720)});

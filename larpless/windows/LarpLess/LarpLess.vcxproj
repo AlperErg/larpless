@@ -105,7 +105,18 @@
     <ClInclude Include="AutolinkedNativeModules.g.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="targetver.h" />
+    <ClInclude Include="Native\FLAppShell.h" />
+    <ClInclude Include="Native\FLNotifications.h" />
+    <ClInclude Include="Native\FLPermissions.h" />
     <ClInclude Include="Native\FLPing.h" />
+    <ClInclude Include="Native\FLScreenCapture.h" />
+    <ClInclude Include="Native\FLWindow.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Packaged next to the exe (Assets\) for the notification logo; copied from the macOS bundle resources. -->
+    <None Include="Assets\FLNotificationIcon.png">
+      <DeploymentContent>true</DeploymentContent>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="LarpLess.cpp" />
