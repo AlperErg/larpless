@@ -82,7 +82,7 @@ Failed or timed-out calls give `unknown`, which is left out of the focus %.
 ### Requirements
 
 - An Apple-silicon Mac with 16 GB of RAM or more on **macOS 14.5** or above.
-- **Xcode 16.1+** (signed in with an Apple ID).
+- **Xcode 16.1+**.
 - **Node 20** or above.
 - **Cocoapods**.
 - **[Ollama](https://ollama.com)** running locally, with the vision model pulled:
@@ -126,13 +126,14 @@ pkill -f "$PWD/macos/build/Build/Products/Debug/LarpLess.app"
 
 On first launch, grant **Screen Recording** (macOS needs an app relaunch afterwards; onboarding has a button for it), **Camera** and **Notifications**.
 
-Switches in [`larpless/src/config.ts`](larpless/src/config.ts):
+The app is signed ad-hoc, so no Apple ID is needed, but macOS forgets those permissions after every rebuild. To keep them, sign with your own Apple Development certificate (**any Apple ID works**, via Xcode → Settings → Accounts → Manage Certificates). Create `larpless/macos/signing.local` (gitignored) and `run-mac.sh` picks it up:
 
-| Flag | Effect |
-|---|---|
-| `USE_MOCK_NATIVE` | `true` uses the JS mocks in `src/native/mock/` instead of the Swift modules |
-| `USE_MOCK_CLASSIFIER` | `true` derives verdicts from the window title, with no Ollama |
-| `CHUNK_S` / `DEMO_CHUNK_S` | Chunk length, normal / demo-fast (both 10 s) |
+```bash
+CODE_SIGN_IDENTITY="Apple Development: Your Name (XXXXXXXXXX)"
+DEVELOPMENT_TEAM=YOURTEAMID
+```
+
+`security find-identity -v -p codesigning` lists your certificate names; the team ID is the Organizational Unit in the certificate's details.
 
 ### Demo mode
 
@@ -183,41 +184,6 @@ log show --last 5m --style compact --predicate 'subsystem == "com.larpless.app"'
 **Classifier bench.** `node scripts/bench-classifier.ts --model qwen3-vl:4b` scores the prompt against `bench/<expected>__<desc>.png`. If that folder is empty it renders 10 synthetic mock-ups instead and never captures the real screen. Add `--clean` to delete the images afterwards.
 
 **Adding native code.** `macos/Focusline-macOS/Native/` is an Xcode *synchronized folder*: drop files in and they join the target, with no `project.pbxproj` edits. Resources are flattened into the bundle, so prefix every type and file name (`FLCapture…`, `FLShell…`).
-
-## Repository layout
-
-```
-.
-├── README.md                 this file
-├── CLAUDE.md                 rules for every agent: privacy, ownership, architecture
-├── plan.md                   original product spec (written for a web app; the behaviour still applies)
-├── brand/                    LarpLess logo, icon and wordmark
-├── docs/macos/
-│   ├── PLAN.md               macOS technical plan: stack, runtime loop, thresholds, demo script
-│   ├── CONTRACTS.md          frozen types, native module APIs, store shape, design tokens
-│   ├── ORCHESTRATOR.md       hackathon-day runbook
-│   ├── agents/WS-*.md        one brief per workstream
-│   └── status/WS-*.md        per-workstream progress, deviations and open requests
-└── larpless/                the app
-    ├── src/
-    │   ├── contracts/        domain, native and store types
-    │   ├── core/             pure TS: prompt, ollama, rules, classifier, chunkFuser, focus,
-    │   │                     pomodoro, alerts, db, sessionController, demoMode
-    │   ├── native/           typed facades over the Swift modules, plus mock/
-    │   ├── store/            zustand: session, app, nav, social
-    │   ├── social/           Supabase client and API
-    │   ├── ui/               theme, components, layout, pages
-    │   ├── fixtures/         demo and test data
-    │   └── dev/              native harnesses and the __FL dev globals
-    ├── __tests__/            Jest: core, social, ui
-    ├── scripts/              run-mac, setup-worktree, js-eval, bench-classifier, demo-social
-    ├── supabase/schema.sql   profiles, friendships, posts and RLS
-    └── macos/Focusline-macOS/
-        ├── Native/Capture/   FLScreenCapture, FLPermissions, FLWebcam + yolo11n.mlpackage
-        ├── Native/Shell/     FLFloatingPanel (SwiftUI), FLNotifications, FLSound, FLAppShell
-        ├── Native/Shared/    FLPing, bridging header
-        └── Fonts/            Inter, Instrument Serif
-```
 
 ## Privacy
 

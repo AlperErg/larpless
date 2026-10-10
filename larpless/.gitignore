@@ -79,3 +79,4 @@ bench/
 .logs/
 macos/build/
 src/social/env.ts
+macos/signing.local
