@@ -106,6 +106,7 @@
     <ClInclude Include="pch.h" />
     <ClInclude Include="targetver.h" />
     <ClInclude Include="Native\FLAppShell.h" />
+    <ClInclude Include="Native\FLFloatingPanel.h" />
     <ClInclude Include="Native\FLNotifications.h" />
     <ClInclude Include="Native\FLPermissions.h" />
     <ClInclude Include="Native\FLPing.h" />
@@ -118,6 +119,10 @@
   <ItemGroup>
     <!-- Packaged next to the exe (Assets\) for the notification logo; copied from the macOS bundle resources. -->
     <None Include="Assets\FLNotificationIcon.png">
+      <DeploymentContent>true</DeploymentContent>
+    </None>
+    <!-- Inter + Instrument Serif for the floating panel (DirectWrite loads them from Assets\Fonts). -->
+    <None Include="Assets\Fonts\*.ttf">
       <DeploymentContent>true</DeploymentContent>
     </None>
   </ItemGroup>
