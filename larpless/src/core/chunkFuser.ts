@@ -1,6 +1,6 @@
 /**
  * Fuse one chunk's webcam samples and screen verdict into a Chunk (PLAN.md §6/§8).
- * Rule order: away → phone → unknown → distracted → subject.
+ * Rule order: away → phone → unknown → distracted → subject (the last three in labelFromVerdict).
  *
  * With zero samples (webcam off, or the camera stopped mid-session) presence is unknown, so the
  * away/phone rules are skipped; the screen verdict decides.
@@ -17,6 +17,14 @@ export const PHONE_FRACTION = 1 / 6;
 export const AWAY_ACTIVITY = 'Away from desk';
 export const PHONE_ACTIVITY = 'Phone';
 
+/** Live state (between chunk closes): away after this many consecutive samples without a person… */
+export const LIVE_AWAY_SAMPLES = 5;
+/** …phone when it's visible in LIVE_PHONE_MIN of the last LIVE_PHONE_SAMPLES. At 1 fps, samples = seconds. */
+export const LIVE_PHONE_SAMPLES = 3;
+export const LIVE_PHONE_MIN = 2;
+/** How many recent samples liveWebcam() needs to see. */
+export const LIVE_SAMPLES = Math.max(LIVE_AWAY_SAMPLES, LIVE_PHONE_SAMPLES);
+
 const round2 = (x: number) => Math.round(x * 100) / 100;
 
 export function awayStats(samples: readonly WebcamSample[]): { away: boolean; fraction: number } {
@@ -32,6 +40,35 @@ export function phoneStats(samples: readonly WebcamSample[]): { phone: boolean; 
   const fraction = visible.length / samples.length;
   const score = visible.length ? visible.reduce((a, s) => a + s.phoneScore, 0) / visible.length : 0;
   return { phone: fraction > PHONE_FRACTION, fraction, score };
+}
+
+/**
+ * What the webcam says right now, from the most recent samples (oldest first). Stored chunks keep
+ * the fraction rules above; this only drives the live panel and pauses live screen checks.
+ */
+export function liveWebcam(recent: readonly WebcamSample[]): 'away' | 'phone' | null {
+  const last = recent.slice(-LIVE_AWAY_SAMPLES);
+  if (last.length === LIVE_AWAY_SAMPLES && last.every((s) => !s.personPresent)) return 'away';
+  if (recent.slice(-LIVE_PHONE_SAMPLES).filter((s) => s.phoneVisible).length >= LIVE_PHONE_MIN) return 'phone';
+  return null;
+}
+
+export type ScreenLabel = Pick<Chunk, 'kind' | 'moduleId' | 'reason' | 'activity' | 'confidence' | 'source'>;
+
+/** Label from a screen verdict alone (no webcam): unknown → distracted → subject. */
+export function labelFromVerdict(verdict: ScreenVerdict | null, verdictSource?: ScreenVerdict['source']): ScreenLabel {
+  const source: ChunkSource = verdictSource ?? verdict?.source ?? 'none';
+  const confidence = verdict ? Math.min(1, Math.max(0, verdict.confidence)) : 0;
+
+  if (!verdict || (verdict.studying && !verdict.moduleId)) {
+    return { kind: 'unknown', moduleId: null, reason: null, activity: verdict?.activity ?? '', confidence: 0, source: 'none' };
+  }
+
+  if (!verdict.studying) {
+    return { kind: 'distracted', moduleId: null, reason: source === 'rule' ? 'rule' : 'screen', activity: verdict.activity, confidence, source };
+  }
+
+  return { kind: 'subject', moduleId: verdict.moduleId, reason: null, activity: verdict.activity, confidence, source };
 }
 
 export interface FuseInput {
@@ -68,16 +105,5 @@ export function fuseChunk({
     return { ...base, kind: 'distracted', moduleId: null, reason: 'phone', activity: PHONE_ACTIVITY, confidence: round2(phone.score), source: 'webcam', appName };
   }
 
-  const source: ChunkSource = verdictSource ?? verdict?.source ?? 'none';
-  const confidence = verdict ? Math.min(1, Math.max(0, verdict.confidence)) : 0;
-
-  if (!verdict || (verdict.studying && !verdict.moduleId)) {
-    return { ...base, kind: 'unknown', moduleId: null, reason: null, activity: verdict?.activity ?? '', confidence: 0, source: 'none', appName };
-  }
-
-  if (!verdict.studying) {
-    return { ...base, kind: 'distracted', moduleId: null, reason: source === 'rule' ? 'rule' : 'screen', activity: verdict.activity, confidence, source, appName };
-  }
-
-  return { ...base, kind: 'subject', moduleId: verdict.moduleId, reason: null, activity: verdict.activity, confidence, source, appName };
+  return { ...base, ...labelFromVerdict(verdict, verdictSource), appName };
 }

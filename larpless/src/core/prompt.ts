@@ -76,14 +76,15 @@ export interface PromptInput {
 /** Max keywords per subject sent to the model. */
 export const PROMPT_KEYWORDS_PER_SUBJECT = 8;
 
-export function buildUserText(
-  appName: string | null,
-  windowTitle: string | null,
-  modules: Pick<StudyModule, 'name' | 'keywords'>[],
-): string {
+/**
+ * SYSTEM plus the module list. It's identical on every call of a session, so Ollama reuses its
+ * processed tokens and only the screenshot and window line are new (bench: 5.3 s → 3.0 s per call
+ * with the ~930-token library list). Keep anything that changes per call out of here.
+ */
+export function buildSystem(modules: Pick<StudyModule, 'name' | 'keywords'>[]): string {
   const lines = [
-    `Frontmost app: ${appName ?? 'unknown'}`,
-    `Window title: ${windowTitle ?? 'unknown'}`,
+    SYSTEM,
+    '',
     'Modules:',
     ...modules.map((m) => {
       // Cap hints per subject: the built-in library has ~44 subjects, and a long prompt costs latency.
@@ -94,10 +95,14 @@ export function buildUserText(
   return lines.join('\n');
 }
 
+export function buildUserText(appName: string | null, windowTitle: string | null): string {
+  return [`Frontmost app: ${appName ?? 'unknown'}`, `Window title: ${windowTitle ?? 'unknown'}`].join('\n');
+}
+
 export function buildMessages({ appName, windowTitle, modules, imageBase64, prefillNoThink }: PromptInput): ChatMessage[] {
   const msgs: ChatMessage[] = [
-    { role: 'system', content: SYSTEM },
-    { role: 'user', content: buildUserText(appName, windowTitle, modules), images: [imageBase64] },
+    { role: 'system', content: buildSystem(modules) },
+    { role: 'user', content: buildUserText(appName, windowTitle), images: [imageBase64] },
   ];
   if (prefillNoThink) msgs.push({ role: 'assistant', content: NO_THINK_PREFILL });
   return msgs;
@@ -131,6 +136,15 @@ function findModule<M extends Pick<StudyModule, 'id' | 'name'>>(subject: string,
   return modules.find((m) => m.name.trim().toLowerCase() === wanted) ?? null;
 }
 
+/**
+ * The model sometimes copies a whole module line ("Biology: cell, mitosis") as the subject. Try the
+ * full string first (a course may itself contain ':'), then the part before the first ':'.
+ */
+function subjectCandidates(subject: string): string[] {
+  const i = subject.indexOf(':');
+  return i > 0 ? [subject, subject.slice(0, i).trim()] : [subject];
+}
+
 function clamp01(x: unknown): number {
   const n = typeof x === 'number' ? x : typeof x === 'string' ? Number(x) : NaN;
   if (!Number.isFinite(n)) return 0.5;
@@ -160,12 +174,12 @@ export function parseVerdict(
   // The model only picks a subject. A description costs output tokens and the UI already shows the subject.
   const activity = '';
   const confidence = clamp01(r.confidence);
-  const subject = r.subject.trim();
+  const candidates = subjectCandidates(r.subject.trim());
 
-  if (subject.toLowerCase() === NOT_STUDY.toLowerCase()) {
+  if (candidates.some((s) => s.toLowerCase() === NOT_STUDY.toLowerCase())) {
     return { studying: false, moduleId: null, activity, confidence, source: 'vlm' };
   }
-  const mod = findModule(subject, modules);
+  const mod = candidates.map((s) => findModule(s, modules)).find((m) => m !== null) ?? null;
   if (!mod) return null;
   // A module subject with studying:false is the model contradicting itself; trust the boolean.
   const studying = typeof r.studying === 'boolean' ? r.studying : true;

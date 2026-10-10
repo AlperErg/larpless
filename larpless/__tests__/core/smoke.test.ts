@@ -138,17 +138,25 @@ describe('Phase 0 smoke', () => {
     expect(useSessionStore.getState().chunks).toHaveLength(0);
   });
 
-  it('mock screen advances its script every 2 calls', async () => {
-    resetMockScreen();
-    const titles: (string | null)[] = [];
-    for (let i = 0; i < 9; i++) titles.push((await mockApis.screen.getActiveWindow()).windowTitle);
-    expect(titles[0]).toBe(titles[1]);
-    expect(titles[2]).toBe('MATH201 Problem set 3.pdf');
-    expect(titles[4]).toBe('Instagram');
-    expect(titles[8]).toBe(titles[0]);
-    const snap = await mockApis.screen.capture(config.CAPTURE);
-    expect(snap.windowTitle).toBe(titles[8]);
-    expect(snap.jpegBase64.startsWith('/9j/')).toBe(true);
+  it('mock screen switches window every 20 s, following the clock', async () => {
+    jest.useFakeTimers();
+    try {
+      resetMockScreen();
+      const titles: (string | null)[] = [];
+      for (let i = 0; i < 9; i++) {
+        titles.push((await mockApis.screen.getActiveWindow()).windowTitle);
+        jest.advanceTimersByTime(10_000);
+      }
+      expect(titles[0]).toBe(titles[1]);
+      expect(titles[2]).toBe('MATH201 Problem set 3.pdf');
+      expect(titles[4]).toBe('Instagram');
+      expect(titles[8]).toBe(titles[0]);
+      const snap = await mockApis.screen.capture(config.CAPTURE);
+      expect(snap.windowTitle).toBe(titles[8]);
+      expect(snap.jpegBase64.startsWith('/9j/')).toBe(true);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('mock webcam follows the 120 s schedule and stops cleanly', async () => {

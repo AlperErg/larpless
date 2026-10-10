@@ -6,7 +6,7 @@
 import type { ScreenVerdict, StudyModule } from '../contracts/domain';
 import type { ScreenSnapshot } from '../contracts/native';
 import type { OllamaStatus } from '../contracts/store';
-import { buildMessages, buildSchema, extractJson, NUM_CTX, parseVerdict } from './prompt';
+import { buildMessages, buildSchema, buildSystem, extractJson, NUM_CTX, parseVerdict } from './prompt';
 
 export type OllamaHealth = Exclude<OllamaStatus, 'unknown'>;
 
@@ -22,8 +22,10 @@ export interface OllamaOptions {
   fetchImpl?: FetchLike;
   /** Timeout for classify(); default 8 s. */
   timeoutMs?: number;
-  /** Timeout for checkHealth(); default 3 s. */
+  /** Timeout for checkHealth() and unload(); default 3 s. */
   healthTimeoutMs?: number;
+  /** Timeout for warmUp(), which may include loading the model; default 30 s. */
+  warmUpTimeoutMs?: number;
   /** Logger for latency + verdict lines; default console.log. Pass () => {} to silence. */
   log?: (line: string) => void;
 }
@@ -31,6 +33,11 @@ export interface OllamaOptions {
 export interface OllamaClient {
   checkHealth(): Promise<OllamaHealth>;
   classify(snapshot: ScreenSnapshot, modules: StudyModule[]): Promise<ScreenVerdict | null>;
+  /**
+   * Load the model and process the system prompt (with `modules`) without an image, so the first
+   * classify() of a session skips both. Never rejects.
+   */
+  warmUp(modules: StudyModule[]): Promise<void>;
   /** Ask Ollama to unload the model now instead of after keep_alive. Never rejects. */
   unload(): Promise<void>;
 }
@@ -65,6 +72,7 @@ export function createOllama(opts: OllamaOptions): OllamaClient {
   const fetchImpl: FetchLike = opts.fetchImpl ?? (globalThis.fetch as unknown as FetchLike);
   const timeoutMs = opts.timeoutMs ?? 8_000;
   const healthTimeoutMs = opts.healthTimeoutMs ?? 3_000;
+  const warmUpTimeoutMs = opts.warmUpTimeoutMs ?? 30_000;
   const log = opts.log ?? ((line: string) => console.log(line));
 
   return {
@@ -143,6 +151,37 @@ export function createOllama(opts: OllamaOptions): OllamaClient {
         return null;
       } finally {
         body = null;
+      }
+    },
+
+    async warmUp(modules) {
+      const model = read(opts.model);
+      const t0 = Date.now();
+      try {
+        await withTimeout(warmUpTimeoutMs, async (signal) => {
+          const res = await fetchImpl(`${trimSlash(read(opts.baseUrl))}/api/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            // Same model, num_ctx and system message as classify(): a different num_ctx would reload the model.
+            body: JSON.stringify({
+              model,
+              stream: false,
+              think: false,
+              keep_alive: '30m',
+              options: { temperature: 0, num_ctx: NUM_CTX, num_predict: 1 },
+              messages: [
+                { role: 'system', content: buildSystem(modules) },
+                { role: 'user', content: 'Ready?' },
+              ],
+            }),
+            signal,
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return res.json();
+        });
+        log(`[ollama] ${model} warm-up ${Date.now() - t0} ms`);
+      } catch {
+        log(`[ollama] ${model} warm-up failed after ${Date.now() - t0} ms`);
       }
     },
 

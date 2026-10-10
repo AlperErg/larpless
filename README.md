@@ -56,16 +56,33 @@ flowchart LR
   UI -->|store actions| CTRL
 ```
 
-Every 10 seconds (1 chunk), the session controller resolves one label, stopping at the computationally cheapest step that gives an answer:
+The session controller runs two cycles: a **live** one every second that keeps the floating panel current, and a **10 second chunk** that records what you did. Both label the screen the same way.
 
-1. **Webcam:** person absent for more than ⅔ of the chunk → `away`.
-2. **Active window:** if LarpLess itself is in front, reuse the previous verdict.
-3. **Rules:** distraction keyword in the app or title → `distracted`.
-4. **Cache:** same app and title as a verdict less than 2 min old → reuse it. No screenshot.
-5. **VLM:** capture screen → classify with the VLM from Ollama.
-6. **Fuse** the screen capture verdict with the webcam samples (phone visible for more than ⅙ → `distracted · phone`) into a `Chunk`(10 second blocks), then update the session store, panel and history.
+### Labelling the screen
 
-Failed or timed-out calls give `unknown`, which is left out of the focus %.
+The classifier stops at the cheapest step that gives an answer:
+
+1. **LarpLess in front:** reuse the previous verdict.
+2. **Rules:** a distraction keyword in the app or window title → `distracted`. No screenshot.
+3. **Cache:** same app and title as a verdict less than 2 min old → reuse it. No screenshot.
+4. **VLM:** take a screenshot and classify it with the vision model in Ollama (about 3 s). If a check for the same window is already running, it waits for that result instead of taking a second screenshot.
+
+### Live: what the panel shows
+
+- **Window changes:** every second the controller reads the frontmost app and title, which needs no screenshot. Once a new window has stayed in front for a second, it is labelled straight away: about 1.5 s through a rule or the cache, about 4 s through the VLM. Quick ⌘-Tabs are ignored, and a result for a window you have already left is dropped.
+- **Webcam (1 fps):** `Away` after 5 s without you, `Phone` when it shows in 2 of the last 3 samples. While you are away, no window checks or screenshots happen.
+
+### Every 10 s: the chunk that is stored
+
+1. **Webcam:** person absent for more than ⅔ of the chunk → `away`, with no screen check.
+2. **Screen:** otherwise label the screen as above. This usually reuses the live check from the cache, so the chunk costs no extra screenshot.
+3. **Fuse** the screen verdict with the chunk's webcam samples (phone visible for more than ⅙ → `distracted · phone`) into a `Chunk`, save it to the history and run the alerts, which escalate per chunk.
+
+Failed or timed-out checks give `unknown`, which is left out of the focus %.
+
+### The model
+
+Starting a session warms the model up, which takes about 3 s while the first window settles, so the first check doesn't also wait for the model to load. The subject list sits in the system prompt, which is identical on every check, so Ollama reuses it and only processes the new screenshot and window line. Ending a session unloads the model to free its memory.
 
 **Layering:** `ui → store → core → native facades → Swift`. `src/core` is pure TypeScript with injected dependencies, so the whole session loop runs under Jest with fake timers.
 
@@ -90,6 +107,14 @@ Failed or timed-out calls give `unknown`, which is left out of the focus %.
 ```bash
 ollama pull qwen3-vl:4b
 ```
+
+LarpLess asks Ollama for a 4K context and unloads the model when a session ends. Ollama's model runner also keeps a prompt cache in RAM (up to 8 GB by default) that fills up during long sessions without helping LarpLess. On a 16–24 GB Mac you can turn it off by quitting Ollama and starting it with:
+
+```bash
+open --env LLAMA_ARG_CACHE_RAM=0 -a Ollama
+```
+
+This lasts until Ollama is quit (`launchctl setenv` does not reach the Ollama app).
 
 ### Install
 

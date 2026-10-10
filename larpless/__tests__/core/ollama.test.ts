@@ -1,4 +1,5 @@
 import { createOllama } from '../../src/core/ollama';
+import { buildSystem } from '../../src/core/prompt';
 import type { FetchLike } from '../../src/core/ollama';
 import type { ScreenSnapshot } from '../../src/contracts/native';
 import { fixtureModules } from '../../src/fixtures/data';
@@ -124,6 +125,31 @@ describe('ollama', () => {
       const o = createOllama({ baseUrl: 'http://x', model: 'm', fetchImpl, log });
       await expect(o.classify(SNAP, fixtureModules)).resolves.toBeNull();
     }
+  });
+
+  describe('warmUp', () => {
+    it('loads the model with the same system prompt and num_ctx as classify, generating one token', async () => {
+      const fetchImpl = jest.fn<ReturnType<FetchLike>, Parameters<FetchLike>>(() => chatRes(''));
+      const o = createOllama({ baseUrl: 'http://127.0.0.1:11434', model: 'qwen3-vl:4b', fetchImpl, log });
+      await o.warmUp(fixtureModules);
+      await o.classify(SNAP, fixtureModules);
+      const [url, init] = fetchImpl.mock.calls[0];
+      expect(url).toBe('http://127.0.0.1:11434/api/chat');
+      const warm = JSON.parse(init!.body!);
+      const real = JSON.parse(fetchImpl.mock.calls[1][1]!.body!);
+      expect(warm).toMatchObject({ model: 'qwen3-vl:4b', keep_alive: '30m', options: { num_ctx: 4096, num_predict: 1 } });
+      expect(warm.messages[0]).toEqual({ role: 'system', content: buildSystem(fixtureModules) });
+      expect(warm.messages[0]).toEqual(real.messages[0]);
+      expect(warm.options.num_ctx).toBe(real.options.num_ctx); // a different num_ctx would reload the model
+      expect(JSON.stringify(warm)).not.toContain('images');
+      expect(logs[0]).toMatch(/warm-up \d+ ms/);
+    });
+
+    it('never rejects', async () => {
+      const o = createOllama({ baseUrl: 'http://x', model: 'm', fetchImpl: () => Promise.reject(new Error('down')), log });
+      await expect(o.warmUp(fixtureModules)).resolves.toBeUndefined();
+      expect(logs[0]).toMatch(/warm-up failed/);
+    });
   });
 
   describe('unload', () => {
