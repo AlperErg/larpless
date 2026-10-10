@@ -12,4 +12,7 @@ if (-not $listening) {
     -ArgumentList '/c', "npx react-native start --port $Port > .logs\metro-$Port.log 2>&1"
 }
 
+# The deploy step needs PowerShell 7 (pwsh.exe); restore it as a .NET local tool (dotnet-tools.json).
+dotnet tool restore
+
 npx @react-native-community/cli run-windows --no-packager --logging

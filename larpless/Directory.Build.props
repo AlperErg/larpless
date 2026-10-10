@@ -1,0 +1,17 @@
+<Project>
+  <!--
+    Windows (react-native-windows) build settings for projects under larpless/, including autolinked
+    native modules in node_modules. MSBuild picks up the nearest Directory.Build.props automatically.
+  -->
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'ReactNativeAsyncStorage'">
+    <!--
+      @react-native-async-storage/async-storage 2.2.0 ships a stale packages.config (CppWinRT only) next to
+      its PackageReference-based project. Windows App SDK 1.8's transitive-dependency check reads that file
+      and reports its split packages as missing, although NuGet resolves all of them (see the project's
+      packages.lock.json). Skip the false positive for this project only.
+    -->
+    <WindowsAppSDKVerifyTransitiveDependencies>false</WindowsAppSDKVerifyTransitiveDependencies>
+    <!-- It also hard-codes the VS 2022 toolset (v143); see windows/AsyncStorageToolset.props. -->
+    <ForceImportBeforeCppProps>$(MSBuildThisFileDirectory)windows\AsyncStorageToolset.props</ForceImportBeforeCppProps>
+  </PropertyGroup>
+</Project>
