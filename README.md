@@ -4,7 +4,7 @@
 
 <p align="center"><img src="docs/images/home-screen.webp" alt="LarpLess home screen: Start session, Pomodoro presets, streak heatmap and recent sessions" width="800"></p>
 
-**Strava for studying, as a native Mac app.** LarpLess watches your screen and webcam *on your own Mac*, works out which subject you are studying every 10 seconds, keeps a floating timer above every app, nudges you when you drift to Instagram or your phone, and gives you a per-subject breakdown when you finish. If you want, you can then share the session stats with friends.
+**Strava for studying, as a native Mac app.** LarpLess watches your screen and webcam *on-device*, works out which subject you are studying or if you are distracted every 10 seconds, nudges you when you drift to Instagram on your screen or if you pick up your phone, and gives you a study session breakdown when you finish *(like Strava)*. If you want, you can then share the session stats with friends.
 
 It was built in one hackathon day with **react-native-macos**: one orchestrator ran four parallel Claude Code agents (plus a fifth for the social features), each in its own git worktree.
 
@@ -15,18 +15,18 @@ It was built in one hackathon day with **react-native-macos**: one orchestrator 
 ## Features
 
 | | |
-|---|---|
-| 📚 **Subjects out of the box** | A built-in library of subjects with keywords sets the labels automatically. Adding your own courses is optional. |
-| 🖥️ **Screen classification** | The frontmost app, the window title and (when needed) a screenshot go to a local vision model (`qwen3-vl:4b` via Ollama). It judges the *content*: a YouTube lecture counts as study, YouTube Shorts doesn't. |
-| ⚡ **Rules + cache fast path** | Known distractions (Instagram, TikTok, Reddit, Netflix, Discord, …) are flagged from the window title alone, and an unchanged window reuses the last verdict. Most checks need no screenshot. |
-| 📷 **Webcam presence & phone detection** | Apple Vision detects whether you are there and CoreML **YOLO11n** spots a phone, at 1 fps, natively. |
-| ⏱️ **Floating timer** | A SwiftUI `NSPanel` that floats over every app and Space. It shows green when you're studying, red when you're distracted, grey when you're away and blue on breaks. Hover it for Pomodoro, sound and session controls. |
-| 🍅 **Pomodoro** | 25/5 (with a long break), 50/10, a fast `demo` preset, or free timer. Breaks pause every capture. |
-| 🔔 **Escalating alerts** | Panel turns red → notification + soft chime → second notification + pulse. A "Back on track" flash when you return. Strictness: 2 / 5 / 10 min. |
-| 🎧 **Ambient sound** | White, pink and brown noise generated with `AVAudioEngine`, ducked during breaks. |
-| 📊 **Summary & history** | Duration, focus %, subject breakdown bar, chunks you can relabel, streaks and a heatmap. |
-| 👥 **Friends feed** *(Phase 2)* | Supabase accounts, friend requests and a feed of shared session stats. Posts carry stats only, never images. |
-| 🎭 **Demo mode** | Replays recorded chunks through the real store and panel, so the demo works offline with no Ollama and no camera. |
+| --- | --- |
+| **Subjects out of the box** | A built-in library of subjects with keywords sets the labels automatically. Adding your own courses is optional. |
+| **Screen classification** | The frontmost app, the window title and (when needed) a screenshot go to a local vision model (`qwen3-vl:4b` via Ollama). It judges the *content*: a YouTube lecture counts as study, YouTube Shorts doesn't. |
+| **Rules + cache fast path** | Known distractions (Instagram, TikTok, Reddit, Netflix, Discord, …) are flagged from the window title alone, and an unchanged window reuses the last verdict. Most checks need no screenshot. |
+| **Webcam presence & phone detection** | Apple Vision detects whether you are there and CoreML **YOLO11n** spots a phone, at 1 fps, natively. |
+| **Floating timer** | A SwiftUI `NSPanel` that floats over every app and Space. It shows green when you're studying, red when you're distracted, grey when you're away and blue on breaks. Hover it for Pomodoro, sound and session controls. |
+| **Pomodoro** | An optional study format of 25 minutes of focus and a subsequent 5 minute break or 50/10 is available. |
+| **Escalating alerts** | Panel turns red → notification + soft chime → second notification + pulse. A "Back on track" flash when you return. Strictness: 2 / 5 / 10 min. |
+| **Ambient sound** | White, pink and brown noise generated with `AVAudioEngine`, ducked during breaks. |
+| **Session Summary** | Duration, focus %, subject breakdown bar, streaks and a heatmap. |
+| **Friends feed** | Supabase accounts, friend requests and a feed of shared session stats. Posts include stats only. |
+| **Demo mode** | Replays recorded chunks through the real store and panel, so the demo works offline with no Ollama and no camera. |
 
 The UI is styled after Notion: Inter + Instrument Serif, the Notion tag palette, callouts, toggle lists, and a ⌘K command palette.
 
@@ -56,14 +56,14 @@ flowchart LR
   UI -->|store actions| CTRL
 ```
 
-At every **chunk boundary** (every 10 s) the session controller resolves one label, stopping at the cheapest step that gives an answer:
+Every 10 seconds (1 chunk), the session controller resolves one label, stopping at the computationally cheapest step that gives an answer:
 
-1. **Webcam:** absent for more than ⅔ of the chunk → `away`. No screenshot.
+1. **Webcam:** person absent for more than ⅔ of the chunk → `away`.
 2. **Active window:** if LarpLess itself is in front, reuse the previous verdict.
-3. **Rules:** distraction keyword in the app or title → `distracted`. No screenshot.
+3. **Rules:** distraction keyword in the app or title → `distracted`.
 4. **Cache:** same app and title as a verdict less than 2 min old → reuse it. No screenshot.
-5. **VLM:** capture → classify (20 s timeout) → drop the frame in `finally`.
-6. **Fuse** the screen verdict with the webcam samples (phone visible for more than ⅙ → `distracted · phone`) into a `Chunk`, then update the store, alerts, panel and history.
+5. **VLM:** capture screen → classify with the VLM from Ollama.
+6. **Fuse** the screen capture verdict with the webcam samples (phone visible for more than ⅙ → `distracted · phone`) into a `Chunk`(10 second blocks), then update the session store, panel and history.
 
 Failed or timed-out calls give `unknown`, which is left out of the focus %.
 
@@ -71,19 +71,20 @@ Failed or timed-out calls give `unknown`, which is left out of the focus %.
 
 ## Tech stack
 
-- **App:** react-native **0.81.6** + react-native-macos **0.81.9**, TypeScript, Hermes. It runs Fabric + bridgeless; the legacy-style native modules work through the interop layer.
+- **App:** react-native 0.81.6 + react-native-macos 0.81.9, TypeScript, Hermes. It runs Fabric + bridgeless; the legacy-style native modules work through the interop layer.
 - **State / storage:** zustand 5, AsyncStorage 2.2.0 (pinned), date-fns 4.
 - **Native (Swift 5, macOS 14+):** ScreenCaptureKit, AVFoundation, Vision, CoreML, UserNotifications, AppKit, SwiftUI.
-- **Models:** Ollama `qwen3-vl:4b` (10/10 on the synthetic bench, p50 ≈ 3.2 s on an M4 Pro) and YOLO11n CoreML (`nms=True`, bundled).
+- **Models:** Ollama `qwen3-vl:4b` and YOLO11n CoreML (`nms=True`, bundled).
 - **Social:** `@supabase/supabase-js` + `react-native-url-polyfill`.
-- **Deliberately not used:** react-navigation, Tailwind/NativeWind, reanimated, react-native-svg, expo-*. Their macOS support was uncertain, so the app uses a route store, `StyleSheet` + theme tokens, core `Animated`, and emoji.
 
 ## Getting started
 
 ### Requirements
 
-- An Apple-silicon Mac on **macOS 14+**, with **Xcode** (signed in with an Apple ID so an *Apple Development* certificate exists) and **CocoaPods**
-- **Node ≥ 20**
+- An Apple-silicon Mac with 16 GB of RAM or more on **macOS 14.5** or above.
+- **Xcode 16.1+** (signed in with an Apple ID).
+- **Node 20** or above.
+- **Cocoapods**.
 - **[Ollama](https://ollama.com)** running locally, with the vision model pulled:
 
 ```bash
@@ -92,7 +93,7 @@ ollama pull qwen3-vl:4b
 
 ### Install
 
-From `larpless/`:
+From `/larpless/`:
 
 ```bash
 scripts/setup-worktree.sh
@@ -100,9 +101,9 @@ scripts/setup-worktree.sh
 
 This runs `npm ci` and then `pod install` with the UTF-8 locale CocoaPods needs. If you run `pod install` yourself, `export LANG=en_US.UTF-8` first.
 
-### Supabase (optional, for the Friends tab)
+### Supabase Setup
 
-The social layer reads `larpless/src/social/env.ts`, which is gitignored. Create it:
+The social layer reads `larpless/src/social/env.ts`, which is gitignored. Create it and fill it with your Supabase details. This is required for the app to run.
 
 ```ts
 export const SUPABASE_URL = 'https://<project>.supabase.co';
@@ -218,27 +219,7 @@ log show --last 5m --style compact --predicate 'subsystem == "com.larpless.app"'
         └── Fonts/            Inter, Instrument Serif
 ```
 
-## Workstreams and status
-
-| WS | Area | Status |
-|---|---|---|
-| **A** | Native capture: permissions, active window, ScreenCaptureKit, webcam + Vision + YOLO | A1–A9 done. The live-camera checks need a person in front of the camera. Camera preview cut. |
-| **B** | Native shell: floating panel, notifications, sound, App Nap, menu | B1–B8 done, B10 partly polished |
-| **C** | Core logic: classifier, fuser, focus, pomodoro, alerts, db, session controller, demo mode | C1–C15 done, with tests |
-| **D** | UI: theme, components, every page, ⌘K palette | D1–D11 done |
-| **E** | Social (Phase 2): Supabase accounts, friends, feed, posting from Summary | P3 + P4 done. Story-card PNG and live photo cut. |
-
-See `docs/macos/status/WS-*.md` for details and the open "needs a human" checks.
-
-### Differences from the original spec
-
-- **Native, not web:** ScreenCaptureKit replaces `getDisplayMedia`, Vision + CoreML replace MediaPipe, an `NSPanel` replaces Document PiP, and AsyncStorage replaces Dexie. The model is `qwen3-vl:4b` instead of `qwen2.5vl:3b`.
-- **Posts carry stats only:** no photo and no storage bucket. One **Friends** tab replaces separate Feed and Profile pages.
-- **Not built:** the 1080×1920 story-card export, the live photo and the rain/café loops (they were on the cut list).
-
-## Privacy invariants
-
-These are enforced by convention and checked during review (see [CLAUDE.md](CLAUDE.md)):
+## Privacy
 
 - Screen and webcam frames stay in memory only. They never go to disk, AsyncStorage, temp files, logs, or the network (except local Ollama).
 - Snapshots, base64 strings, pixel buffers and `CGImage`s are never logged. Logs carry sizes and timings only.
