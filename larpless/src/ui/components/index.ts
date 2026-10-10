@@ -18,6 +18,6 @@ export { Segmented } from './Segmented';
 export type { SegmentedOption } from './Segmented';
 export { Switch } from './Switch';
 export { CodeBlock } from './CodeBlock';
-export { MacView, MacPressable, MacTextInput, isAltPress } from './mac';
-export type { MacKeyEvent, HandledKey } from './mac';
+export { MacView, MacPressable, MacTextInput, isAltPress, handledKeys } from './mac';
+export type { MacKeyEvent, HandledKey, WindowsHandledKey } from './mac';
 export { SessionRowHeader, SessionRowBody, sessionToggleItem } from './SessionRow';

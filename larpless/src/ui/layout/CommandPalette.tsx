@@ -12,8 +12,8 @@ import { useAppStore } from '../../store/appStore';
 import { useNavStore } from '../../store/navStore';
 import type { Route } from '../../store/navStore';
 import { useSessionStore } from '../../store/sessionStore';
-import { MacPressable, MacTextInput, MacView } from '../components/mac';
-import type { HandledKey, MacKeyEvent } from '../components/mac';
+import { MacPressable, MacTextInput, MacView, handledKeys } from '../components/mac';
+import type { MacKeyEvent } from '../components/mac';
 import { endSession, isLive, startSession, togglePause } from '../lib/actions';
 import { colors, fonts, motion, radius, space } from '../theme';
 
@@ -93,7 +93,8 @@ export function CommandPalette() {
   return open ? <PaletteOverlay /> : null;
 }
 
-const KEYS: HandledKey[] = [{ key: 'ArrowUp' }, { key: 'ArrowDown' }, { key: 'Enter' }, { key: 'Escape' }];
+const KEYS = handledKeys([{ key: 'ArrowUp' }, { key: 'ArrowDown' }, { key: 'Enter' }, { key: 'Escape' }]);
+const ESCAPE = handledKeys([{ key: 'Escape' }]);
 
 function PaletteOverlay() {
   const setOpen = useNavStore((s) => s.setPaletteOpen);
@@ -156,7 +157,7 @@ function PaletteOverlay() {
         {/* Escape anywhere in the card; the input's own keys stop propagating (onKeyDown bubbles in JS). */}
         <MacView
           style={styles.card}
-          keyDownEvents={[{ key: 'Escape' }]}
+          keyDownEvents={ESCAPE}
           onKeyDown={(e) => {
             if (e.nativeEvent.key === 'Escape') close();
           }}>

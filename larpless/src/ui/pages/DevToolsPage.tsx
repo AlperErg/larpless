@@ -22,6 +22,7 @@ import { caughtErrors } from '../layout/ErrorBoundary';
 import { useViewport } from '../lib/viewport';
 import { Page } from '../layout/Page';
 import { colors, space } from '../theme';
+import { MOD } from '../platform';
 
 const FIXTURES: FixtureName[] = ['idle', 'running', 'distracted', 'break', 'summary'];
 
@@ -72,7 +73,7 @@ export function DevToolsPage() {
         Navigation
       </Text>
       <View style={styles.row}>
-        <Button testID="dev-open-palette" title="Open ⌘K palette" variant="secondary" onPress={() => setPaletteOpen(true)} style={styles.btn} />
+        <Button testID="dev-open-palette" title={`Open ${MOD}K palette`} variant="secondary" onPress={() => setPaletteOpen(true)} style={styles.btn} />
         <Button title="Onboarding" variant="secondary" onPress={() => go('onboarding')} style={styles.btn} />
         {(['home', 'session', 'summary', 'history', 'modules', 'settings'] as Route[]).map((r) => (
           <Button key={r} title={r} variant="ghost" onPress={() => go(r)} style={styles.btn} />

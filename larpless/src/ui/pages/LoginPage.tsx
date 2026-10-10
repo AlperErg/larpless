@@ -8,6 +8,7 @@ import { TextField } from '../components/TextField';
 import { Page } from '../layout/Page';
 import { errorText } from '../lib/social';
 import { colors, space, tag } from '../theme';
+import { DEVICE } from '../platform';
 
 type Mode = 'signIn' | 'signUp';
 
@@ -37,7 +38,7 @@ export function LoginPage() {
 
   return (
     <Page testID="page-login" header={{ icon: '👥', title: 'Friends' }}>
-      <Text muted>Share finished sessions with friends and see how they're studying. Only the stats you post leave this Mac.</Text>
+      <Text muted>{`Share finished sessions with friends and see how they're studying. Only the stats you post leave this ${DEVICE}.`}</Text>
 
       {status === 'unconfigured' ? (
         <Callout emoji="⚠️" tone="orange" style={styles.block}>

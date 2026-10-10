@@ -12,6 +12,7 @@ import { streakDays } from '../lib/derive';
 import { formatDuration, greeting } from '../lib/format';
 import { POMODORO_OPTIONS } from '../lib/labels';
 import { space } from '../theme';
+import { ALT, MOD } from '../platform';
 import { useAllModules } from '../lib/useAllModules';
 
 const RECENT = 7;
@@ -59,7 +60,7 @@ export function HomePage() {
               icon="▶︎"
               variant="primary"
               size="lg"
-              tooltip="⌥-click for a demo session"
+              tooltip={`${ALT}click for a demo session`}
               onPress={(e) => startSession({ pomodoro: preset, demo: isAltPress(e) })}
             />
             <View style={styles.preset}>
@@ -78,7 +79,7 @@ export function HomePage() {
             </View>
           </View>
           <Text variant="small" style={styles.tip}>
-            ⌥-click Start for a demo session · ⌘K for every command
+            {`${ALT}click Start for a demo session · ${MOD}K for every command`}
           </Text>
         </View>
       )}

@@ -5,6 +5,7 @@
  * Tokens are grouped per scheme so a `dark` set can be added later (cut item 4);
  * only `light` ships today, and `colors` / `tag` point at it.
  */
+import { Platform } from 'react-native';
 import type { ChunkKind, TagColor } from '../contracts/domain';
 
 export type SchemeName = 'light';
@@ -99,13 +100,31 @@ export const TAG_COLORS: TagColor[] = [
 ];
 
 /** PostScript names of the bundled fonts (CONTRACTS.md §9, verified with mdls). */
-export const fonts = {
+const macFonts = {
   regular: 'Inter-Regular',
   medium: 'Inter-Medium',
   semibold: 'Inter-SemiBold',
   serif: 'InstrumentSerif-Regular',
   serifItalic: 'InstrumentSerif-Italic',
-} as const;
+  mono: 'Menlo',
+};
+
+/**
+ * react-native-windows (Fabric) can't load bundled fonts yet (microsoft/react-native-windows#16339), so
+ * Windows uses system fonts. DirectWrite names each weight as its own family ("Segoe UI Semibold"), so the
+ * weight stays encoded in the family name exactly like the macOS PostScript names. Segoe UI has no Medium.
+ * Instrument Serif's italic needs `fontStyle: 'italic'` on Windows (see Text.tsx).
+ */
+const windowsFonts: typeof macFonts = {
+  regular: 'Segoe UI',
+  medium: 'Segoe UI',
+  semibold: 'Segoe UI Semibold',
+  serif: 'Georgia',
+  serifItalic: 'Georgia',
+  mono: 'Consolas',
+};
+
+export const fonts = Platform.OS === 'windows' ? windowsFonts : macFonts;
 
 export const space = {
   xs: 4,

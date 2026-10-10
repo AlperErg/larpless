@@ -17,6 +17,7 @@ import { PageBody } from '../layout/Page';
 import { courseNameProblem, draftsFromModules, modulesFromDrafts } from '../lib/modules';
 import type { ModuleDraft } from '../lib/modules';
 import { colors, motion, radius, space, tag } from '../theme';
+import { DEVICE, IS_WINDOWS } from '../platform';
 import { LIBRARY_MODULES } from '../../core/subjectLibrary';
 
 const STEPS = ['Your modules', 'Permissions', 'Local AI'] as const;
@@ -41,7 +42,7 @@ export function OnboardingPage() {
 
   return (
     <ScrollView testID="page-onboarding" style={styles.scroll} contentContainerStyle={styles.scrollContent}>
-      <PageHeader icon="👋" title="Welcome to LarpLess" subtitle={<Text muted>Strava for studying. Everything is analysed on this Mac.</Text>} />
+      <PageHeader icon="👋" title="Welcome to LarpLess" subtitle={<Text muted>{`Strava for studying. Everything is analysed on this ${DEVICE}.`}</Text>} />
       <PageBody>
         <Progress step={step} />
         <Animated.View style={{ opacity: fade, transform: [{ translateY }] }}>
@@ -172,25 +173,28 @@ function PermissionsStep({ onBack, onNext }: { onBack: () => void; onNext: () =>
         Frames stay in memory and are never saved. During breaks and while you're away, nothing is captured.
       </Text>
 
-      <PermRow
-        id="screen"
-        icon="🖥"
-        title="Screen Recording"
-        body="Reads the frontmost window to tell study from distraction."
-        status={perm?.screen ?? null}
-        onAllow={() => request('screen')}
-        onSettings={() => native.permissions.openSettings('screen').catch(() => {})}
-        extra={
-          perm?.screen !== 'granted' || screenRequested ? (
-            <View style={styles.relaunch}>
-              <Text variant="small" style={styles.flex}>
-                macOS only applies Screen Recording after LarpLess relaunches.
-              </Text>
-              <Button testID="relaunch" title="Relaunch" variant="secondary" onPress={() => native.permissions.relaunch().catch(() => {})} />
-            </View>
-          ) : null
-        }
-      />
+      {/* Windows has no Screen Recording permission: the app can always read the frontmost window. */}
+      {IS_WINDOWS ? null : (
+        <PermRow
+          id="screen"
+          icon="🖥"
+          title="Screen Recording"
+          body="Reads the frontmost window to tell study from distraction."
+          status={perm?.screen ?? null}
+          onAllow={() => request('screen')}
+          onSettings={() => native.permissions.openSettings('screen').catch(() => {})}
+          extra={
+            perm?.screen !== 'granted' || screenRequested ? (
+              <View style={styles.relaunch}>
+                <Text variant="small" style={styles.flex}>
+                  macOS only applies Screen Recording after LarpLess relaunches.
+                </Text>
+                <Button testID="relaunch" title="Relaunch" variant="secondary" onPress={() => native.permissions.relaunch().catch(() => {})} />
+              </View>
+            ) : null
+          }
+        />
+      )}
       <PermRow
         id="camera"
         icon="📷"
@@ -300,12 +304,12 @@ function OllamaStep({ onBack, onFinish }: { onBack: () => void; onFinish: () => 
         Local AI
       </Text>
       <Text muted style={styles.lead}>
-        LarpLess asks a vision model running in Ollama what's on screen. Nothing leaves your Mac.
+        {`LarpLess asks a vision model running in Ollama what's on screen. Nothing leaves your ${DEVICE}.`}
       </Text>
       {ok ? (
         <Callout testID="ollama-ready" emoji="🟢" tone="green">
           <Text>
-            <Strong>{name}</Strong> is ready. Everything stays on this Mac.
+            <Strong>{name}</Strong> is ready. Everything stays on this {DEVICE}.
           </Text>
         </Callout>
       ) : (
@@ -327,7 +331,7 @@ function OllamaStep({ onBack, onFinish }: { onBack: () => void; onFinish: () => 
           <Text variant="small" weight="medium" style={styles.stepLabel}>
             1. Open the Ollama app:
           </Text>
-          <CodeBlock code="open -a Ollama" />
+          <CodeBlock code={IS_WINDOWS ? 'ollama serve' : 'open -a Ollama'} />
           <Text variant="small" weight="medium" style={styles.stepLabel}>
             2. Download the model:
           </Text>

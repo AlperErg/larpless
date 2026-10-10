@@ -54,7 +54,7 @@ const styles = StyleSheet.create({
     paddingVertical: space.sm + 2,
     paddingHorizontal: space.md,
   },
-  code: { flex: 1, fontFamily: 'Menlo', fontSize: 13, lineHeight: 18, color: colors.text },
+  code: { flex: 1, fontFamily: fonts.mono, fontSize: 13, lineHeight: 18, color: colors.text },
   copy: { paddingHorizontal: space.sm, paddingVertical: 2, borderRadius: radius },
   copyText: { fontFamily: fonts.medium, fontSize: 12, color: colors.muted },
 });
