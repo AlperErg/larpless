@@ -184,7 +184,8 @@ This starts Metro on port 8081 if it isn't already running (log in `.logs/metro-
 **Differences from the Mac app**
 
 - Shortcuts use **Ctrl** instead of ⌘ (Ctrl+K palette, Ctrl+Enter start, Ctrl+. end).
-- The webcam detects **presence** with the built-in Windows `FaceDetector`. **Phone detection is not wired up yet**, so `phoneVisible` is always `false` (YOLO11n through ONNX Runtime is planned).
+- The webcam currently detects **presence** with the built-in Windows `FaceDetector`, which only finds a fairly frontal face: looking down, turning away or strong backlight reads as *away*. **Phone detection is not wired up yet**, so `phoneVisible` is always `false`.
+- **Planned:** the Windows webcam will switch to **YOLO11n through ONNX Runtime**, a model that detects whole **bodies** (the `person` class, score > 0.5) as well as phones (`cell phone`, score > 0.4), the same model and thresholds as the Mac's CoreML YOLO. This replaces `FaceDetector` for presence, so you count as present whenever your body is in frame, not only when your face is.
 - The main window uses Segoe UI, Georgia and Consolas, because react-native-windows can't load bundled fonts yet. The floating panel draws its own text and keeps Inter + Instrument Serif.
 - Page transitions and other `Animated` effects are off on Windows (`ANIMATE` in `src/ui/platform.ts`): react-native-windows drops the content of a re-rendered `Animated.View`. The floating panel's tint, pulse and flash animations are native and unaffected.
 - Closing the main window quits the app (the Windows convention) instead of keeping it in the background.
