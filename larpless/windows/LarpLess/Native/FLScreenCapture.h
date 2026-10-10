@@ -15,6 +15,7 @@
 #include <thread>
 #include <vector>
 
+#include "FLUtil.h"
 #include "FLWindow.h"
 
 #pragma comment(lib, "dwmapi.lib")
@@ -97,12 +98,6 @@ struct FLScreenCapture {
   static double Num(JSValueObject const &obj, char const *key, double fallback) {
     const auto it{obj.find(key)};
     return it == obj.end() || it->second.IsNull() ? fallback : it->second.AsDouble();
-  }
-
-  static double EpochMs() {
-    return static_cast<double>(
-        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
-            .count());
   }
 
   static JSValue Str(std::wstring const &s) {
@@ -286,28 +281,6 @@ struct FLScreenCapture {
     ULONG read{0};
     return SUCCEEDED(stream->Seek(zero, STREAM_SEEK_SET, nullptr)) &&
         SUCCEEDED(stream->Read(out.data(), static_cast<ULONG>(out.size()), &read)) && read == out.size();
-  }
-
-  static std::string Base64(std::vector<uint8_t> const &data) {
-    static constexpr char table[]{"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"};
-    std::string out;
-    out.reserve((data.size() + 2) / 3 * 4);
-    size_t i{0};
-    for (; i + 2 < data.size(); i += 3) {
-      const uint32_t n{(uint32_t{data[i]} << 16) | (uint32_t{data[i + 1]} << 8) | data[i + 2]};
-      out += table[(n >> 18) & 63];
-      out += table[(n >> 12) & 63];
-      out += table[(n >> 6) & 63];
-      out += table[n & 63];
-    }
-    if (i < data.size()) {
-      const uint32_t n{(uint32_t{data[i]} << 16) | (i + 1 < data.size() ? uint32_t{data[i + 1]} << 8 : 0)};
-      out += table[(n >> 18) & 63];
-      out += table[(n >> 12) & 63];
-      out += i + 1 < data.size() ? table[(n >> 6) & 63] : '=';
-      out += '=';
-    }
-    return out;
   }
 };
 

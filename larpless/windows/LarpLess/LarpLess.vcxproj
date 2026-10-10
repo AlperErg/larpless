@@ -111,6 +111,8 @@
     <ClInclude Include="Native\FLPing.h" />
     <ClInclude Include="Native\FLScreenCapture.h" />
     <ClInclude Include="Native\FLSound.h" />
+    <ClInclude Include="Native\FLUtil.h" />
+    <ClInclude Include="Native\FLWebcam.h" />
     <ClInclude Include="Native\FLWindow.h" />
   </ItemGroup>
   <ItemGroup>
