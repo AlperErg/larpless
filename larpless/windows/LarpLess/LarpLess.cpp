@@ -15,6 +15,7 @@
 #include "Native/FLPermissions.h"
 #include "Native/FLPing.h"
 #include "Native/FLScreenCapture.h"
+#include "Native/FLSound.h"
 #include "Native/FLWindow.h"
 
 // A PackageProvider containing any turbo modules you define within this app project
