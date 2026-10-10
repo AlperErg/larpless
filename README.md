@@ -151,7 +151,7 @@ pkill -f "$PWD/macos/build/Build/Products/Debug/LarpLess.app"
 
 On first launch, grant **Screen Recording** (macOS needs an app relaunch afterwards; onboarding has a button for it), **Camera** and **Notifications**.
 
-The app is signed ad-hoc, so no Apple ID is needed, but macOS forgets those permissions after every rebuild. To keep them, sign with your own Apple Development certificate (**any Apple ID works**, via Xcode → Settings → Accounts → Manage Certificates). Create `larpless/macos/signing.local` (gitignored) and `run-mac.sh` picks it up:
+The Debug app is signed ad-hoc, so no Apple ID is needed, but macOS forgets those permissions after every rebuild. To keep them, sign with your own Apple Development certificate (**any Apple ID works**, via Xcode → Settings → Accounts → Manage Certificates). Create `larpless/macos/signing.local` (gitignored) and `run-mac.sh` picks it up:
 
 ```bash
 CODE_SIGN_IDENTITY="Apple Development: Your Name (XXXXXXXXXX)"
@@ -159,6 +159,12 @@ DEVELOPMENT_TEAM=YOURTEAMID
 ```
 
 `security find-identity -v -p codesigning` lists your certificate names; the team ID is the Organizational Unit in the certificate's details.
+
+The Release configuration is set up for distribution: Developer ID signing for the LarpLess team, hardened runtime, and the camera entitlement from `LarpLess.entitlements`. Building it needs that team's **Developer ID Application** certificate. To build Release locally without it, override the identity:
+
+```bash
+xcodebuild -workspace macos/Focusline.xcworkspace -scheme Focusline-macOS -configuration Release -derivedDataPath macos/build CODE_SIGN_IDENTITY="Apple Development: Your Name (XXXXXXXXXX)" DEVELOPMENT_TEAM=YOURTEAMID build
+```
 
 ### Demo mode
 

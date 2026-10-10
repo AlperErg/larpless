@@ -19,7 +19,7 @@ scripts/run-mac.sh 8081                    # Metro on 8081 + Debug build with th
 xcodebuild -workspace macos/Focusline.xcworkspace -scheme Focusline-macOS -configuration Debug build
 ```
 
-- `run-mac.sh` opens a **new** app instance each time; quit the old one first: `pkill -f "$PWD/macos/build/Build/Products/Debug/LarpLess.app"`. Metro logs go to `.logs/metro-<port>.log`. An optional gitignored `macos/signing.local` (`CODE_SIGN_IDENTITY`, `DEVELOPMENT_TEAM`) gives a stable signature so Screen Recording/Camera grants survive rebuilds; otherwise it signs ad-hoc.
+- `run-mac.sh` opens a **new** app instance each time; quit the old one first: `pkill -f "$PWD/macos/build/Build/Products/Debug/LarpLess.app"`. Metro logs go to `.logs/metro-<port>.log`. An optional gitignored `macos/signing.local` (`CODE_SIGN_IDENTITY`, `DEVELOPMENT_TEAM`) gives a stable signature so Screen Recording/Camera grants survive rebuilds; otherwise it signs ad-hoc. Release is set up for distribution: `Developer ID Application` (team `P74N9B6V54`), hardened runtime, and `Focusline-macOS/LarpLess.entitlements` (camera; the hardened runtime blocks the webcam without it). Versions come from `MARKETING_VERSION`/`CURRENT_PROJECT_VERSION`. ATS allows only local networking (Ollama); everything else must be HTTPS.
 - `src/social/env.ts` is gitignored but **imported unconditionally**, so it must exist for the build/typecheck to work (`export const SUPABASE_URL = ''; export const SUPABASE_ANON_KEY = '';` runs fully local). Schema: `supabase/schema.sql`.
 - Runtime needs Ollama on `127.0.0.1:11434` with `qwen3-vl:4b`. Tests never need it.
 
