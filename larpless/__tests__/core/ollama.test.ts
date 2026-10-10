@@ -47,7 +47,7 @@ describe('ollama', () => {
       stream: false,
       think: false,
       keep_alive: '30m',
-      options: { temperature: 0 },
+      options: { temperature: 0, num_ctx: 4096 },
     });
     expect(body.format.properties.subject.enum).toEqual(['Biology', 'Maths', 'History', 'Not study']);
     expect(body.format.required).not.toContain('activity');
@@ -124,6 +124,26 @@ describe('ollama', () => {
       const o = createOllama({ baseUrl: 'http://x', model: 'm', fetchImpl, log });
       await expect(o.classify(SNAP, fixtureModules)).resolves.toBeNull();
     }
+  });
+
+  describe('unload', () => {
+    it('posts keep_alive 0 with no prompt to /api/generate', async () => {
+      const fetchImpl = jest.fn<ReturnType<FetchLike>, Parameters<FetchLike>>(() => jsonRes({ done: true, done_reason: 'unload' }));
+      const o = createOllama({ baseUrl: 'http://127.0.0.1:11434/', model: 'qwen3-vl:4b', fetchImpl, log });
+      await o.unload();
+      const [url, init] = fetchImpl.mock.calls[0];
+      expect(url).toBe('http://127.0.0.1:11434/api/generate');
+      expect(init?.method).toBe('POST');
+      expect(JSON.parse(init!.body!)).toEqual({ model: 'qwen3-vl:4b', keep_alive: 0 });
+      expect(logs).toEqual(['[ollama] qwen3-vl:4b unloaded']);
+    });
+
+    it('never rejects (Ollama down or HTTP error)', async () => {
+      for (const fetchImpl of [() => Promise.reject(new Error('x')), () => jsonRes({}, false, 500)] as FetchLike[]) {
+        await expect(createOllama({ baseUrl: 'http://x', model: 'm', fetchImpl, log }).unload()).resolves.toBeUndefined();
+      }
+      expect(logs).toEqual(['[ollama] m unload failed', '[ollama] m unload failed']);
+    });
   });
 
   describe('checkHealth', () => {

@@ -6,7 +6,7 @@
 import type { ScreenVerdict, StudyModule } from '../contracts/domain';
 import type { ScreenSnapshot } from '../contracts/native';
 import type { OllamaStatus } from '../contracts/store';
-import { buildMessages, buildSchema, extractJson, parseVerdict } from './prompt';
+import { buildMessages, buildSchema, extractJson, NUM_CTX, parseVerdict } from './prompt';
 
 export type OllamaHealth = Exclude<OllamaStatus, 'unknown'>;
 
@@ -31,6 +31,8 @@ export interface OllamaOptions {
 export interface OllamaClient {
   checkHealth(): Promise<OllamaHealth>;
   classify(snapshot: ScreenSnapshot, modules: StudyModule[]): Promise<ScreenVerdict | null>;
+  /** Ask Ollama to unload the model now instead of after keep_alive. Never rejects. */
+  unload(): Promise<void>;
 }
 
 const read = (v: string | (() => string)) => (typeof v === 'function' ? v() : v);
@@ -95,7 +97,7 @@ export function createOllama(opts: OllamaOptions): OllamaClient {
         stream: false,
         think: false,
         keep_alive: '30m',
-        options: { temperature: 0 },
+        options: { temperature: 0, num_ctx: NUM_CTX },
         format: buildSchema(modules.map((m) => m.name)),
         messages: buildMessages({
           appName: snapshot.appName,
@@ -141,6 +143,25 @@ export function createOllama(opts: OllamaOptions): OllamaClient {
         return null;
       } finally {
         body = null;
+      }
+    },
+
+    async unload() {
+      const model = read(opts.model);
+      try {
+        // Empty prompt + keep_alive 0 is Ollama's documented unload; it doesn't load a model that isn't resident.
+        await withTimeout(healthTimeoutMs, async (signal) => {
+          const res = await fetchImpl(`${trimSlash(read(opts.baseUrl))}/api/generate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model, keep_alive: 0 }),
+            signal,
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        });
+        log(`[ollama] ${model} unloaded`);
+      } catch {
+        log(`[ollama] ${model} unload failed`);
       }
     },
   };

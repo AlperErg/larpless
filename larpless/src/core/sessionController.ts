@@ -50,7 +50,7 @@ export interface SessionControllerDeps {
   getModules(): StudyModule[];
   getSettings(): Settings;
   classifier: Pick<Classifier, 'classifyCurrent' | 'reset'>;
-  ollama: Pick<OllamaClient, 'checkHealth'>;
+  ollama: Pick<OllamaClient, 'checkHealth' | 'unload'>;
   now(): number;
   config: ControllerConfig;
   /** Called after a summary is saved (end, relabel) so the app store can refresh its session list. */
@@ -492,6 +492,8 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
           log('[session] saveSession failed');
         }
         teardownNative();
+        // Free the model's RAM (several GB) now rather than after keep_alive. Demo never loads it.
+        if (!demo) deps.ollama.unload().catch(noop);
         native.panel.hide().catch(noop);
         native.sound.play('off').catch(noop);
         native.sound.duck(1);

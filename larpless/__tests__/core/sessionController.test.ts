@@ -65,7 +65,7 @@ function setup(opts: { settings?: Partial<Settings>; native?: Partial<NativeApis
     ...opts.native,
   };
   const db = createDb(createMemoryKv());
-  const ollama = { classify: jest.fn(async () => null), checkHealth: jest.fn(async () => 'ok' as const) };
+  const ollama = { classify: jest.fn(async () => null), checkHealth: jest.fn(async () => 'ok' as const), unload: jest.fn(async () => {}) };
   const classifier = createClassifier({
     native,
     ollama,
@@ -269,9 +269,11 @@ describe('sessionController', () => {
     expect(h.native.sound.play).toHaveBeenLastCalledWith('off');
     expect(h.native.appShell.endSessionActivity).toHaveBeenCalled();
     expect(h.webcamStop).toHaveBeenCalled();
+    expect(h.ollama.unload).toHaveBeenCalledTimes(1);
     expect(jest.getTimerCount()).toBe(0);
     // A second end is a no-op.
     expect(await h.ctrl.end()).toBeNull();
+    expect(h.ollama.unload).toHaveBeenCalledTimes(1);
   });
 
   it('a partial window under 10 s is dropped at end', async () => {
@@ -442,6 +444,7 @@ describe('sessionController', () => {
     expect(getWin).not.toHaveBeenCalled();
     expect(h.capture).not.toHaveBeenCalled();
     expect(h.webcamStart).not.toHaveBeenCalled();
+    expect(h.ollama.unload).not.toHaveBeenCalled();
     expect(await h.db.getChunks(summary!.id)).toHaveLength(48);
     expect(jest.getTimerCount()).toBe(0);
   });

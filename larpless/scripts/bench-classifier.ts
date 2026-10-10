@@ -20,7 +20,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { StudyModule } from '../src/contracts/domain';
-import { buildMessages, buildSchema, extractJson, NOT_STUDY, parseVerdict } from '../src/core/prompt.ts';
+import { buildMessages, buildSchema, extractJson, NOT_STUDY, NUM_CTX, parseVerdict } from '../src/core/prompt.ts';
 
 /* ------------------------------------------------------------------ */
 /* Args                                                                */
@@ -484,7 +484,7 @@ async function chat(imageBase64: string, appName: string | null, windowTitle: st
     model: MODEL,
     stream: false,
     keep_alive: '30m',
-    options: { temperature: 0 },
+    options: { temperature: 0, num_ctx: NUM_CTX },
     format: buildSchema(MODULES.map((m) => m.name)),
     messages: buildMessages({ appName, windowTitle, modules: MODULES, imageBase64, prefillNoThink: PREFILL }),
   };

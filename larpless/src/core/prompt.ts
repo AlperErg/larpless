@@ -9,6 +9,14 @@ import type { ScreenVerdict, StudyModule } from '../contracts/domain';
 export const NOT_STUDY = 'Not study';
 export const MAX_ACTIVITY_CHARS = 60;
 
+/**
+ * Context window requested from Ollama (`options.num_ctx`). The runner reserves KV memory for the
+ * whole window up front (~0.14 MiB/token for qwen3-vl:4b), so the server default (often 32K = 4.6 GB)
+ * wastes RAM. A request is ~2,400 tokens with the full subject library (~1,070 of them the image),
+ * so 4096 leaves room for ~75 more custom courses.
+ */
+export const NUM_CTX = 4096;
+
 export const SYSTEM = [
   'You label what a student is doing on their Mac for a study tracker. You get a screenshot of the main display, the frontmost app name, and its window title. Decide whether the visible content is studying for one of the student\'s modules.',
   '- Judge the content, not the app: a lecture on YouTube, slides in Preview, notes in Notion, a problem set in a browser or an IDE exercise all count as studying if they match a module.',
