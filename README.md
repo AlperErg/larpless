@@ -6,7 +6,7 @@
 
 **Strava for studying, as a native Mac app.** LarpLess watches your screen and webcam *on-device*, works out which subject you are studying or if you are distracted every 10 seconds, nudges you when you drift to Instagram on your screen or if you pick up your phone, and gives you a study session breakdown when you finish *(like Strava)*. If you want, you can then share the session stats with friends.
 
-It was built in one hackathon day with **react-native-macos**: one orchestrator ran four parallel Claude Code agents (plus a fifth for the social features), each in its own git worktree.
+It was built in one hackathon day with **react-native-macos**: one orchestrator ran four parallel Claude Code agents (plus a fifth for the social features), each in its own git worktree. It also runs on **Windows 10/11** through react-native-windows, with C++ versions of the same native modules (see [Windows](#windows)).
 
 > **Privacy first.** Frames are analysed in memory and dropped right away. Nothing is written to disk, and the only network call involving a frame goes to Ollama on `127.0.0.1`. Only labels such as "Biology, 10 s" are stored. The in-app privacy badge shows `Screenshots analysed: N · checks without a screenshot: M · stored: 0`, and on Pomodoro breaks the app stops capturing.
 
@@ -76,6 +76,7 @@ Failed or timed-out calls give `unknown`, which is left out of the focus %.
 - **Native (Swift 5, macOS 14+):** ScreenCaptureKit, AVFoundation, Vision, CoreML, UserNotifications, AppKit, SwiftUI.
 - **Models:** Ollama `qwen3-vl:4b` and YOLO11n CoreML (`nms=True`, bundled).
 - **Social:** `@supabase/supabase-js` + `react-native-url-polyfill`.
+- **Windows:** react-native-windows 0.81 (C++ app, Fabric, WinAppSDK 1.8). Native modules in C++/WinRT: Direct2D + DirectWrite, XAudio2, MediaCapture + FaceDetector, WIC, toast notifications.
 
 ## Getting started
 
@@ -135,9 +136,38 @@ DEVELOPMENT_TEAM=YOURTEAMID
 
 `security find-identity -v -p codesigning` lists your certificate names; the team ID is the Organizational Unit in the certificate's details.
 
+### Windows
+
+The Windows build uses the same TypeScript and the same JS ↔ native contract; only the native modules (`larpless/windows/LarpLess/Native/`) are C++ instead of Swift.
+
+**Requirements**
+
+- Windows 10/11 x64 with 16 GB of RAM or more.
+- **Visual Studio 2026** (Community is fine) with the *Desktop development with C++* and *WinUI application development* workloads, the *MSIX Packaging Tools* component and the **Windows 11 SDK 10.0.22621**.
+- **.NET SDK 10**, **Node 22** or above.
+- **Developer Mode** on and **long paths** enabled (Settings → System → For developers).
+- **[Ollama for Windows](https://ollama.com)** with `qwen3-vl:4b` pulled, as on the Mac.
+
+**Install and run.** From `larpless/`, run `npm ci`, create `src/social/env.ts` as in [Supabase Setup](#supabase-setup), then:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run-windows.ps1
+```
+
+This starts Metro on port 8081 if it isn't already running (log in `.logs/metro-8081.log`), restores the local PowerShell 7 tool the deploy step needs, then builds, deploys and launches the Debug app. The first build takes several minutes. No admin terminal is needed. Allow the camera when Windows asks; there is no Screen Recording permission on Windows.
+
+**Differences from the Mac app**
+
+- Shortcuts use **Ctrl** instead of ⌘ (Ctrl+K palette, Ctrl+Enter start, Ctrl+. end).
+- The webcam detects **presence** with the built-in Windows `FaceDetector`. **Phone detection is not wired up yet**, so `phoneVisible` is always `false` (YOLO11n through ONNX Runtime is planned).
+- The main window uses Segoe UI, Georgia and Consolas, because react-native-windows can't load bundled fonts yet. The floating panel draws its own text and keeps Inter + Instrument Serif.
+- Page transitions and other `Animated` effects are off on Windows (`ANIMATE` in `src/ui/platform.ts`): react-native-windows drops the content of a re-rendered `Animated.View`. The floating panel's tint, pulse and flash animations are native and unaffected.
+- Closing the main window quits the app (the Windows convention) instead of keeping it in the background.
+- During a session the app holds a Windows power request and opts out of EcoQoS, the counterpart of disabling App Nap.
+
 ### Demo mode
 
-- **⌥-click Start** on Home, or ⌘K → *Start demo session*: replays fixture chunks through the real store and floating panel.
+- **⌥-click Start** on Home, or ⌘K (Ctrl+K on Windows) → *Start demo session*: replays fixture chunks through the real store and floating panel.
 - ⌘K → *Toggle demo fast mode*: short alert thresholds (20 s / 50 s instead of minutes).
 - `node scripts/demo-social.mjs seed`: creates demo accounts with friendships and sample posts. Also `accept`, `request <user>` and `status`.
 
@@ -184,6 +214,8 @@ log show --last 5m --style compact --predicate 'subsystem == "com.larpless.app"'
 **Classifier bench.** `node scripts/bench-classifier.ts --model qwen3-vl:4b` scores the prompt against `bench/<expected>__<desc>.png`. If that folder is empty it renders 10 synthetic mock-ups instead and never captures the real screen. Add `--clean` to delete the images afterwards.
 
 **Adding native code.** `macos/Focusline-macOS/Native/` is an Xcode *synchronized folder*: drop files in and they join the target, with no `project.pbxproj` edits. Resources are flattened into the bundle, so prefix every type and file name (`FLCapture…`, `FLShell…`).
+
+On Windows each module is one header in `windows/LarpLess/Native/` (`REACT_MODULE` / `REACT_METHOD` / `REACT_EVENT`). Include it in `LarpLess.cpp` and add a `ClInclude` to `LarpLess.vcxproj`. Files to ship with the app go in `windows/LarpLess/Assets/` as `<None … DeploymentContent="true">` items. To rebuild without the script (Metro already running), use `npx @react-native-community/cli run-windows --no-packager --logging`. Two quirks of the bridgeless runtime: `ReactContext::JSDispatcher()` is empty, so emit events directly (that's thread-safe), and blocking `.get()` on WinRT async calls must run off the UI (STA) thread.
 
 ## Privacy
 
