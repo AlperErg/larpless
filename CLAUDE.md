@@ -60,6 +60,10 @@ These are product guarantees; preserve them in any change:
 - Only labels are persisted; window titles are never stored. `privacy.framesStored` is the constant `0`.
 - A screenshot is taken only on the VLM path. Nothing is captured during Pomodoro breaks or while the user is away.
 
+## Windows
+
+There is also a Windows build (react-native-windows, C++ native modules in `larpless/windows/LarpLess/Native/`). Its commands, gotchas, module status and open issues (Ollama speed on CPU-only PCs, planned YOLO body detection) are in [`larpless/windows/CLAUDE.md`](larpless/windows/CLAUDE.md). UI differences go through `src/ui/platform.ts` and must leave the Mac output unchanged.
+
 ## Stale references
 
 Comments cite `PLAN.md` and `CONTRACTS.md` sections, and `scripts/guard-ownership.sh` references `docs/macos/status/WS-*.md` (the per-agent workstream ownership hook from the hackathon). Those docs were removed; treat `src/contracts/` and the code as the source of truth.
