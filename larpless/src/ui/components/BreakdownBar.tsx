@@ -3,6 +3,7 @@ import { Animated, StyleSheet, View } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { BreakdownEntry } from '../../contracts/domain';
 import { colors, space, tag } from '../theme';
+import { ANIMATE, MotionView } from '../platform';
 import { formatDuration } from '../lib/format';
 import { Tag } from './Tag';
 
@@ -50,6 +51,7 @@ export function BreakdownBar({ entries, legend, legendTime, height = 10, hideBar
 function Segment({ entry, last }: { entry: BreakdownEntry; last: boolean }) {
   const w = useRef(new Animated.Value(0)).current;
   useEffect(() => {
+    if (!ANIMATE) return undefined;
     Animated.spring(w, {
       toValue: entry.pct,
       useNativeDriver: false,
@@ -58,9 +60,11 @@ function Segment({ entry, last }: { entry: BreakdownEntry; last: boolean }) {
     }).start();
     return () => w.stopAnimation();
   }, [entry.pct, w]);
-  const width = w.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'], extrapolate: 'clamp' });
+  const width = ANIMATE
+    ? w.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'], extrapolate: 'clamp' })
+    : (`${Math.min(100, Math.max(0, entry.pct))}%` as const);
   return (
-    <Animated.View
+    <MotionView
       testID={`segment-${entry.key}`}
       style={[
         styles.segment,

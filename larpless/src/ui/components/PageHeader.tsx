@@ -4,6 +4,7 @@ import { Animated, Easing, StyleSheet, Text as RNText, View } from 'react-native
 import type { TagColor } from '../../contracts/domain';
 import { useGutter } from '../lib/hooks';
 import { colors, layout, motion, space, tag } from '../theme';
+import { ANIMATE, MotionView } from '../platform';
 import { Text } from './Text';
 
 export interface PageHeaderProps {
@@ -26,6 +27,10 @@ export function PageHeader({ icon, title, cover, subtitle, right, testID }: Page
 
   useEffect(() => {
     if (target === layers.over) return;
+    if (!ANIMATE) {
+      setLayers({ under: target, over: target });
+      return;
+    }
     // Cross-fade the cover to the new subject colour.
     setLayers((l) => ({ under: l.over, over: target }));
     fade.setValue(0);
@@ -41,7 +46,7 @@ export function PageHeader({ icon, title, cover, subtitle, right, testID }: Page
   return (
     <View testID={testID}>
       <View style={[styles.cover, { backgroundColor: layers.under }]}>
-        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: layers.over, opacity: fade }]} />
+        <MotionView style={[StyleSheet.absoluteFill, { backgroundColor: layers.over, opacity: ANIMATE ? fade : 1 }]} />
       </View>
       <View style={[styles.column, { paddingHorizontal: gutter }]}>
         <RNText style={styles.icon}>{icon}</RNText>

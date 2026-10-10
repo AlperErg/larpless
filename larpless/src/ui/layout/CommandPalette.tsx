@@ -16,6 +16,7 @@ import { MacPressable, MacTextInput, MacView, handledKeys } from '../components/
 import type { MacKeyEvent } from '../components/mac';
 import { endSession, isLive, startSession, togglePause } from '../lib/actions';
 import { colors, fonts, motion, radius, space } from '../theme';
+import { ANIMATE, MotionView } from '../platform';
 
 export interface PaletteCommand {
   id: string;
@@ -113,9 +114,11 @@ function PaletteOverlay() {
   const filtered = filterCommands(commands, query);
   const selected = Math.min(sel, Math.max(0, filtered.length - 1));
 
-  const t = useRef(new Animated.Value(0)).current;
+  const t = useRef(new Animated.Value(ANIMATE ? 0 : 1)).current;
   useEffect(() => {
-    Animated.timing(t, { toValue: 1, duration: motion.fast, easing: Easing.out(Easing.quad), useNativeDriver: false }).start();
+    if (ANIMATE) {
+      Animated.timing(t, { toValue: 1, duration: motion.fast, easing: Easing.out(Easing.quad), useNativeDriver: false }).start();
+    }
     const id = setTimeout(() => inputRef.current?.focus(), 30);
     return () => {
       clearTimeout(id);
@@ -151,9 +154,9 @@ function PaletteOverlay() {
 
   let lastGroup = '';
   return (
-    <Animated.View testID="palette" style={[StyleSheet.absoluteFill, styles.overlay, { opacity: t }]}>
+    <MotionView testID="palette" style={[StyleSheet.absoluteFill, styles.overlay, { opacity: ANIMATE ? t : 1 }]}>
       <Pressable testID="palette-backdrop" accessibilityLabel="Close palette" style={[StyleSheet.absoluteFill, styles.backdrop]} onPress={close} />
-      <Animated.View style={[styles.cardWrap, { transform: [{ scale }] }]} pointerEvents="box-none">
+      <MotionView style={[styles.cardWrap, { transform: [{ scale: ANIMATE ? scale : 1 }] }]} pointerEvents="box-none">
         {/* Escape anywhere in the card; the input's own keys stop propagating (onKeyDown bubbles in JS). */}
         <MacView
           style={styles.card}
@@ -220,8 +223,8 @@ function PaletteOverlay() {
             <RNText style={styles.footerText}>↑↓ to move · ↵ to run · esc to close</RNText>
           </View>
         </MacView>
-      </Animated.View>
-    </Animated.View>
+      </MotionView>
+    </MotionView>
   );
 }
 

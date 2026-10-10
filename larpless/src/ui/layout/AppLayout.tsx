@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Animated, Easing, StyleSheet, View } from 'react-native';
 import type { Route } from '../../store/navStore';
 import { colors, motion } from '../theme';
+import { ANIMATE, MotionView } from '../platform';
 import { ErrorBoundary } from './ErrorBoundary';
 import { Sidebar } from './Sidebar';
 
@@ -15,6 +16,7 @@ export interface AppLayoutProps {
 export function AppLayout({ route, children }: AppLayoutProps) {
   const t = useRef(new Animated.Value(1)).current;
   useEffect(() => {
+    if (!ANIMATE) return undefined;
     t.setValue(0);
     Animated.timing(t, {
       toValue: 1,
@@ -28,9 +30,9 @@ export function AppLayout({ route, children }: AppLayoutProps) {
   return (
     <View style={styles.root}>
       <Sidebar />
-      <Animated.View testID="content" style={[styles.content, { opacity: t, transform: [{ translateY }] }]}>
+      <MotionView testID="content" style={[styles.content, ANIMATE ? { opacity: t, transform: [{ translateY }] } : null]}>
         <ErrorBoundary where={route}>{children}</ErrorBoundary>
-      </Animated.View>
+      </MotionView>
     </View>
   );
 }

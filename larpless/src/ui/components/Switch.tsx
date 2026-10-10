@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet } from 'react-native';
 import { colors, motion } from '../theme';
+import { ANIMATE, MotionView } from '../platform';
 import { MacPressable } from './mac';
 
 export interface SwitchProps {
@@ -19,6 +20,7 @@ const KNOB = 14;
 export function Switch({ value, onChange, disabled, testID, accessibilityLabel }: SwitchProps) {
   const t = useRef(new Animated.Value(value ? 1 : 0)).current;
   useEffect(() => {
+    if (!ANIMATE) return undefined;
     Animated.timing(t, {
       toValue: value ? 1 : 0,
       duration: motion.fast,
@@ -27,7 +29,11 @@ export function Switch({ value, onChange, disabled, testID, accessibilityLabel }
     }).start();
     return () => t.stopAnimation();
   }, [value, t]);
-  const translateX = t.interpolate({ inputRange: [0, 1], outputRange: [2, W - KNOB - 2] });
+  const translateX = ANIMATE
+    ? t.interpolate({ inputRange: [0, 1], outputRange: [2, W - KNOB - 2] })
+    : value
+      ? W - KNOB - 2
+      : 2;
   return (
     <MacPressable
       testID={testID}
@@ -38,7 +44,7 @@ export function Switch({ value, onChange, disabled, testID, accessibilityLabel }
       enableFocusRing={false}
       onPress={() => onChange(!value)}
       style={[styles.track, { backgroundColor: value ? colors.accent : colors.active }, disabled ? styles.disabled : null]}>
-      <Animated.View style={[styles.knob, { transform: [{ translateX }] }]} />
+      <MotionView style={[styles.knob, { transform: [{ translateX }] }]} />
     </MacPressable>
   );
 }

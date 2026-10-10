@@ -17,7 +17,7 @@ import { PageBody } from '../layout/Page';
 import { courseNameProblem, draftsFromModules, modulesFromDrafts } from '../lib/modules';
 import type { ModuleDraft } from '../lib/modules';
 import { colors, motion, radius, space, tag } from '../theme';
-import { DEVICE, IS_WINDOWS } from '../platform';
+import { ANIMATE, DEVICE, IS_WINDOWS, MotionView } from '../platform';
 import { LIBRARY_MODULES } from '../../core/subjectLibrary';
 
 const STEPS = ['Your modules', 'Permissions', 'Local AI'] as const;
@@ -26,6 +26,7 @@ export function OnboardingPage() {
   const [step, setStep] = useState(0);
   const fade = useRef(new Animated.Value(1)).current;
   useEffect(() => {
+    if (!ANIMATE) return undefined;
     fade.setValue(0);
     Animated.timing(fade, { toValue: 1, duration: motion.base, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
     return () => fade.stopAnimation();
@@ -45,11 +46,11 @@ export function OnboardingPage() {
       <PageHeader icon="👋" title="Welcome to LarpLess" subtitle={<Text muted>{`Strava for studying. Everything is analysed on this ${DEVICE}.`}</Text>} />
       <PageBody>
         <Progress step={step} />
-        <Animated.View style={{ opacity: fade, transform: [{ translateY }] }}>
+        <MotionView style={ANIMATE ? { opacity: fade, transform: [{ translateY }] } : undefined}>
           {step === 0 ? <ModulesStep onNext={() => setStep(1)} /> : null}
           {step === 1 ? <PermissionsStep onBack={() => setStep(0)} onNext={() => setStep(2)} /> : null}
           {step === 2 ? <OllamaStep onBack={() => setStep(1)} onFinish={finish} /> : null}
-        </Animated.View>
+        </MotionView>
         {config.SHOW_DEV_TOOLS ? (
           <View style={styles.devRow}>
             <Button testID="onboarding-skip" title="Skip onboarding (dev)" variant="ghost" onPress={finish} />
