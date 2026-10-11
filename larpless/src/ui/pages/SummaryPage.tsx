@@ -169,6 +169,7 @@ const SOURCE_LABEL: Record<Chunk['source'], string> = {
   vlm: 'AI',
   rule: 'rule',
   cache: 'cache',
+  title: 'title',
   webcam: 'camera',
   none: '',
   user: 'edited',

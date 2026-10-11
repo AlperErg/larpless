@@ -16,7 +16,7 @@ export interface StudyModule {
 
 export type ChunkKind = 'subject' | 'distracted' | 'away' | 'unknown';
 export type DistractionReason = 'phone' | 'screen' | 'rule';
-export type ChunkSource = 'vlm' | 'rule' | 'cache' | 'webcam' | 'none' | 'user';
+export type ChunkSource = 'vlm' | 'rule' | 'cache' | 'title' | 'webcam' | 'none' | 'user';
 
 export interface Chunk {
   id: string;
@@ -57,7 +57,8 @@ export interface ScreenVerdict {
   moduleId: string | null;
   activity: string;
   confidence: number;
-  source: 'vlm' | 'rule' | 'cache';
+  /** title: a module keyword in the window title (Windows only, ClassifierConfig.TITLE_FIRST). */
+  source: 'vlm' | 'rule' | 'cache' | 'title';
 }
 
 export type Strictness = 2 | 5 | 10;               // minutes until the first notification

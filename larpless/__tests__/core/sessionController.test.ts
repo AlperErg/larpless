@@ -28,7 +28,7 @@ const INITIAL: SessionStoreState = {
 
 const T0 = new Date(2026, 9, 9, 14, 0, 0).getTime();
 
-function setup(opts: { settings?: Partial<Settings>; native?: Partial<NativeApis>; prepareOllama?: () => Promise<unknown> } = {}) {
+function setup(opts: { settings?: Partial<Settings>; native?: Partial<NativeApis>; prepareOllama?: () => Promise<unknown>; titleFirst?: boolean } = {}) {
   let state: SessionStoreState = { ...INITIAL };
   const store: StoreApi = {
     getState: () => state,
@@ -72,7 +72,7 @@ function setup(opts: { settings?: Partial<Settings>; native?: Partial<NativeApis
     native,
     ollama,
     now: () => Date.now(),
-    config: { USE_MOCK_CLASSIFIER: true, CACHE_TTL_MS: 120_000, CAPTURE: { maxWidth: 1280, jpegQuality: 0.7 } },
+    config: { USE_MOCK_CLASSIFIER: true, CACHE_TTL_MS: 120_000, CAPTURE: { maxWidth: 1280, jpegQuality: 0.7 }, ...(opts.titleFirst ? { TITLE_FIRST: true } : {}) },
     getPower: () => effectiveProfile(settings.powerProfile),
   });
   const warmUp = jest.spyOn(classifier, 'warmUp');
@@ -482,6 +482,22 @@ describe('sessionController', () => {
     expect(h.state.chunks.slice(3).map((c) => c.source)).toEqual(['cache', 'cache', 'cache']);
     expect(h.state.privacy).toEqual({ framesAnalysed: 1, checksWithoutScreenshot: 6, framesStored: 0 });
     expect(h.capture).toHaveBeenCalledTimes(1);
+    await h.ctrl.end();
+  });
+
+  it('TITLE_FIRST (Windows): a module keyword in the title labels chunks without any screenshot', async () => {
+    const win = async () => ({ appName: 'Preview', bundleId: 'com.apple.Preview', windowTitle: 'BIO101 Lecture 4.pdf', isSelf: false });
+    const h = setup({ settings: { webcamEnabled: false }, titleFirst: true });
+    h.native.screen.getActiveWindow = win;
+    await h.ctrl.start({ pomodoro: 'off' });
+    await advance(90_000);
+    expect(h.state.chunks).toHaveLength(3);
+    for (const c of h.state.chunks) {
+      expect(c).toMatchObject({ kind: 'subject', moduleId: 'mod_biology', source: 'title', activity: '', appName: 'Preview' });
+    }
+    expect(h.state.privacy).toEqual({ framesAnalysed: 0, checksWithoutScreenshot: 3, framesStored: 0 });
+    expect(h.capture).not.toHaveBeenCalled();
+    expect((await h.db.getChunks(h.state.session!.id)).map((c) => c.source)).toEqual(['title', 'title', 'title']);
     await h.ctrl.end();
   });
 

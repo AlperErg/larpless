@@ -461,3 +461,105 @@ describe('classifier', () => {
     }
   });
 });
+
+describe('classifier: TITLE_FIRST (Windows)', () => {
+  const TITLE_BIO: ScreenVerdict = { studying: true, moduleId: 'mod_biology', activity: '', confidence: 0.7, source: 'title' };
+
+  it('a module keyword in the title answers without a screenshot or the model', async () => {
+    const s = setup({ config: { TITLE_FIRST: true } });
+    const r = await s.c.classifyCurrent(fixtureModules);
+    expect(r).toEqual({ verdict: TITLE_BIO, tookScreenshot: false, appName: 'Preview', key: BIO_KEY });
+    expect(r).not.toHaveProperty('gen');
+    expect(r).not.toHaveProperty('tookMs');
+    expect(s.capture).not.toHaveBeenCalled();
+    expect(s.classify).not.toHaveBeenCalled();
+    // Title hits are not cached: the same window matches again (still source 'title').
+    expect((await s.c.classifyCurrent(fixtureModules)).verdict).toEqual(TITLE_BIO);
+    expect(s.capture).not.toHaveBeenCalled();
+  });
+
+  it('no keyword in the title → VLM', async () => {
+    const s = setup({ config: { TITLE_FIRST: true } });
+    s.setWin({ windowTitle: 'Some music video' });
+    const r = await s.c.classifyCurrent(fixtureModules);
+    expect(r).toMatchObject({ verdict: BIO_VERDICT, tookScreenshot: true });
+    expect(s.capture).toHaveBeenCalledTimes(1);
+    expect(s.classify).toHaveBeenCalledTimes(1);
+  });
+
+  it('unknown title → VLM', async () => {
+    const s = setup({ config: { TITLE_FIRST: true } });
+    s.setWin({ windowTitle: null });
+    expect((await s.c.classifyCurrent(fixtureModules)).tookScreenshot).toBe(true);
+    expect(s.classify).toHaveBeenCalledTimes(1);
+  });
+
+  it('a distraction rule beats a module keyword', async () => {
+    const s = setup({ config: { TITLE_FIRST: true } });
+    s.setWin({ appName: 'Safari', windowTitle: 'BIO101 cell memes • Instagram' });
+    const r = await s.c.classifyCurrent(fixtureModules);
+    expect(r.verdict).toEqual({ studying: false, moduleId: null, activity: 'Instagram', confidence: 1, source: 'rule' });
+    expect(s.capture).not.toHaveBeenCalled();
+  });
+
+  it('a cached VLM verdict beats a module keyword', async () => {
+    const HIST: ScreenVerdict = { ...BIO_VERDICT, moduleId: 'mod_history' };
+    const s = setup({ config: { TITLE_FIRST: true }, verdict: HIST });
+    // No modules → no title match, so the VLM classifies (and caches) this window.
+    expect((await s.c.classifyCurrent([])).verdict).toEqual(HIST);
+    s.advance(10_000);
+    const r = await s.c.classifyCurrent(fixtureModules);
+    expect(r).toMatchObject({ verdict: { ...HIST, source: 'cache' }, tookScreenshot: false });
+    expect(s.capture).toHaveBeenCalledTimes(1);
+  });
+
+  it('isSelf after a title hit reuses it as cache, with the hit window', async () => {
+    const s = setup({ config: { TITLE_FIRST: true } });
+    await s.c.classifyCurrent(fixtureModules);
+    s.setWin({ appName: 'LarpLess', windowTitle: 'LarpLess', isSelf: true });
+    expect(await s.c.classifyCurrent(fixtureModules)).toEqual({
+      verdict: { ...TITLE_BIO, source: 'cache' },
+      tookScreenshot: false,
+      appName: 'Preview',
+      key: BIO_KEY,
+    });
+    expect(s.capture).not.toHaveBeenCalled();
+  });
+
+  it('a call during a running VLM flight answers from its title without waiting', async () => {
+    let release: (v: ScreenVerdict) => void = () => {};
+    const s = setup({ config: { TITLE_FIRST: true } });
+    s.setWin({ windowTitle: 'Other.pdf' });
+    s.classify.mockImplementationOnce(() => new Promise<ScreenVerdict>((res) => (release = res)));
+    let firstDone = false;
+    const first = s.c.classifyCurrent(fixtureModules).then((r) => {
+      firstDone = true;
+      return r;
+    });
+    await tick();
+    s.setWin({ windowTitle: 'MATH201 Problem set 3.pdf' });
+    const second = await s.c.classifyCurrent(fixtureModules);
+    expect(firstDone).toBe(false);
+    expect(second).toEqual({
+      verdict: { studying: true, moduleId: 'mod_maths', activity: '', confidence: 0.7, source: 'title' },
+      tookScreenshot: false,
+      appName: 'Preview',
+      key: windowKey('Preview', 'MATH201 Problem set 3.pdf'),
+    });
+    expect(s.capture).toHaveBeenCalledTimes(1);
+    release(BIO_VERDICT);
+    expect(await first).toMatchObject({ tookScreenshot: true, key: windowKey('Preview', 'Other.pdf') });
+    expect(s.capture).toHaveBeenCalledTimes(1);
+    expect(s.classify).toHaveBeenCalledTimes(1);
+  });
+
+  it('flag off (Mac): the same title goes to the VLM', async () => {
+    for (const config of [{}, { TITLE_FIRST: false }]) {
+      const s = setup({ config });
+      const r = await s.c.classifyCurrent(fixtureModules);
+      expect(r).toMatchObject({ verdict: BIO_VERDICT, tookScreenshot: true });
+      expect(s.capture).toHaveBeenCalledTimes(1);
+      expect(s.classify).toHaveBeenCalledTimes(1);
+    }
+  });
+});

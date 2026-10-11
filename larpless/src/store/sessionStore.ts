@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { create } from 'zustand';
 import { config, DEFAULT_SETTINGS } from '../config';
 import type { SessionStore, SessionStoreState } from '../contracts/store';
@@ -43,7 +44,10 @@ export function getSessionController(): SessionController {
       native,
       ollama,
       now: Date.now,
-      config,
+      // Windows workaround: the CPU-only VLM takes ~30 s per check, so module keywords in the window
+      // title answer first. The goal is the Mac's VLM-first logic; turn this off once Windows
+      // inference is fast (see windows/CLAUDE.md).
+      config: { ...config, TITLE_FIRST: Platform.OS === 'windows' },
       getPower: () => effectiveProfile(settings().powerProfile),
     });
     controller = createSessionController({

@@ -1,5 +1,6 @@
 /**
- * Screen classifier: PLAN.md §6 steps 2–5 (isSelf → rules → cache → single-flight VLM).
+ * Screen classifier: PLAN.md §6 steps 2–5 (isSelf → rules → cache → [title keywords] → single-flight VLM).
+ * The title-keyword step runs only with config.TITLE_FIRST (Windows); without it the order is unchanged.
  *
  * Single flight: one screenshot at a time. A call for the same window shares that result.
  * A call for another window waits, and when the running call finishes exactly one follow-up
@@ -15,11 +16,18 @@ import { BEHIND_WINDOWS } from './powerProfile';
 import type { PowerSpec } from './powerProfile';
 import { MAX_ACTIVITY_CHARS } from './prompt';
 import { matchDistraction } from './rules';
+import { findModuleBySubstring, matchModuleByTitle } from './titleMatch';
 
 export interface ClassifierConfig {
   USE_MOCK_CLASSIFIER: boolean;
   CACHE_TTL_MS: number;
   CAPTURE: CaptureOptions;
+  /**
+   * Answer from module keywords in the window title (whole words; user modules and library subjects
+   * alike) before taking a screenshot. Off by default; only Windows turns it on, as a workaround for
+   * CPU-only PCs where the VLM takes ~30 s per check. The long-term goal is the Mac's VLM-first logic.
+   */
+  TITLE_FIRST?: boolean;
 }
 
 export interface ClassifierDeps {
@@ -78,8 +86,6 @@ interface CacheEntry {
   ttlMs: number;
 }
 
-const lc = (s: string) => s.toLowerCase();
-
 /**
  * USE_MOCK_CLASSIFIER: derive a verdict from the window title, no Ollama.
  * A module matches when its name or a keyword appears in the title (keywords of 6+ letters also
@@ -90,16 +96,7 @@ export function mockVerdictFromTitle(
   windowTitle: string | null,
   modules: StudyModule[],
 ): ScreenVerdict {
-  const title = lc(windowTitle ?? '');
-  const hit = title
-    ? modules.find((m) =>
-        [m.name, ...m.keywords].some((k) => {
-          const kw = lc(k.trim());
-          if (!kw) return false;
-          return title.includes(kw) || (kw.length >= 6 && title.includes(kw.slice(0, -1)));
-        }),
-      )
-    : undefined;
+  const hit = findModuleBySubstring(windowTitle, modules);
   const activity = (windowTitle ?? appName ?? 'Unknown').slice(0, MAX_ACTIVITY_CHARS);
   return hit
     ? { studying: true, moduleId: hit.id, activity, confidence: 0.7, source: 'vlm' }
@@ -213,8 +210,8 @@ export function createClassifier({ native, ollama, now, config, getPower }: Clas
     | { kind: 'fast'; result: ClassifyResult }
     | { kind: 'vlm'; appName: string | null; key: string };
 
-  /** Rules, cache and "this app" never take a screenshot, so they don't need the flight. */
-  async function decide(): Promise<Decision> {
+  /** Rules, cache, title keywords and "this app" never take a screenshot, so they don't need the flight. */
+  async function decide(modules: StudyModule[]): Promise<Decision> {
     const win = await native.screen.getActiveWindow();
     const appName = win.appName ?? null;
     if (win.isSelf) {
@@ -244,11 +241,20 @@ export function createClassifier({ native, ollama, now, config, getPower }: Clas
         result: { verdict: remember({ ...cache.verdict, source: 'cache' }, appName, key), tookScreenshot: false, appName, key },
       };
     }
+    if (config.TITLE_FIRST && win.windowTitle) {
+      const hit = matchModuleByTitle(win.windowTitle, modules);
+      if (hit) {
+        // activity stays '': it is persisted with the chunk, and window titles are never stored.
+        // Not written to the cache, which holds VLM verdicts only; matching again is cheap.
+        const verdict: ScreenVerdict = { studying: true, moduleId: hit.id, activity: '', confidence: 0.7, source: 'title' };
+        return { kind: 'fast', result: { verdict: remember(verdict, appName, key), tookScreenshot: false, appName, key } };
+      }
+    }
     return { kind: 'vlm', appName, key };
   }
 
   async function joinFlight(running: Flight, modules: StudyModule[], ctx: ClassifyContext): Promise<ClassifyResult> {
-    const decided = await decide();
+    const decided = await decide(modules);
     if (decided.kind === 'fast') return decided.result;
     running.seen.add(decided.key);
     const shared = await running.result;
@@ -312,7 +318,7 @@ export function createClassifier({ native, ollama, now, config, getPower }: Clas
         return out;
       };
       try {
-        const decided = await decide();
+        const decided = await decide(modules);
         if (decided.kind === 'fast') {
           flight.key = decided.result.key ?? '';
           if (flight.key) flight.seen.add(flight.key);
