@@ -142,8 +142,8 @@
     <ResourceCompile Include="LarpLess.rc" />
   </ItemGroup>
   <ItemGroup>
+    <!-- Generated from brand/larpless-logo.png by scripts/make-windows-icons.ps1. -->
     <Image Include="LarpLess.ico" />
-    <Image Include="small.ico" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ReactNativeWindowsTargets">

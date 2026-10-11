@@ -23,6 +23,7 @@ Get-Process LarpLess -EA SilentlyContinue | Stop-Process; npx @react-native-comm
 - Stop the running app before rebuilding. A first build takes several minutes; incremental ones about one.
 - Compile errors: the newest `windows\msbuild_*.err`. The build log written with `*>` is UTF-16 — read it with `Get-Content`.
 - Relaunch the installed build without rebuilding: `Start-Process "shell:AppsFolder\$((Get-AppxPackage *LarpLess*).PackageFamilyName)!App"`.
+- App icons (`LarpLess\LarpLess.ico`, `LarpLess.Package\Images\*.png`) are generated from `brand/larpless-logo.png`: `powershell -ExecutionPolicy Bypass -File scripts\make-windows-icons.ps1`. Windows caches tile/taskbar icons, so an updated logo may only show after unpinning/repinning or a sign-out.
 - Packaged layout: exe at `windows\LarpLess.Package\bin\x64\Debug\AppX\LarpLess\LarpLess.exe`.
 - Crashes: `Get-WinEvent -FilterHashtable @{LogName='Application'; Id=1000; StartTime=(Get-Date).AddHours(-1)} | ? Message -match LarpLess`.
 - `scripts/js-eval.mjs` works as on the Mac (`__FL`). Exit code **9** with `Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)` is a harmless libuv teardown assert (output is still valid); exit code **2** + "no debuggable app" means the app is not running (or crashed).
