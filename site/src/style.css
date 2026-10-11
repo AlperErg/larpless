@@ -744,7 +744,7 @@ section {
   background: var(--green);
 }
 
-.seg.sets {
+.seg.break {
   --share: 18;
   flex: 18;
   background: var(--blue-tag);
@@ -842,6 +842,66 @@ section {
   transition-delay: 70ms;
 }
 
+#score .subjects {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  overflow: hidden;
+  border-radius: inherit;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease;
+}
+
+#score .subject {
+  flex: var(--part);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: max-content;
+  padding: 0 6px;
+  background: var(--green);
+}
+
+#score .subject:first-child {
+  padding-left: 14px;
+}
+
+#score .subject:last-child {
+  padding-right: 14px;
+}
+
+#score .subject:nth-child(2) {
+  background: color-mix(in oklab, var(--green) 72%, white);
+}
+
+#score .subject:nth-child(3) {
+  background: color-mix(in oklab, var(--green) 78%, black);
+}
+
+#score .subject + .subject {
+  box-shadow: inset 2px 0 0 var(--bg);
+}
+
+#score .subject .seg-mins {
+  font-size: 1.15rem;
+}
+
+#score .seg.bio.hot {
+  flex-grow: calc(var(--share) + 40);
+}
+
+#score .seg.bio.hot .seg-label {
+  opacity: 0;
+}
+
+#score .seg.bio.hot .subjects {
+  opacity: 1;
+  transition-delay: 70ms;
+}
+
 #score .legend li[data-seg] {
   cursor: pointer;
   transition: color 200ms ease;
@@ -930,7 +990,7 @@ section {
   background: var(--green);
 }
 
-.swatch.sets {
+.swatch.break {
   background: var(--blue-tag);
 }
 
@@ -1426,6 +1486,14 @@ figure.reveal.in img {
 
   #score .seg.hot {
     min-width: 6.75rem;
+  }
+
+  #score .seg.bio.hot {
+    flex-grow: calc(var(--share) + 140);
+  }
+
+  #score .subject .seg-mins {
+    font-size: 1rem;
   }
 
   .float {
