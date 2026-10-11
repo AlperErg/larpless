@@ -14,6 +14,7 @@
 #include "Native/FLFloatingPanel.h"
 #include "Native/FLNowPlaying.h"
 #include "Native/FLNotifications.h"
+#include "Native/FLOllama.h"
 #include "Native/FLPermissions.h"
 #include "Native/FLPing.h"
 #include "Native/FLScreenCapture.h"

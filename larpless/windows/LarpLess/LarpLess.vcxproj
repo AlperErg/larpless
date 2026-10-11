@@ -118,6 +118,7 @@
     <ClInclude Include="Native\FLFloatingPanel.h" />
     <ClInclude Include="Native\FLNowPlaying.h" />
     <ClInclude Include="Native\FLNotifications.h" />
+    <ClInclude Include="Native\FLOllama.h" />
     <ClInclude Include="Native\FLPermissions.h" />
     <ClInclude Include="Native\FLPing.h" />
     <ClInclude Include="Native\FLScreenCapture.h" />

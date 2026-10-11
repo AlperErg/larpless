@@ -54,11 +54,26 @@ constexpr Rgb Hex(uint32_t v) {
   return {((v >> 16) & 255) / 255.0f, ((v >> 8) & 255) / 255.0f, (v & 255) / 255.0f};
 }
 
+// Light or dark, set from JS (setColorScheme). Only touched on the UI thread.
+inline bool &DarkScheme() {
+  static bool dark{false};
+  return dark;
+}
+
 // NotionColors.swift
 struct Tint {
   Rgb bg, text;
 };
 inline Tint TintFor(std::string const &name) {
+  if (DarkScheme()) { // NotionColors.swift dark tags
+    if (name == "green") return {Hex(0x1A2420), Hex(0x6FBF8E)};
+    if (name == "red") return {Hex(0x2A1C1B), Hex(0xE07A74)};
+    if (name == "blue") return {Hex(0x1A242C), Hex(0x7EB0D4)};
+    if (name == "brown") return {Hex(0x3F2F28), Hex(0xDEB3A0)};
+    if (name == "orange") return {Hex(0x432D1F), Hex(0xEBAF85)};
+    if (name == "pink") return {Hex(0x432A36), Hex(0xEBA6C5)};
+    return {Hex(0x222220), Hex(0xC8C3B8)}; // gray / unknown
+  }
   if (name == "green") return {Hex(0xEDF3EC), Hex(0x448361)};
   if (name == "red") return {Hex(0xFDEBEC), Hex(0xD44C47)};
   if (name == "blue") return {Hex(0xE7F3F8), Hex(0x337EA9)};
@@ -67,8 +82,15 @@ inline Tint TintFor(std::string const &name) {
   if (name == "pink") return {Hex(0xFAF1F5), Hex(0xC14C8A)};
   return {Hex(0xF1F1EF), Hex(0x787774)}; // gray / unknown
 }
-constexpr Rgb kBg{Hex(0xFFFFFF)}, kText{Hex(0x37352F)}, kMuted{Hex(0x787774)}, kBorder{Hex(0xE9E9E7)},
-    kHover{Hex(0xEFEFED)};
+struct Palette {
+  Rgb bg, text, muted, border, hover;
+};
+inline Palette const &Colors() {
+  static constexpr Palette light{Hex(0xFFFFFF), Hex(0x37352F), Hex(0x787774), Hex(0xE9E9E7), Hex(0xEFEFED)};
+  // NotionColors.swift dark. The border (#F4F1EA at 16%) is pre-blended over the dark bg: brushes here are opaque.
+  static constexpr Palette dark{Hex(0x10110F), Hex(0xF4F1EA), Hex(0xC8C3B8), Hex(0x343532), Hex(0x2A2B28)};
+  return DarkScheme() ? dark : light;
+}
 
 struct Pomodoro {
   std::string phase{"focus"};
@@ -236,6 +258,13 @@ class Window {
       Render();
       Schedule();
     }
+  }
+
+  // Light / dark palette (see Colors()); repaints right away when visible.
+  void SetColorScheme(bool dark) {
+    if (DarkScheme() == dark) return;
+    DarkScheme() = dark;
+    if (Visible()) Render();
   }
 
   // Dev: let screenshots include the panel (it's excluded from screen capture by default).
@@ -471,7 +500,7 @@ class Window {
       RoundRect({-g, -g + 2, kWidth + g, panelH + g + 2}, kRadius + g, {0, 0, 0}, 0.018f);
     }
     // White base, then the tint layer (crossfaded; modulated while pulsing).
-    RoundRect(panel, kRadius, kBg);
+    RoundRect(panel, kRadius, Colors().bg);
     const Tint tint{TintFor(m_state.tint)};
     float tintAlpha{1};
     if (m_state.pulse) tintAlpha = static_cast<float>(0.8 + 0.2 * std::cos(2 * 3.14159265358979 * SteadyS() / 2.4));
@@ -479,7 +508,7 @@ class Window {
     if (mix < 1) RoundRect(panel, kRadius, TintFor(m_prevTint).bg, tintAlpha * (1 - mix));
     RoundRect(panel, kRadius, tint.bg, tintAlpha * mix);
     m_rt->DrawRoundedRectangle(D2D1::RoundedRect({0.5f, 0.5f, kWidth - 0.5f, panelH - 0.5f}, kRadius, kRadius),
-                               Brush(m_state.pulse ? tint.text : kBorder, m_state.pulse ? 0.45f : 1).Get(), 1);
+                               Brush(m_state.pulse ? tint.text : Colors().border, m_state.pulse ? 0.45f : 1).Get(), 1);
 
     const float hub{m_hubAlpha};
     if (hub < 1) DrawCompact(tint, 1 - hub);
@@ -533,7 +562,7 @@ class Window {
   void DrawCompact(Tint const &tint, float a) {
     auto const &s{m_state};
     // Big serif timer + speaker icon + Pomodoro ring.
-    Text(Clock(ElapsedS()), Format(true, DWRITE_FONT_WEIGHT_NORMAL, 44).Get(), {kPad, 6, kWidth - 70, 62}, kText, a);
+    Text(Clock(ElapsedS()), Format(true, DWRITE_FONT_WEIGHT_NORMAL, 44).Get(), {kPad, 6, kWidth - 70, 62}, Colors().text, a);
     float right{kWidth - kPad};
     if (s.pomodoro) {
       const D2D1_POINT_2F c{right - 10, 34};
@@ -544,7 +573,7 @@ class Window {
     }
     if (s.soundId != "off") {
       Text(L"\uE767", Format(false, DWRITE_FONT_WEIGHT_NORMAL, 14, DWRITE_TEXT_ALIGNMENT_CENTER, L"Segoe MDL2 Assets").Get(),
-           {right - 20, 24, right, 44}, kMuted, a);
+           {right - 20, 24, right, 44}, Colors().muted, a);
     }
 
     // Status pill: dot + text in the tint colour.
@@ -559,7 +588,7 @@ class Window {
     std::wstring roundText;
     if (s.pomodoro) roundText = L"Round " + std::to_wstring(s.pomodoro->round) + L" of " + std::to_wstring(s.pomodoro->rounds);
     if (s.subtitle && s.status != "distracted" && W(*s.subtitle) != roundText) {
-      Text(W(*s.subtitle), Format(false, DWRITE_FONT_WEIGHT_NORMAL, 12).Get(), {kPad, 94, kWidth - kPad, 112}, kMuted, a);
+      Text(W(*s.subtitle), Format(false, DWRITE_FONT_WEIGHT_NORMAL, 12).Get(), {kPad, 94, kWidth - kPad, 112}, Colors().muted, a);
     }
 
     // Pomodoro dots + footer.
@@ -571,11 +600,11 @@ class Window {
         const D2D1_POINT_2F c{kPad + 4 + i * 12.0f, 128};
         if (i < completed) m_rt->FillEllipse(D2D1::Ellipse(c, 3.5f, 3.5f), Brush(tint.text, a).Get());
         else if (focus && i == completed) m_rt->DrawEllipse(D2D1::Ellipse(c, 3.5f, 3.5f), Brush(tint.text, a).Get(), 1.5f);
-        else m_rt->FillEllipse(D2D1::Ellipse(c, 3.5f, 3.5f), Brush(kMuted, 0.25f * a).Get());
+        else m_rt->FillEllipse(D2D1::Ellipse(c, 3.5f, 3.5f), Brush(Colors().muted, 0.25f * a).Get());
       }
       std::wstring footer{roundText};
       if (focus) footer += L" \u00B7 " + Countdown((p.phaseEndsAtMs - NowMs()) / 1000.0) + L" left";
-      Text(footer, Format(false, DWRITE_FONT_WEIGHT_NORMAL, 11).Get(), {kPad, 140, kWidth - kPad, 158}, kMuted, a);
+      Text(footer, Format(false, DWRITE_FONT_WEIGHT_NORMAL, 11).Get(), {kPad, 140, kWidth - kPad, 158}, Colors().muted, a);
     }
   }
 
@@ -601,11 +630,11 @@ class Window {
   void Button(D2D1_RECT_F r, std::wstring const &label, std::function<JSValueObject()> action, float a, bool selected = false,
               std::optional<Tint> chip = std::nullopt, bool icon = false) {
     const bool hot{m_hover && InRect(r, m_mouse)};
-    if (selected) RoundRect(r, 5, chip ? chip->bg : kHover, a);
-    else if (hot) RoundRect(r, 5, kHover, a);
+    if (selected) RoundRect(r, 5, chip ? chip->bg : Colors().hover, a);
+    else if (hot) RoundRect(r, 5, Colors().hover, a);
     const auto format{icon ? Format(false, DWRITE_FONT_WEIGHT_NORMAL, 12, DWRITE_TEXT_ALIGNMENT_CENTER, L"Segoe MDL2 Assets")
                            : Format(false, DWRITE_FONT_WEIGHT_MEDIUM, 11.5f, DWRITE_TEXT_ALIGNMENT_CENTER)};
-    Text(label, format.Get(), r, selected && chip ? chip->text : kText, a);
+    Text(label, format.Get(), r, selected && chip ? chip->text : Colors().text, a);
     m_controls.push_back({r, std::move(action)});
   }
 
@@ -627,7 +656,7 @@ class Window {
       x += 46;
     }
     Text(Clock(ElapsedS()), Format(false, DWRITE_FONT_WEIGHT_MEDIUM, 12, DWRITE_TEXT_ALIGNMENT_TRAILING).Get(),
-         {kWidth - 90, 12, kWidth - kPad, 36}, kMuted, a);
+         {kWidth - 90, 12, kWidth - kPad, 36}, Colors().muted, a);
 
     // Row 2: sound chips, the selected one in its own tag colour.
     struct Chip {
@@ -648,11 +677,11 @@ class Window {
 
     // Row 3: volume slider.
     const D2D1_RECT_F track{kPad + 4, 86, kWidth - kPad - 4, 90};
-    RoundRect(track, 2, kMuted, 0.25f * a);
+    RoundRect(track, 2, Colors().muted, 0.25f * a);
     const float knobX{track.left + static_cast<float>(s.volume) * (track.right - track.left)};
-    RoundRect({track.left, track.top, knobX, track.bottom}, 2, kText, 0.7f * a);
-    m_rt->FillEllipse(D2D1::Ellipse({knobX, 88}, 7, 7), Brush(kBg, a).Get());
-    m_rt->DrawEllipse(D2D1::Ellipse({knobX, 88}, 7, 7), Brush(kBorder, a).Get(), 1);
+    RoundRect({track.left, track.top, knobX, track.bottom}, 2, Colors().text, 0.7f * a);
+    m_rt->FillEllipse(D2D1::Ellipse({knobX, 88}, 7, 7), Brush(Colors().bg, a).Get());
+    m_rt->DrawEllipse(D2D1::Ellipse({knobX, 88}, 7, 7), Brush(Colors().border, a).Get(), 1);
     m_controls.push_back({{track.left - 8, 76, track.right + 8, 100}, nullptr, true});
     m_sliderTrack = track;
 
@@ -867,12 +896,12 @@ class Window {
   void DrawMediaStrip(FLNowPlayingTrack const &snap) {
     if (!snap.active) return;
     const float y{kHeight};
-    RoundRect({kPad, y, kWidth - kPad, y + 1}, 0, kBorder);
+    RoundRect({kPad, y, kWidth - kPad, y + 1}, 0, Colors().border);
     auto const icon{Format(false, DWRITE_FONT_WEIGHT_NORMAL, 12, DWRITE_TEXT_ALIGNMENT_CENTER, L"Segoe MDL2 Assets")};
     auto add = [&](float x, wchar_t const *glyph, int command) {
       const D2D1_RECT_F r{x, y + 6, x + 26, y + 32};
-      if (m_hover && InRect(r, m_mouse)) RoundRect(r, 4, kHover);
-      Text(glyph, icon.Get(), r, kText);
+      if (m_hover && InRect(r, m_mouse)) RoundRect(r, 4, Colors().hover);
+      Text(glyph, icon.Get(), r, Colors().text);
       m_mediaHits.push_back({r, command});
     };
     add(8, L"\uE892", 0);
@@ -880,11 +909,11 @@ class Window {
     add(60, L"\uE893", 2);
     std::wstring line{snap.title};
     if (!snap.artist.empty()) line += L" \u00B7 " + snap.artist;
-    Text(line, Format(false, DWRITE_FONT_WEIGHT_MEDIUM, 11).Get(), {92, y + 4, kWidth - 58, y + 32}, kText);
+    Text(line, Format(false, DWRITE_FONT_WEIGHT_MEDIUM, 11).Get(), {92, y + 4, kWidth - 58, y + 32}, Colors().text);
     if (snap.hasDuration) {
       Text(Countdown(FLNowPlayingRemainingS(snap, NowMs())),
            Format(false, DWRITE_FONT_WEIGHT_MEDIUM, 11, DWRITE_TEXT_ALIGNMENT_TRAILING).Get(),
-           {kWidth - 56, y + 4, kWidth - 8, y + 32}, kMuted);
+           {kWidth - 56, y + 4, kWidth - 8, y + 32}, Colors().muted);
     }
   }
 
@@ -947,6 +976,13 @@ struct FLFloatingPanel {
     m_context.UIDispatcher().Post([patch = std::make_shared<JSValueObject>(std::move(state))] {
       Panel::Window::Instance().Apply(*patch);
     });
+  }
+
+  // 'light' | 'dark' (JS resolves 'system' first). Fire-and-forget; anything but 'dark' means light, like macOS.
+  REACT_METHOD(SetColorScheme, L"setColorScheme")
+  void SetColorScheme(std::string &&scheme) noexcept {
+    const bool dark{scheme == "dark"};
+    m_context.UIDispatcher().Post([dark] { Panel::Window::Instance().SetColorScheme(dark); });
   }
 
   // Dev diagnostics (HarnessB-style).
