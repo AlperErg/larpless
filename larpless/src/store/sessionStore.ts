@@ -3,6 +3,7 @@ import { config, DEFAULT_SETTINGS } from '../config';
 import type { SessionStore, SessionStoreState } from '../contracts/store';
 import { createClassifier } from '../core/classifier';
 import { createOllama } from '../core/ollama';
+import { effectiveProfile } from '../core/powerProfile';
 import { createSessionController } from '../core/sessionController';
 import type { SessionController } from '../core/sessionController';
 import { fixtureChunks } from '../fixtures/data';
@@ -37,7 +38,13 @@ export function getSessionController(): SessionController {
       model: () => settings().model,
       timeoutMs: config.CLASSIFY_TIMEOUT_MS,
     });
-    const classifier = createClassifier({ native, ollama, now: Date.now, config });
+    const classifier = createClassifier({
+      native,
+      ollama,
+      now: Date.now,
+      config,
+      getPower: () => effectiveProfile(settings().powerProfile),
+    });
     controller = createSessionController({
       native,
       db: appDb,

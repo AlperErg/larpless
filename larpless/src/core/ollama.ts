@@ -20,7 +20,7 @@ export interface OllamaOptions {
   baseUrl: string | (() => string);
   model: string | (() => string);
   fetchImpl?: FetchLike;
-  /** Timeout for classify(); default 8 s. */
+  /** Timeout for classify() when a call does not pass its own. Default 30 s. */
   timeoutMs?: number;
   /** Timeout for checkHealth() and unload(); default 3 s. */
   healthTimeoutMs?: number;
@@ -30,14 +30,21 @@ export interface OllamaOptions {
   log?: (line: string) => void;
 }
 
+export interface OllamaCallOptions {
+  /** Overrides the client timeout for this call. */
+  timeoutMs?: number;
+  /** How long Ollama keeps the model loaded after this call. Default `30m`. */
+  keepAlive?: string;
+}
+
 export interface OllamaClient {
   checkHealth(): Promise<OllamaHealth>;
-  classify(snapshot: ScreenSnapshot, modules: StudyModule[]): Promise<ScreenVerdict | null>;
+  classify(snapshot: ScreenSnapshot, modules: StudyModule[], call?: OllamaCallOptions): Promise<ScreenVerdict | null>;
   /**
    * Load the model and process the system prompt (with `modules`) without an image, so the first
    * classify() of a session skips both. Never rejects.
    */
-  warmUp(modules: StudyModule[]): Promise<void>;
+  warmUp(modules: StudyModule[], call?: Pick<OllamaCallOptions, 'keepAlive'>): Promise<void>;
   /** Ask Ollama to unload the model now instead of after keep_alive. Never rejects. */
   unload(): Promise<void>;
 }
@@ -70,7 +77,7 @@ async function withTimeout<T>(ms: number, fn: (signal: AbortSignal) => Promise<T
 
 export function createOllama(opts: OllamaOptions): OllamaClient {
   const fetchImpl: FetchLike = opts.fetchImpl ?? (globalThis.fetch as unknown as FetchLike);
-  const timeoutMs = opts.timeoutMs ?? 8_000;
+  const timeoutMs = opts.timeoutMs ?? 30_000;
   const healthTimeoutMs = opts.healthTimeoutMs ?? 3_000;
   const warmUpTimeoutMs = opts.warmUpTimeoutMs ?? 30_000;
   const log = opts.log ?? ((line: string) => console.log(line));
@@ -96,15 +103,16 @@ export function createOllama(opts: OllamaOptions): OllamaClient {
       }
     },
 
-    async classify(snapshot, modules) {
+    async classify(snapshot, modules, call) {
       const model = read(opts.model);
       const t0 = Date.now();
+      const keepAlive = call?.keepAlive ?? '30m';
       // Built once; dropped in finally so the base64 copy doesn't linger.
       let body: string | null = JSON.stringify({
         model,
         stream: false,
         think: false,
-        keep_alive: '30m',
+        keep_alive: keepAlive,
         options: { temperature: 0, num_ctx: NUM_CTX },
         format: buildSchema(modules.map((m) => m.name)),
         messages: buildMessages({
@@ -117,7 +125,7 @@ export function createOllama(opts: OllamaOptions): OllamaClient {
         }),
       });
       try {
-        const data = await withTimeout(timeoutMs, async (signal) => {
+        const data = await withTimeout(call?.timeoutMs ?? timeoutMs, async (signal) => {
           const res = await fetchImpl(`${trimSlash(read(opts.baseUrl))}/api/chat`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -154,7 +162,7 @@ export function createOllama(opts: OllamaOptions): OllamaClient {
       }
     },
 
-    async warmUp(modules) {
+    async warmUp(modules, call) {
       const model = read(opts.model);
       const t0 = Date.now();
       try {
@@ -167,7 +175,7 @@ export function createOllama(opts: OllamaOptions): OllamaClient {
               model,
               stream: false,
               think: false,
-              keep_alive: '30m',
+              keep_alive: call?.keepAlive ?? '30m',
               options: { temperature: 0, num_ctx: NUM_CTX, num_predict: 1 },
               messages: [
                 { role: 'system', content: buildSystem(modules) },

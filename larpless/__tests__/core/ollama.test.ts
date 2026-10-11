@@ -60,6 +60,17 @@ describe('ollama', () => {
     expect(body.messages[2]).toEqual({ role: 'assistant', content: '<think>\n\n</think>\n\n' });
   });
 
+  it('uses the per-call keep_alive on classify and warmUp', async () => {
+    const fetchImpl = jest.fn<ReturnType<FetchLike>, Parameters<FetchLike>>(() =>
+      chatRes(JSON.stringify({ studying: false, subject: 'Not study', activity: 'Feed', confidence: 0.9 })),
+    );
+    const o = createOllama({ baseUrl: 'http://127.0.0.1:11434', model: 'qwen3-vl:4b', fetchImpl, log });
+    await o.classify(SNAP, fixtureModules, { keepAlive: '5m' });
+    await o.warmUp(fixtureModules, { keepAlive: '5m' });
+    expect(JSON.parse(fetchImpl.mock.calls[0][1]!.body!).keep_alive).toBe('5m');
+    expect(JSON.parse(fetchImpl.mock.calls[1][1]!.body!).keep_alive).toBe('5m');
+  });
+
   it('tolerates code fences / stray text around the JSON reply', async () => {
     const fetchImpl: FetchLike = () =>
       chatRes('```json\n{"studying":true,"subject":"Maths","activity":"Problem set","confidence":0.8}\n```');

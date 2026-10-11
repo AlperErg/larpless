@@ -9,7 +9,7 @@ import { useSessionStore } from '../../store/sessionStore';
 import { Button, MacPressable, MacTextInput, Segmented, Switch, Text } from '../components';
 import { Page } from '../layout/Page';
 import { isLive } from '../lib/actions';
-import { POMODORO_OPTIONS, SOUNDS, SOUND_ICON, SOUND_LABEL, STRICTNESS_OPTIONS } from '../lib/labels';
+import { POMODORO_OPTIONS, POWER_OPTIONS, SOUNDS, SOUND_ICON, SOUND_LABEL, STRICTNESS_OPTIONS } from '../lib/labels';
 import { ollamaLine } from '../layout/Sidebar';
 import { colors, fonts, radius, space, tag } from '../theme';
 
@@ -98,13 +98,16 @@ export function SettingsPage() {
       </Row>
 
       <SectionTitle>Focus</SectionTitle>
+      <Row label="Power" hint="Slower machines use Eco so the model can finish.">
+        <Segmented testID="settings-power" options={POWER_OPTIONS} value={s.powerProfile} onChange={(v) => update({ powerProfile: v })} />
+      </Row>
       <Row label="Strictness" hint="Minutes of distraction before a notification.">
         <Segmented testID="settings-strictness" options={STRICTNESS_OPTIONS} value={s.strictness} onChange={(v) => update({ strictness: v })} />
       </Row>
       <Row label="Pomodoro" hint="Default for new sessions.">
         <Segmented testID="settings-pomodoro" options={POMODORO_OPTIONS} value={s.pomodoroDefault} onChange={(v) => update({ pomodoroDefault: v })} />
       </Row>
-      <Row label="Demo fast mode" hint="10 s checks and alerts after 20 s. The Pomodoro length stays whatever you picked.">
+      <Row label="Demo fast mode" hint="Alerts after 20 s. Check rate stays on the power profile you picked.">
         <Switch testID="settings-demoFast" accessibilityLabel="Demo fast mode" value={s.demoFast} onChange={(v) => update({ demoFast: v })} />
       </Row>
       <Row label="Webcam" hint="Presence and phone detection, on device at 1 fps.">

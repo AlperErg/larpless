@@ -2,14 +2,17 @@
  * Session runtime loop (PLAN.md §6). Wires the native facades, classifier, fuser, alerts, pomodoro
  * and db to the session store. Pure TS: everything is injected, time comes from `now()`.
  *
- * Chunk windows: a window starts at `windowStart` and closes at `windowStart + chunkS`; the next one
- * starts exactly there (no drift). Pauses and breaks shift the open window by their length, so no
- * partial chunk (and no screenshot) is taken when they start. `end()` finalises a partial chunk ≥ 10 s.
+ * Chunk windows: a window starts at `windowStart` and closes one power-profile chunk later; the next
+ * one starts exactly there (no drift). A mid-session step-down lengthens the open window. Pauses and
+ * breaks shift it by their length, so no partial chunk (and no screenshot) is taken when they start.
+ * `end()` finalises a partial chunk ≥ 10 s.
  *
  * Live state: between chunk closes the panel follows what's happening now. Every tick reads the
- * frontmost window (no screenshot); once a new window has been frontmost for LIVE_SETTLE_MS it is
- * classified straight away, and webcam samples drive away/phone (liveWebcam). The chunk closing later
- * reuses that verdict from the classifier cache. Stored chunks and alerts keep their chunk rules.
+ * frontmost window (no screenshot); once a new window has been frontmost for the profile's settle
+ * time it is classified straight away, and webcam samples drive away/phone (liveWebcam). The chunk
+ * closing later reuses that verdict from the classifier cache. Stored chunks and alerts keep their
+ * chunk rules. A vision call slower than the chunk, or one that three windows arrived during, steps
+ * the session down one profile until it ends.
  *
  * PRIVACY: snapshots never pass through here (the classifier drops them); nothing image-like is logged.
  */
@@ -26,6 +29,7 @@ import { computeSummary } from './focus';
 import { newId } from './ids';
 import type { OllamaClient } from './ollama';
 import { initPomodoro, isBreak, phaseDurationMs, remainingMs, resumeWith, skip, tick as pomoTick, toggle } from './pomodoro';
+import { effectiveProfile, resetSessionProfile, stepSessionProfile } from './powerProfile';
 import type { PomodoroEvent } from './pomodoro';
 import { startDemo } from './demoMode';
 import type { DemoHandle } from './demoMode';
@@ -151,8 +155,9 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
   let webcamRunning = false;
   let windowSamples: WebcamSample[] = [];
   let windowStart = 0;
-  let chunkS = config.CHUNK_S;
   let chunkIndex = 0;
+  /** Vision-call id we already stepped down for, so the owner and a waiter don't both step. */
+  let steppedGen = 0;
   let suspendedAt: number | null = null; // pause or break start
   let pomoRemaining: number | null = null; // pomodoro time left when paused
   let alertState: AlertState = INITIAL_ALERT;
@@ -170,6 +175,18 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
   let probing = false;
 
   const isActive = () => sessionId !== null && ['running', 'paused', 'break'].includes(get().status);
+  const chunkSeconds = () => effectiveProfile(deps.getSettings().powerProfile).chunkS;
+  const settleMs = () => effectiveProfile(deps.getSettings().powerProfile).liveSettleMs;
+
+  function considerStepDown(r: ClassifyResult) {
+    if (r.gen == null || r.gen === steppedGen) return;
+    const spec = effectiveProfile(deps.getSettings().powerProfile);
+    const slow = (r.tookMs ?? 0) > spec.chunkS * 1000;
+    if (!slow && !r.fellBehind) return;
+    steppedGen = r.gen;
+    const next = stepSessionProfile(spec.id);
+    if (next !== spec.id) log(`[session] power profile ${spec.id} → ${next}`);
+  }
 
   /* ---------- timer ---------- */
 
@@ -282,7 +299,7 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
           seenSince = t;
           return;
         }
-        if (key === checkedKey || t - seenSince < LIVE_SETTLE_MS) return;
+        if (key === checkedKey || t - seenSince < settleMs()) return;
         checkedKey = key;
         track(liveCheck(sid), 'live check');
       })
@@ -294,6 +311,7 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
 
   async function liveCheck(sid: string) {
     const r = await deps.classifier.classifyCurrent(deps.getModules());
+    considerStepDown(r);
     if (sid !== sessionId || ending) return;
     if (r.tookScreenshot) {
       const p = get().privacy;
@@ -367,6 +385,7 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
     // 1. Away (webcam) → no screenshot at all.
     if (!awayStats(samples).away) {
       const r = await deps.classifier.classifyCurrent(modules);
+      considerStepDown(r);
       verdict = r.verdict;
       appName = r.appName;
       tookScreenshot = r.tookScreenshot;
@@ -467,7 +486,8 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
     const t = now();
     // Close due chunk windows first, so a focus phase ending on a boundary keeps its last chunk.
     if (!demo && get().status === 'running') {
-      while (t >= windowStart + chunkS * 1000) closeWindow(windowStart + chunkS * 1000);
+      const chunkMs = chunkSeconds() * 1000;
+      while (t >= windowStart + chunkMs) closeWindow(windowStart + chunkMs);
       probeWindow();
     }
     const st = get();
@@ -501,7 +521,8 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
       const t = now();
       const settings = deps.getSettings();
       demo = !!opts.demo;
-      chunkS = demo ? config.CHUNK_S : settings.demoFast ? config.DEMO_CHUNK_S : config.CHUNK_S;
+      resetSessionProfile();
+      steppedGen = 0;
       const sid = newId('ses', t);
       sessionId = sid;
       deps.classifier.reset();

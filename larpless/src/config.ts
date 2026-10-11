@@ -6,7 +6,7 @@ export const config = {
   CHUNK_S: 10,
   DEMO_CHUNK_S: 10,
   CAPTURE: { maxWidth: 1280, jpegQuality: 0.7 },
-  CLASSIFY_TIMEOUT_MS: 8_000,
+  CLASSIFY_TIMEOUT_MS: 30_000, // ceiling so a slow machine can finish; profiles change cadence, not this
   CACHE_TTL_MS: 120_000,
   WEBCAM_FPS: 1,
   SHOW_DEV_TOOLS: __DEV__,
@@ -16,6 +16,7 @@ export const DEFAULT_SETTINGS: Settings = {
   model: 'qwen3-vl:4b',
   ollamaUrl: 'http://127.0.0.1:11434',
   strictness: 2,
+  powerProfile: 'medium',
   demoFast: false,
   webcamEnabled: true,
   soundsEnabled: true,
