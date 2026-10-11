@@ -5,6 +5,7 @@
 RCT_EXTERN_METHOD(show:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(hide:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(update:(NSDictionary *)state)
+RCT_EXTERN_METHOD(setColorScheme:(NSString *)scheme)
 // Debug helpers (dev harness only)
 RCT_EXTERN_METHOD(debugInfo:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(debugSetHover:(BOOL)on)

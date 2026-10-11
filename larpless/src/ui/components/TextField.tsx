@@ -1,12 +1,24 @@
+import { useState } from 'react';
 import { StyleSheet, Text as NativeText, View } from 'react-native';
-import { colors, fonts, radius, space } from '../theme';
+import { colors, fonts, layout, radius, space, themed } from '../theme';
 import { MacTextInput } from './mac';
 import type { MacTextInputProps } from './mac';
 
-/** 28 px bordered Notion input. */
-export function TextField({ style, ...props }: MacTextInputProps) {
+/** White field on the canvas. The border turns cobalt while it is focused. */
+export function TextField({ style, onFocus, onBlur, ...props }: MacTextInputProps) {
+  const [focused, setFocused] = useState(false);
+  const border = focused ? styles.focused : null;
+  const handleFocus: MacTextInputProps['onFocus'] = (e) => {
+    setFocused(true);
+    onFocus?.(e);
+  };
+  const handleBlur: MacTextInputProps['onBlur'] = (e) => {
+    setFocused(false);
+    onBlur?.(e);
+  };
+
   if (props.secureTextEntry) {
-    return <MaskedTextField style={style} {...props} />;
+    return <MaskedTextField style={[style, border]} {...props} onFocus={handleFocus} onBlur={handleBlur} />;
   }
 
   return (
@@ -16,7 +28,9 @@ export function TextField({ style, ...props }: MacTextInputProps) {
       autoCapitalize="none"
       placeholderTextColor={colors.faint}
       {...props}
-      style={[styles.input, style]}
+      onFocus={handleFocus}
+      onBlur={handleBlur}
+      style={[styles.input, style, border]}
     />
   );
 }
@@ -48,33 +62,34 @@ function MaskedTextField({ style, ...props }: MacTextInputProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   input: {
-    height: 28,
-    paddingHorizontal: space.sm,
+    height: layout.controlHeight,
+    paddingHorizontal: space.sm + 2,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius,
-    backgroundColor: colors.bg,
+    backgroundColor: colors.raised,
     fontFamily: fonts.regular,
     fontSize: 14,
     color: colors.text,
   },
+  focused: { borderColor: colors.accent },
   maskedInput: {
     color: 'transparent',
     borderWidth: 0,
     backgroundColor: 'transparent',
   },
   maskedInputLayout: {
-    height: 28,
-    paddingHorizontal: space.sm,
+    height: layout.controlHeight,
+    paddingHorizontal: space.sm + 2,
   },
   mask: {
     position: 'absolute',
-    left: space.sm,
-    right: space.sm,
+    left: space.sm + 2,
+    right: space.sm + 2,
     top: 0,
-    height: 28,
+    height: layout.controlHeight,
     lineHeight: 26,
     fontFamily: fonts.regular,
     fontSize: 14,
@@ -83,4 +98,4 @@ const styles = StyleSheet.create({
   placeholder: {
     color: colors.faint,
   },
-});
+}));

@@ -4,6 +4,9 @@ export type TagColor =
 
 export type SoundId = 'off' | 'white' | 'pink' | 'brown' | 'rain' | 'cafe';
 
+/** `system` follows the display. Dark is the landing site's warm paper on near-black. */
+export type Appearance = 'system' | 'light' | 'dark';
+
 export interface StudyModule {
   id: string;          // stable, e.g. "mod_k3j9x"
   name: string;        // unique; also used as the VLM enum value, e.g. "Biology"
@@ -87,4 +90,5 @@ export interface Settings {
   volume: number;                       // 0..1
   pomodoroDefault: PomodoroPreset | 'off';
   onboarded: boolean;
+  appearance: Appearance;
 }

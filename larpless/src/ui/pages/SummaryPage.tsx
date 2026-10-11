@@ -14,7 +14,7 @@ import { SharePanel } from '../components/SharePanel';
 import { Page } from '../layout/Page';
 import { breakdownFromChunks, focusPctFromChunks, lookChunk, relookBreakdown } from '../lib/derive';
 import { formatDuration, formatLongDate, formatTime, formatTimeS } from '../lib/format';
-import { colors, fonts, space } from '../theme';
+import { colors, fonts, space, themed } from '../theme';
 import { useAllModules } from '../lib/useAllModules';
 
 type Patch = Pick<Chunk, 'kind' | 'moduleId' | 'reason'>;
@@ -227,7 +227,7 @@ function RelabelChips({ c, modules, onRelabel }: { c: Chunk; modules: StudyModul
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   flex: { flex: 1 },
   row: { flexDirection: 'row', alignItems: 'center' },
   gapLeft: { marginLeft: space.md },
@@ -244,4 +244,4 @@ const styles = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center' },
   chipsLabel: { marginRight: space.sm },
   chip: { marginRight: space.xs + 2, marginVertical: 2 },
-});
+}));

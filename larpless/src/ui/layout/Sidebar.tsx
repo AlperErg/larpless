@@ -10,7 +10,7 @@ import { useSessionStore } from '../../store/sessionStore';
 import { MacPressable } from '../components/mac';
 import { StatusDot } from '../components/StatusDot';
 import type { DotKind } from '../components/StatusDot';
-import { colors, fonts, layout, radius, space, tag } from '../theme';
+import { colors, fonts, layout, radius, space, tag, themed } from '../theme';
 import type { TagColor } from '../../contracts/domain';
 
 interface NavItem {
@@ -154,7 +154,7 @@ function SidebarRow({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   sidebar: {
     width: layout.sidebarWidth,
     backgroundColor: colors.sidebar,
@@ -186,7 +186,7 @@ const styles = StyleSheet.create({
     marginBottom: 1,
   },
   rowHover: { backgroundColor: colors.hover },
-  rowActive: { backgroundColor: colors.active },
+  rowActive: { backgroundColor: colors.accentSoft },
   rowIcon: { width: 22, fontSize: 14, lineHeight: 18 },
   rowLabel: { flex: 1, fontFamily: fonts.medium, fontSize: 14, lineHeight: 18, color: colors.muted },
   rowLabelActive: { fontFamily: fonts.semibold, color: colors.text },
@@ -195,4 +195,4 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   ollama: { paddingHorizontal: space.sm, paddingVertical: space.xs + 2, borderRadius: radius },
   ollamaText: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16, color: colors.muted },
-});
+}));

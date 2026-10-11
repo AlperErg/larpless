@@ -6,6 +6,7 @@ import { useNavStore } from '../../src/store/navStore';
 import { useSocialStore } from '../../src/store/socialStore';
 import type { SocialStore } from '../../src/store/socialStore';
 import { SharePanel } from '../../src/ui/components/SharePanel';
+import { buildCommands } from '../../src/ui/layout/CommandPalette';
 import { FriendsPage } from '../../src/ui/pages/FriendsPage';
 
 function textOf(r: ReactTestRenderer): string {
@@ -92,7 +93,42 @@ describe('FriendsPage', () => {
     act(() => useSocialStore.setState({ status: 'signedOut' }));
     const r = await render(<FriendsPage />);
     expect(r.root.findAll((n) => n.props.testID === 'page-login').length).toBeGreaterThan(0);
+    expect(textOf(r)).toContain('Create an account');
+  });
+
+  it('opens a create-account screen and submits the new account', async () => {
+    const signUp = jest.fn(async () => {});
+    act(() => useSocialStore.setState({ status: 'signedOut', signUp }));
+    const r = await render(<FriendsPage />);
+    await act(async () => byTestID(r, 'login-create').props.onPress());
+    expect(r.root.findAll((n) => n.props.testID === 'page-signup').length).toBeGreaterThan(0);
     expect(textOf(r)).toContain('Create account');
+    await act(async () => byTestID(r, 'signup-username', 'onChangeText').props.onChangeText('ada_l'));
+    expect(textOf(r)).toContain('@ada_l');
+    await act(async () => byTestID(r, 'signup-password', 'onChangeText').props.onChangeText('secret1'));
+    await act(async () => byTestID(r, 'signup-confirm', 'onChangeText').props.onChangeText('secret1'));
+    await act(async () => byTestID(r, 'signup-submit').props.onPress());
+    expect(signUp).toHaveBeenCalledWith('ada_l', 'secret1');
+  });
+
+  it('stays on create-account when the passwords differ', async () => {
+    const signUp = jest.fn(async () => {});
+    act(() => useSocialStore.setState({ status: 'signedOut', signUp }));
+    const r = await render(<FriendsPage />);
+    await act(async () => byTestID(r, 'login-create').props.onPress());
+    await act(async () => byTestID(r, 'signup-password', 'onChangeText').props.onChangeText('secret1'));
+    await act(async () => byTestID(r, 'signup-confirm', 'onChangeText').props.onChangeText('nope'));
+    await act(async () => byTestID(r, 'signup-submit').props.onPress());
+    expect(signUp).not.toHaveBeenCalled();
+    expect(textOf(r)).toContain("Those passwords don't match.");
+  });
+
+  it('signs out from the friends header', async () => {
+    const signOut = jest.fn(async () => {});
+    act(() => signedIn({ signOut }));
+    const r = await render(<FriendsPage />);
+    await act(async () => byTestID(r, 'friends-signout').props.onPress());
+    expect(signOut).toHaveBeenCalled();
   });
 
   it('surfaces sign-in errors inline', async () => {
@@ -151,6 +187,25 @@ describe('FriendsPage', () => {
     await act(async () => byTestID(r, 'friend-send').props.onPress());
     expect(addFriend).toHaveBeenCalledWith('grace');
     expect(textOf(r)).toContain('Request sent to @grace.');
+  });
+});
+
+describe('account commands', () => {
+  it('puts sign-in, create account and sign-out on the command palette', () => {
+    const signedOut = buildCommands({ status: 'idle', demoFast: false, hasSummary: false, devTools: false, auth: 'signedOut' });
+    expect(signedOut.map((c) => c.id)).toEqual(expect.arrayContaining(['sign-in', 'create-account']));
+    act(() => signedOut.find((c) => c.id === 'create-account')?.run());
+    expect(useNavStore.getState()).toMatchObject({ route: 'feed', params: { auth: 'signUp' } });
+
+    const signedInCmds = buildCommands({
+      status: 'idle',
+      demoFast: false,
+      hasSummary: false,
+      devTools: false,
+      auth: 'signedIn',
+      username: 'ada',
+    });
+    expect(signedInCmds.find((c) => c.id === 'sign-out')).toMatchObject({ title: 'Sign out', hint: '@ada' });
   });
 });
 

@@ -15,6 +15,8 @@ export type Route =
 
 export interface NavParams {
   sessionId?: string;
+  /** Signed-out Friends screen. Cleared once an account is signed in. */
+  auth?: 'signIn' | 'signUp';
 }
 
 export interface NavState {

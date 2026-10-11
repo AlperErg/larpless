@@ -4,7 +4,7 @@
  * Opened by the native menu (FLMenuCommand 'commandPalette'), the sidebar "Search" row, or Dev tools.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text as RNText, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text as RNText, useColorScheme, View } from 'react-native';
 import type { TextInput } from 'react-native';
 import { config } from '../../config';
 import type { SessionStatus } from '../../contracts/store';
@@ -12,14 +12,15 @@ import { useAppStore } from '../../store/appStore';
 import { useNavStore } from '../../store/navStore';
 import type { Route } from '../../store/navStore';
 import { useSessionStore } from '../../store/sessionStore';
+import { useSocialStore } from '../../store/socialStore';
 import { MacPressable, MacTextInput, MacView } from '../components/mac';
 import type { HandledKey, MacKeyEvent } from '../components/mac';
 import { endSession, isLive, startSession, togglePause } from '../lib/actions';
-import { colors, fonts, motion, radius, space } from '../theme';
+import { colors, fonts, radius, space, themed } from '../theme';
 
 export interface PaletteCommand {
   id: string;
-  group: 'Session' | 'Navigate' | 'Settings';
+  group: 'Session' | 'Navigate' | 'Account' | 'Settings';
   icon: string;
   title: string;
   hint?: string;
@@ -40,6 +41,11 @@ export function buildCommands(ctx: {
   demoFast: boolean;
   hasSummary: boolean;
   devTools: boolean;
+  auth?: 'signedIn' | 'signedOut';
+  username?: string | null;
+  appearance?: 'system' | 'light' | 'dark';
+  /** Resolved light or dark, after `system` has followed the display. */
+  scheme?: 'light' | 'dark';
 }): PaletteCommand[] {
   const nav = useNavStore.getState();
   const out: PaletteCommand[] = [];
@@ -66,6 +72,44 @@ export function buildCommands(ctx: {
   if (ctx.hasSummary) out.push({ id: 'go-summary', group: 'Navigate', icon: '🏁', title: 'Go to last summary', run: () => nav.go('summary') });
   if (ctx.devTools) out.push({ id: 'go-dev', group: 'Navigate', icon: '🛠', title: 'Go to Dev tools', run: () => nav.go('dev') });
 
+  if (ctx.auth === 'signedOut') {
+    out.push({ id: 'sign-in', group: 'Account', icon: '🔑', title: 'Sign in', run: () => nav.go('feed', { auth: 'signIn' }) });
+    out.push({
+      id: 'create-account',
+      group: 'Account',
+      icon: '✨',
+      title: 'Create account',
+      run: () => nav.go('feed', { auth: 'signUp' }),
+    });
+  }
+  if (ctx.auth === 'signedIn') {
+    out.push({
+      id: 'sign-out',
+      group: 'Account',
+      icon: '↩',
+      title: 'Sign out',
+      hint: ctx.username ? `@${ctx.username}` : undefined,
+      run: () => {
+        useSocialStore.getState().signOut().catch(() => {});
+      },
+    });
+  }
+
+  const appearance = ctx.appearance ?? useAppStore.getState().settings.appearance;
+  const dark = (ctx.scheme ?? (appearance === 'dark' ? 'dark' : 'light')) === 'dark';
+  out.push({
+    id: 'appearance',
+    group: 'Settings',
+    icon: '🌙',
+    title: dark ? 'Use light mode' : 'Use dark mode',
+    hint: appearance === 'system' ? 'following the system' : appearance,
+    run: () => {
+      useAppStore
+        .getState()
+        .updateSettings({ appearance: dark ? 'light' : 'dark' })
+        .catch(() => {});
+    },
+  });
   out.push({
     id: 'demo-fast',
     group: 'Settings',
@@ -100,28 +144,28 @@ function PaletteOverlay() {
   const status = useSessionStore((s) => s.status);
   const hasSummary = useSessionStore((s) => s.lastSummary != null);
   const demoFast = useAppStore((s) => s.settings.demoFast);
+  const appearance = useAppStore((s) => s.settings.appearance);
+  const system = useColorScheme();
+  const scheme = appearance === 'dark' || (appearance !== 'light' && system === 'dark') ? 'dark' : 'light';
+  const social = useSocialStore((s) => s.status);
+  const username = useSocialStore((s) => s.profile?.username);
+  const auth = social === 'signedIn' || social === 'signedOut' ? social : undefined;
   const [query, setQuery] = useState('');
   const [sel, setSel] = useState(0);
   const inputRef = useRef<TextInput>(null);
   const ran = useRef(false);
 
   const commands = useMemo(
-    () => buildCommands({ status, demoFast, hasSummary, devTools: config.SHOW_DEV_TOOLS }),
-    [status, demoFast, hasSummary],
+    () => buildCommands({ status, demoFast, hasSummary, devTools: config.SHOW_DEV_TOOLS, auth, username, appearance, scheme }),
+    [status, demoFast, hasSummary, auth, username, appearance, scheme],
   );
   const filtered = filterCommands(commands, query);
   const selected = Math.min(sel, Math.max(0, filtered.length - 1));
 
-  const t = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    Animated.timing(t, { toValue: 1, duration: motion.fast, easing: Easing.out(Easing.quad), useNativeDriver: false }).start();
     const id = setTimeout(() => inputRef.current?.focus(), 30);
-    return () => {
-      clearTimeout(id);
-      t.stopAnimation();
-    };
-  }, [t]);
-  const scale = useMemo(() => t.interpolate({ inputRange: [0, 1], outputRange: [0.98, 1] }), [t]);
+    return () => clearTimeout(id);
+  }, []);
 
   const close = () => setOpen(false);
   const runAt = (i: number) => {
@@ -150,9 +194,9 @@ function PaletteOverlay() {
 
   let lastGroup = '';
   return (
-    <Animated.View testID="palette" style={[StyleSheet.absoluteFill, styles.overlay, { opacity: t }]}>
+    <View testID="palette" style={[StyleSheet.absoluteFill, styles.overlay]}>
       <Pressable testID="palette-backdrop" accessibilityLabel="Close palette" style={[StyleSheet.absoluteFill, styles.backdrop]} onPress={close} />
-      <Animated.View style={[styles.cardWrap, { transform: [{ scale }] }]} pointerEvents="box-none">
+      <View style={styles.cardWrap} pointerEvents="box-none">
         {/* Escape anywhere in the card; the input's own keys stop propagating (onKeyDown bubbles in JS). */}
         <MacView
           style={styles.card}
@@ -219,20 +263,20 @@ function PaletteOverlay() {
             <RNText style={styles.footerText}>↑↓ to move · ↵ to run · esc to close</RNText>
           </View>
         </MacView>
-      </Animated.View>
-    </Animated.View>
+      </View>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   overlay: { zIndex: 100 },
   backdrop: { backgroundColor: colors.backdrop },
   cardWrap: { position: 'absolute', top: '20%', left: 0, right: 0, alignItems: 'center' },
   card: {
     width: 560,
     maxWidth: '90%',
-    backgroundColor: colors.bg,
-    borderRadius: radius + 2,
+    backgroundColor: colors.raised,
+    borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     shadowColor: colors.shadow,
@@ -289,4 +333,4 @@ const styles = StyleSheet.create({
     backgroundColor: colors.sidebar,
   },
   footerText: { fontFamily: fonts.regular, fontSize: 11, color: colors.faint },
-});
+}));

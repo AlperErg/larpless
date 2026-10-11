@@ -4,7 +4,7 @@ import type { StyleProp, ViewStyle } from 'react-native';
 import type { TagColor } from '../../contracts/domain';
 import type { FeedPost } from '../../social/api';
 import { formatDuration } from '../lib/format';
-import { colors, fonts, radius, space, tag } from '../theme';
+import { colors, fonts, radius, space, tag, themed } from '../theme';
 import { BreakdownBar } from './BreakdownBar';
 import { Tag } from './Tag';
 import { Text } from './Text';
@@ -74,13 +74,13 @@ function Stat({ value, label }: { value: string; label: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   card: {
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius * 2,
     padding: space.lg,
-    backgroundColor: colors.bg,
+    backgroundColor: colors.raised,
   },
   head: { flexDirection: 'row', alignItems: 'center' },
   avatar: { alignItems: 'center', justifyContent: 'center', marginRight: space.sm },
@@ -91,4 +91,4 @@ const styles = StyleSheet.create({
   stats: { flexDirection: 'row', flexWrap: 'wrap', marginTop: space.md, marginBottom: space.sm },
   stat: { marginRight: space.xxl, marginBottom: space.xs },
   statValue: { fontFamily: fonts.serif, fontSize: 30, lineHeight: 36, color: colors.text },
-});
+}));

@@ -3,7 +3,7 @@ import { StyleSheet, Text as RNText, View } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 import { addDays, format, startOfDay, startOfWeek } from 'date-fns';
 import type { SessionSummary } from '../../contracts/domain';
-import { colors, fonts, heat, space } from '../theme';
+import { colors, fonts, heat, space, themed } from '../theme';
 import { dayKey, minutesByDay } from '../lib/derive';
 import { MacView } from './mac';
 
@@ -90,7 +90,7 @@ export function Heatmap({ sessions, weeks = 12, now, testID, style }: HeatmapPro
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   row: { flexDirection: 'row' },
   dayLabels: { marginRight: space.xs + 2 },
   dayLabel: { height: CELL, marginBottom: GAP, fontFamily: fonts.regular, fontSize: 9, lineHeight: CELL, color: colors.faint },
@@ -101,4 +101,4 @@ const styles = StyleSheet.create({
   legend: { flexDirection: 'row', alignItems: 'center', marginTop: space.xs, marginLeft: 30 },
   legendCell: { marginBottom: 0, marginRight: GAP },
   legendText: { fontFamily: fonts.regular, fontSize: 10, lineHeight: 12, color: colors.faint, marginHorizontal: space.xs },
-});
+}));

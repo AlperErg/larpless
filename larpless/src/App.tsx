@@ -7,7 +7,7 @@
  * - native menu: commandPalette / startSession / endSession
  */
 import { useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, useColorScheme, View } from 'react-native';
 import { config } from './config';
 import { native } from './native';
 import { useAppStore } from './store/appStore';
@@ -25,13 +25,13 @@ import { DevToolsPage, installUiIntrospection } from './ui/pages/DevToolsPage';
 import { FriendsPage } from './ui/pages/FriendsPage';
 import { HistoryPage } from './ui/pages/HistoryPage';
 import { HomePage } from './ui/pages/HomePage';
-import { LoginPage } from './ui/pages/LoginPage';
+import { AuthGate } from './ui/pages/LoginPage';
 import { ModulesPage } from './ui/pages/ModulesPage';
 import { OnboardingPage } from './ui/pages/OnboardingPage';
 import { SessionPage } from './ui/pages/SessionPage';
 import { SettingsPage } from './ui/pages/SettingsPage';
 import { SummaryPage } from './ui/pages/SummaryPage';
-import { colors, layout } from './ui/theme';
+import { applyScheme, colors, layout, themed } from './ui/theme';
 
 function renderPage(route: Route) {
   switch (route) {
@@ -51,7 +51,7 @@ function renderPage(route: Route) {
     case 'profile':
       return <FriendsPage />;
     case 'login':
-      return <LoginPage />;
+      return <AuthGate />;
     default:
       // 'dev' is rendered by the persistent overlay below; 'onboarding' outside the layout.
       return null;
@@ -120,10 +120,23 @@ function useMenuCommands(): void {
   );
 }
 
+/** `system` follows the display. Anything else is pinned. */
+function useResolvedScheme(): 'light' | 'dark' {
+  const appearance = useAppStore((s) => s.settings.appearance);
+  const system = useColorScheme();
+  if (appearance === 'light' || appearance === 'dark') return appearance;
+  return system === 'dark' ? 'dark' : 'light';
+}
+
 function App() {
   const booted = useBootRouting();
   useSessionRouting();
   useMenuCommands();
+  const scheme = useResolvedScheme();
+  applyScheme(scheme);
+  useEffect(() => {
+    native.panel.setColorScheme(scheme);
+  }, [scheme]);
   useEffect(() => {
     if (__DEV__) installUiIntrospection();
   }, []);
@@ -154,7 +167,7 @@ function App() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   devOverlay: {
     position: 'absolute',
@@ -165,6 +178,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
   },
   hidden: { display: 'none' },
-});
+}));
 
 export default App;

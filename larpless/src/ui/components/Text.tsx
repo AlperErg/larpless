@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { StyleSheet, Text as RNText } from 'react-native';
 import type { StyleProp, TextStyle } from 'react-native';
-import { colors, fonts } from '../theme';
+import { colors, fonts, themed } from '../theme';
 
 export type TextVariant = 'title' | 'h2' | 'h3' | 'body' | 'small';
 export type TextWeight = 'regular' | 'medium' | 'semibold';
@@ -79,13 +79,13 @@ export function Muted({ children }: { children?: ReactNode }) {
   return <RNText style={styles.muted}>{children}</RNText>;
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   strong: { fontFamily: fonts.semibold },
-  title: { fontFamily: fonts.serif, fontSize: 40, lineHeight: 48, color: colors.text },
+  title: { fontFamily: fonts.serif, fontSize: 40, lineHeight: 46, letterSpacing: -0.6, color: colors.text },
   h2: { fontFamily: fonts.semibold, fontSize: 20, lineHeight: 28, color: colors.text },
   h3: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 22, color: colors.text },
   body: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 21, color: colors.text },
   small: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 17, color: colors.muted },
   muted: { color: colors.muted },
   center: { textAlign: 'center' },
-});
+}));

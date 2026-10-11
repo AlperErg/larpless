@@ -1,10 +1,10 @@
 import type { ReactNode } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { StyleSheet, ScrollView, View } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 import { PageHeader } from '../components/PageHeader';
 import type { PageHeaderProps } from '../components/PageHeader';
 import { useGutter } from '../lib/hooks';
-import { colors, layout, space } from '../theme';
+import { colors, layout, space, themed } from '../theme';
 
 export interface PageProps {
   header?: PageHeaderProps;
@@ -33,7 +33,7 @@ export function Section({ children, style }: { children?: ReactNode; style?: Sty
   return <View style={[styles.section, style]}>{children}</View>;
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   scroll: { flex: 1, backgroundColor: colors.bg },
   content: { paddingBottom: 96, flexGrow: 1 },
   column: {
@@ -43,4 +43,4 @@ const styles = StyleSheet.create({
     paddingTop: space.xl,
   },
   section: { marginTop: space.xxl },
-});
+}));

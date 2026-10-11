@@ -18,7 +18,7 @@ import { Button, Callout, CodeBlock, EditableTable, ModelDownload, Muted, Subjec
 import { PageBody } from '../layout/Page';
 import { courseNameProblem, draftsFromModules, modulesFromDrafts } from '../lib/modules';
 import type { ModuleDraft } from '../lib/modules';
-import { colors, motion, radius, space, tag } from '../theme';
+import { colors, motion, radius, space, tag, themed } from '../theme';
 import { LIBRARY_MODULES } from '../../core/subjectLibrary';
 
 const STEPS = ['Your modules', 'Permissions', 'Ollama', 'AI model'] as const;
@@ -473,7 +473,7 @@ function ModelStep({ onBack, onFinish }: { onBack: () => void; onFinish: () => v
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   presets: { marginTop: space.lg },
   scroll: { flex: 1, backgroundColor: colors.bg },
   scrollContent: { paddingBottom: 96 },
@@ -510,4 +510,5 @@ const styles = StyleSheet.create({
   },
   permExtra: { marginTop: space.sm },
   codeGap: { marginTop: space.xs },
-});
+  stepLabel: { marginTop: space.lg, marginBottom: space.xs },
+}));

@@ -4,8 +4,11 @@ import Foundation
 import QuartzCore
 import Vision
 
-/// Sample buffer delegate: gates frames to `fps`, runs Vision (presence + YOLO) and emits a sample.
+/// Sample buffer delegate: gates frames to `fps`, runs YOLO11n and emits a sample.
 /// Runs entirely on the webcam video queue.
+///
+/// Presence and phone both come from YOLO (`person` and `cell phone`). Until the model has loaded,
+/// and if it fails to load, nothing is emitted: a missing person would otherwise read as away.
 final class FLWebcamProcessor: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, @unchecked Sendable {
   private let interval: CFTimeInterval
   private let emit: ([String: Any]) -> Void
@@ -38,47 +41,38 @@ final class FLWebcamProcessor: NSObject, AVCaptureVideoDataOutputSampleBufferDel
     processedCount += 1
     if timingLogsLeft > 0 {
       timingLogsLeft -= 1
-      FLCaptureLog.log(String(format: "[FLWebcam] frame %d analysed in %.0f ms (yolo=%@)",
-                              processedCount, (CACurrentMediaTime() - now) * 1000,
-                              (body["_yolo"] as? Bool ?? false) ? "on" : "off"))
+      FLCaptureLog.log(String(format: "[FLWebcam] frame %d analysed in %.0f ms",
+                              processedCount, (CACurrentMediaTime() - now) * 1000))
     }
-    var out = body
-    out.removeValue(forKey: "_yolo")
-    emit(out)
+    emit(body)
   }
 
   /// The pixel buffer is only used inside this call; nothing retains it.
-  private func analyse(_ pixelBuffer: CVPixelBuffer) -> [String: Any] {
-    let human = VNDetectHumanRectanglesRequest()
-    human.upperBodyOnly = true
-    var requests: [VNRequest] = [human]
-
-    var yolo: VNCoreMLRequest?
-    if let model = FLWebcamModel.shared.current {
-      let req = VNCoreMLRequest(model: model)
-      req.imageCropAndScaleOption = .scaleFit
-      yolo = req
-      requests.append(req)
-    }
+  /// Nil while YOLO is still loading, failed to load, or this frame could not be analysed.
+  /// A failed analysis must not emit `personPresent: false`, which the session treats as away.
+  private func analyse(_ pixelBuffer: CVPixelBuffer) -> [String: Any]? {
+    guard let model = FLWebcamModel.shared.current else { return nil }
+    let yolo = VNCoreMLRequest(model: model)
+    yolo.imageCropAndScaleOption = .scaleFit
 
     let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: .up, options: [:])
     do {
-      try handler.perform(requests)
+      try handler.perform([yolo])
     } catch {
       if !loggedVisionError {
         loggedVisionError = true
         FLCaptureLog.log("[FLWebcam] Vision perform failed: \(error.localizedDescription)")
       }
+      return nil
     }
 
-    var personPresent = (human.results ?? []).contains { $0.confidence > Self.personThreshold }
+    var personPresent = false
     var phoneScore: Float = 0
-    for obs in (yolo?.results as? [VNRecognizedObjectObservation]) ?? [] {
+    for obs in (yolo.results as? [VNRecognizedObjectObservation]) ?? [] {
       guard let top = obs.labels.first else { continue }
       if top.identifier == FLWebcamModel.phoneLabel {
         phoneScore = max(phoneScore, top.confidence)
       } else if top.identifier == FLWebcamModel.personLabel, top.confidence > Self.personThreshold {
-        // Fallback presence signal when the upper-body detector misses (e.g. side-on, close to the camera).
         personPresent = true
       }
     }
@@ -88,7 +82,6 @@ final class FLWebcamProcessor: NSObject, AVCaptureVideoDataOutputSampleBufferDel
       "personPresent": personPresent,
       "phoneVisible": phoneScore > Self.phoneThreshold,
       "phoneScore": Double(phoneScore),
-      "_yolo": yolo != nil,
     ]
   }
 }
