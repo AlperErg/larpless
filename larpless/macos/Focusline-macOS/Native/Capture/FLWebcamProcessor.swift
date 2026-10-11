@@ -48,7 +48,8 @@ final class FLWebcamProcessor: NSObject, AVCaptureVideoDataOutputSampleBufferDel
   }
 
   /// The pixel buffer is only used inside this call; nothing retains it.
-  /// Nil while YOLO is still loading or failed to load, so the caller emits nothing.
+  /// Nil while YOLO is still loading, failed to load, or this frame could not be analysed.
+  /// A failed analysis must not emit `personPresent: false`, which the session treats as away.
   private func analyse(_ pixelBuffer: CVPixelBuffer) -> [String: Any]? {
     guard let model = FLWebcamModel.shared.current else { return nil }
     let yolo = VNCoreMLRequest(model: model)
@@ -62,6 +63,7 @@ final class FLWebcamProcessor: NSObject, AVCaptureVideoDataOutputSampleBufferDel
         loggedVisionError = true
         FLCaptureLog.log("[FLWebcam] Vision perform failed: \(error.localizedDescription)")
       }
+      return nil
     }
 
     var personPresent = false
