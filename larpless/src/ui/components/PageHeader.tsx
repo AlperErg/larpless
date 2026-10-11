@@ -20,7 +20,7 @@ export interface PageHeaderProps {
 
 /** Notion page header: full-width 120 px cover strip, 48 px emoji icon overlapping it, serif title. */
 export function PageHeader({ icon, title, cover, subtitle, right, testID }: PageHeaderProps) {
-  const target = cover ? tag[cover].bg : colors.sidebar;
+  const target = cover ? tag[cover].bg : colors.wash;
   const [layers, setLayers] = useState({ under: target, over: target });
   const fade = useRef(new Animated.Value(1)).current;
   const gutter = useGutter();
@@ -69,7 +69,7 @@ const styles = StyleSheet.create({
     maxWidth: layout.contentMaxWidth,
     alignSelf: 'center',
   },
-  icon: { fontSize: 48, lineHeight: 64, height: 64, marginTop: -34, alignSelf: 'flex-start' },
+  icon: { fontSize: 36, lineHeight: 44, height: 44, marginTop: -22, alignSelf: 'flex-start' },
   titleRow: { flexDirection: 'row', alignItems: 'flex-end', marginTop: space.xs },
   title: { flex: 1 },
   right: { marginLeft: space.lg, paddingBottom: space.sm },

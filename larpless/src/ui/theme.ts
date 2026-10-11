@@ -1,6 +1,7 @@
 /**
- * LarpLess design tokens (Notion-inspired). CONTRACTS.md §9.
+ * LarpLess design tokens. CONTRACTS.md §9.
  *
+ * Cool desk-paper canvas, white raised surfaces, one cobalt accent.
  * This is the ONLY file in src/ui that may contain hex colour values.
  * Tokens are grouped per scheme so a `dark` set can be added later (cut item 4);
  * only `light` ships today, and `colors` / `tag` point at it.
@@ -12,7 +13,13 @@ export type SchemeName = 'light';
 
 export interface Palette {
   bg: string;
+  /** Cards, fields, and secondary buttons sitting on the canvas. */
+  raised: string;
+  /** Quiet band behind page titles. Same hue as the canvas, a step deeper. */
+  wash: string;
   sidebar: string;
+  /** Pale accent fill for the selected nav row. */
+  accentSoft: string;
   text: string;
   muted: string;
   /** Lighter than muted: placeholders, disabled text, secondary icons. */
@@ -40,25 +47,28 @@ export interface TagTone {
 }
 
 const lightPalette: Palette = {
-  bg: '#FFFFFF',
-  sidebar: '#F7F6F3',
-  text: '#37352F',
-  muted: '#787774',
-  faint: '#9B9A97',
-  border: '#E9E9E7',
-  hover: '#EFEFED',
-  active: '#E3E2DF',
-  accent: '#2383E2',
-  accentHover: '#0077D4',
+  bg: '#F3F5F8',
+  raised: '#FFFFFF',
+  wash: '#E6ECF3',
+  sidebar: '#F3F5F8',
+  text: '#152033',
+  muted: '#4C5D72',
+  faint: '#5E7086',
+  border: '#E2E7EE',
+  hover: '#E8EDF3',
+  active: '#DDE3EC',
+  accent: '#1E4ED8',
+  accentHover: '#1A45C2',
+  accentSoft: '#E8EEFB',
   onAccent: '#FFFFFF',
-  backdrop: '#0F0F0F66',
-  codeBg: '#87837826',
-  codeText: '#EB5757',
-  shadow: '#0F0F0F',
+  backdrop: '#15203366',
+  codeBg: '#1E4ED814',
+  codeText: '#C2413B',
+  shadow: '#152033',
 };
 
 const lightTags: Record<TagColor, TagTone> = {
-  gray: { bg: '#F1F1EF', text: '#787774' },
+  gray: { bg: '#E7ECF2', text: '#4C5D72' },
   brown: { bg: '#F4EEEE', text: '#9F6B53' },
   orange: { bg: '#FBECDD', text: '#D9730D' },
   yellow: { bg: '#FBF3DB', text: '#CB912F' },
@@ -71,7 +81,7 @@ const lightTags: Record<TagColor, TagTone> = {
 
 /** Heatmap intensities: 0 min, <15, <30, <60, ≥60 (greens). */
 const lightHeat: [string, string, string, string, string] = [
-  '#EFEFED',
+  '#E4E9F0',
   '#D3E5D2',
   '#A6CCA4',
   '#6DAA75',
@@ -136,16 +146,16 @@ export const space = {
   xxxl: 48,
 } as const;
 
-export const radius = 4;
+export const radius = 8;
 
-export const motion = { fast: 150, base: 200, slow: 250 } as const;
+export const motion = { fast: 140, base: 180, slow: 240 } as const;
 
 export const layout = {
   sidebarWidth: 240,
   contentMaxWidth: 900,
   contentPadding: 48,
-  coverHeight: 120,
-  controlHeight: 28,
+  coverHeight: 72,
+  controlHeight: 32,
 } as const;
 
 /** Tag colour that represents a chunk kind (status dot, panel tint, timeline). */

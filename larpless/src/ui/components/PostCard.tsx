@@ -80,7 +80,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: radius * 2,
     padding: space.lg,
-    backgroundColor: colors.bg,
+    backgroundColor: colors.raised,
   },
   head: { flexDirection: 'row', alignItems: 'center' },
   avatar: { alignItems: 'center', justifyContent: 'center', marginRight: space.sm },

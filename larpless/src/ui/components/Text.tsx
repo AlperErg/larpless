@@ -82,7 +82,7 @@ export function Muted({ children }: { children?: ReactNode }) {
 
 const styles = StyleSheet.create({
   strong: { fontFamily: fonts.semibold },
-  title: { fontFamily: fonts.serif, fontSize: 40, lineHeight: 48, color: colors.text },
+  title: { fontFamily: fonts.serif, fontSize: 40, lineHeight: 46, letterSpacing: -0.6, color: colors.text },
   h2: { fontFamily: fonts.semibold, fontSize: 20, lineHeight: 28, color: colors.text },
   h3: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 22, color: colors.text },
   body: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 21, color: colors.text },

@@ -6,6 +6,7 @@ import type { Settings } from '../../src/contracts/domain';
 import { initialAppState, useAppStore } from '../../src/store/appStore';
 import { useNavStore } from '../../src/store/navStore';
 import { initialSessionState, useSessionStore } from '../../src/store/sessionStore';
+import { useSocialStore } from '../../src/store/socialStore';
 import { mockNowPlaying } from '../../src/native/mock/nowPlaying';
 import { SettingsPage } from '../../src/ui/pages/SettingsPage';
 
@@ -62,7 +63,7 @@ const a11y = (r: ReactTestRenderer, id: string) => r.root.findAll((n) => n.props
 const isSelected = (r: ReactTestRenderer, id: string) => a11y(r, id).selected === true;
 const isOn = (r: ReactTestRenderer, id: string) => a11y(r, id).checked === true;
 
-const actionsBackup = { session: { ...useSessionStore.getState() }, app: { ...useAppStore.getState() } };
+const actionsBackup = { session: { ...useSessionStore.getState() }, app: { ...useAppStore.getState() }, social: { ...useSocialStore.getState() } };
 
 beforeAll(() => {
   jest.spyOn(console, 'log').mockImplementation(() => {});
@@ -80,6 +81,7 @@ afterEach(() => {
     useSessionStore.setState({ ...actionsBackup.session, ...initialSessionState });
     useAppStore.setState({ ...actionsBackup.app, ...initialAppState });
     useNavStore.setState({ route: 'home', params: {}, paletteOpen: false });
+    useSocialStore.setState(actionsBackup.social, true);
   });
 });
 
@@ -252,5 +254,28 @@ describe('Settings page', () => {
     expect(isSelected(r, 'settings-strictness-10')).toBe(true);
     warn.mockRestore();
     act(() => r.unmount());
+  });
+
+  it('signs out, and opens the create-account screen when signed out', async () => {
+    const signOut = jest.fn(async () => {});
+    act(() =>
+      useSocialStore.setState({
+        status: 'signedIn',
+        userId: 'u1',
+        profile: { id: 'u1', username: 'ada' },
+        signOut,
+      }),
+    );
+    const r = render();
+    expect(textOf(r)).toContain('@ada');
+    await press(byTestID(r, 'settings-signout'));
+    expect(signOut).toHaveBeenCalled();
+    act(() => r.unmount());
+
+    act(() => useSocialStore.setState({ status: 'signedOut', profile: null, userId: null }));
+    const signedOut = render();
+    await press(byTestID(signedOut, 'settings-signup'));
+    expect(useNavStore.getState()).toMatchObject({ route: 'feed', params: { auth: 'signUp' } });
+    act(() => signedOut.unmount());
   });
 });

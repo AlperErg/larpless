@@ -51,6 +51,6 @@ export function Switch({ value, onChange, disabled, testID, accessibilityLabel }
 
 const styles = StyleSheet.create({
   track: { width: W, height: H, borderRadius: H / 2, justifyContent: 'center' },
-  knob: { width: KNOB, height: KNOB, borderRadius: KNOB / 2, backgroundColor: colors.bg },
+  knob: { width: KNOB, height: KNOB, borderRadius: KNOB / 2, backgroundColor: colors.raised },
   disabled: { opacity: 0.4 },
 });
