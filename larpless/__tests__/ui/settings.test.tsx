@@ -86,7 +86,9 @@ describe('Settings page', () => {
   it('focus and sound choices apply at once, persist, and show as selected', async () => {
     const r = render();
     expect(isSelected(r, 'settings-strictness-2')).toBe(true);
+    expect(isSelected(r, 'settings-power-medium')).toBe(true);
 
+    await press(byTestID(r, 'settings-power-eco'));
     await press(byTestID(r, 'settings-strictness-5'));
     await press(byTestID(r, 'settings-pomodoro-25/5'));
     await press(byTestID(r, 'settings-sound-rain'));
@@ -95,6 +97,7 @@ describe('Settings page', () => {
     await press(byTestID(r, 'settings-sounds'));
 
     const expected = {
+      powerProfile: 'eco',
       strictness: 5,
       pomodoroDefault: '25/5',
       defaultSound: 'rain',
@@ -104,6 +107,8 @@ describe('Settings page', () => {
     };
     expect(settings()).toMatchObject(expected);
     expect(await stored()).toMatchObject(expected);
+    expect(isSelected(r, 'settings-power-eco')).toBe(true);
+    expect(isSelected(r, 'settings-power-medium')).toBe(false);
     expect(isSelected(r, 'settings-strictness-5')).toBe(true);
     expect(isSelected(r, 'settings-strictness-2')).toBe(false);
     expect(isSelected(r, 'settings-pomodoro-25/5')).toBe(true);

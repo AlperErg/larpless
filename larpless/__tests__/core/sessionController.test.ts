@@ -4,6 +4,7 @@ import type { NativeApis, PanelAction, PanelState } from '../../src/contracts/na
 import type { SessionStoreState } from '../../src/contracts/store';
 import { createClassifier } from '../../src/core/classifier';
 import { createDb, createMemoryKv } from '../../src/core/db';
+import { sessionOverride, resetSessionProfile } from '../../src/core/powerProfile';
 import { createSessionController, toPanelState } from '../../src/core/sessionController';
 import type { StoreApi } from '../../src/core/sessionController';
 import { fixtureChunks, fixtureModules, fixtureStates } from '../../src/fixtures/data';
@@ -35,7 +36,7 @@ function setup(opts: { settings?: Partial<Settings>; native?: Partial<NativeApis
       state = { ...state, ...p };
     },
   };
-  let settings: Settings = { ...DEFAULT_SETTINGS, onboarded: true, ...opts.settings };
+  let settings: Settings = { ...DEFAULT_SETTINGS, onboarded: true, powerProfile: 'eco', ...opts.settings };
   const panelUpdates: PanelState[] = [];
   let panelAction: ((a: PanelAction) => void) | null = null;
 
@@ -121,6 +122,7 @@ beforeAll(() => {
 beforeEach(() => {
   jest.useFakeTimers({ now: T0 });
   resetMockScreen();
+  resetSessionProfile();
 });
 
 afterEach(() => {
@@ -229,7 +231,7 @@ describe('sessionController', () => {
   });
 
   it('a pomodoro break stops capture and the webcam, ducks sound, then focus resumes', async () => {
-    const h = setup({ settings: { demoFast: true } });
+    const h = setup({ settings: { demoFast: true, powerProfile: 'high' } });
     await h.ctrl.start({ pomodoro: 'demo' }); // 2 min focus / 1 min break, so the test doesn't wait 25 min
     expect(h.state.pomodoro).toMatchObject({ preset: 'demo', phase: 'focus' });
     await advance(120_000);
@@ -295,7 +297,7 @@ describe('sessionController', () => {
   });
 
   it('full session: start → chunks → level-2 alert → break → end → summary (mock native, demoFast)', async () => {
-    const h = setup({ settings: { demoFast: true, webcamEnabled: false } });
+    const h = setup({ settings: { demoFast: true, powerProfile: 'high', webcamEnabled: false } });
     await h.ctrl.start({ pomodoro: 'demo' });
     // 10 s chunks; mock screen: BIO ×2, MATH ×2, Instagram ×2, YouTube ×2 …
     await advance(60_000);
@@ -491,26 +493,27 @@ describe('sessionController', () => {
       return { h, setTitle: (t: string) => (title = t) };
     }
 
-    it('a new window is classified once it settles (~2 s), long before the chunk closes, which then reuses it', async () => {
+    it('a new window is classified once it settles, long before the chunk closes, which then reuses it', async () => {
       const { h, setTitle } = liveSetup('BIO101 Lecture 4.pdf');
       await h.ctrl.start({ pomodoro: 'off' });
-      await advance(2_000);
+      // Eco settles after 3 s: first seen on the 1 s tick, classified on the 4 s tick.
+      await advance(4_000);
       expect(h.state.current).toMatchObject({ kind: 'subject', moduleId: 'mod_biology' });
       expect(h.panelUpdates.at(-1)).toMatchObject({ status: 'studying', title: 'Biology' });
       expect(h.capture).toHaveBeenCalledTimes(1);
 
       setTitle('MATH201 Problem set 3.pdf');
-      await advance(2_000);
+      await advance(4_000);
       expect(h.state.current).toMatchObject({ kind: 'subject', moduleId: 'mod_maths' });
       expect(h.state.chunks).toHaveLength(0); // the 30 s chunk is still open
 
       setTitle('Instagram');
-      await advance(2_000);
+      await advance(4_000);
       expect(h.panelUpdates.at(-1)).toMatchObject({ status: 'distracted', title: 'Distracted', subtitle: 'Instagram', tint: 'red' });
       expect(h.capture).toHaveBeenCalledTimes(2); // rules need no screenshot
 
       setTitle('MATH201 Problem set 3.pdf');
-      await advance(24_000);
+      await advance(18_000);
       expect(h.state.chunks).toHaveLength(1);
       expect(h.state.chunks[0]).toMatchObject({ kind: 'subject', moduleId: 'mod_maths', source: 'cache' });
       expect(h.capture).toHaveBeenCalledTimes(2);
@@ -543,9 +546,9 @@ describe('sessionController', () => {
           }),
       );
       await h.ctrl.start({ pomodoro: 'off' });
-      await advance(2_000); // BIO check started, capture pending
+      await advance(4_000); // BIO check started, capture pending
       setTitle('Instagram');
-      await advance(2_000);
+      await advance(4_000);
       expect(h.state.current).toMatchObject({ kind: 'distracted', activity: 'Instagram' });
       release();
       await advance(0);
@@ -577,6 +580,40 @@ describe('sessionController', () => {
       expect(h.state.current).toMatchObject({ kind: 'distracted', activity: 'Phone' });
       expect(h.panelUpdates.at(-1)).toMatchObject({ status: 'distracted', subtitle: 'Phone', tint: 'red' });
       expect(h.state.chunks).toHaveLength(2);
+      await h.ctrl.end();
+    });
+
+    it('a classify slower than the chunk steps the session down, and the next chunk uses the longer interval', async () => {
+      let release: () => void = () => {};
+      const h = setup({ settings: { powerProfile: 'high', webcamEnabled: false } });
+      h.capture.mockImplementationOnce(
+        () =>
+          new Promise((res) => {
+            release = () =>
+              res({
+                appName: 'Preview',
+                bundleId: 'com.apple.Preview',
+                windowTitle: 'BIO101 Lecture 4.pdf',
+                isSelf: false,
+                jpegBase64: 'x',
+                width: 1,
+                height: 1,
+                capturedAt: Date.now(),
+              });
+          }),
+      );
+      await h.ctrl.start({ pomodoro: 'off' });
+      await advance(2_000); // high settles in 1 s, so the vision call is in flight
+      await advance(12_000); // past the 10 s chunk; the call is still running
+      release();
+      await advance(0);
+      expect(sessionOverride()).toBe('medium');
+      expect(h.state.chunks).toHaveLength(1);
+      expect(h.state.chunks[0].durationS).toBe(10);
+
+      await advance(11_000); // open window started at 10 s; medium closes it 15 s later
+      expect(h.state.chunks).toHaveLength(2);
+      expect(h.state.chunks[1]).toMatchObject({ durationS: 15, startedAt: T0 + 10_000 });
       await h.ctrl.end();
     });
 

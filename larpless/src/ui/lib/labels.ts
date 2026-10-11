@@ -1,4 +1,4 @@
-import type { PomodoroPhase, PomodoroPreset, SoundId, Strictness } from '../../contracts/domain';
+import type { PomodoroPhase, PomodoroPreset, PowerProfile, SoundId, Strictness } from '../../contracts/domain';
 
 export const SOUNDS: SoundId[] = ['off', 'white', 'pink', 'brown', 'rain', 'cafe'];
 
@@ -28,6 +28,12 @@ export const POMODORO_OPTIONS: { value: PomodoroPreset | 'off'; label: string; i
   { value: 'off', label: 'Off' },
   { value: '25/5', label: '25/5', icon: '🍅' },
   { value: '50/10', label: '50/10', icon: '🍅' },
+];
+
+export const POWER_OPTIONS: { value: PowerProfile; label: string }[] = [
+  { value: 'eco', label: 'Eco' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
 ];
 
 export const STRICTNESS_OPTIONS: { value: Strictness; label: string }[] = [

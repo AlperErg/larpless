@@ -3,6 +3,7 @@ import type { ActiveWindow, ScreenSnapshot } from '../../src/contracts/native';
 import { createClassifier, mockVerdictFromTitle, windowKey } from '../../src/core/classifier';
 import type { ClassifierConfig } from '../../src/core/classifier';
 import { fixtureModules } from '../../src/fixtures/data';
+import type { PowerSpec } from '../../src/core/powerProfile';
 
 const CFG: ClassifierConfig = {
   USE_MOCK_CLASSIFIER: false,
@@ -12,7 +13,7 @@ const CFG: ClassifierConfig = {
 
 const BIO_VERDICT: ScreenVerdict = { studying: true, moduleId: 'mod_biology', activity: 'Reading slides', confidence: 0.9, source: 'vlm' };
 
-function setup(opts: { config?: Partial<ClassifierConfig>; verdict?: ScreenVerdict | null } = {}) {
+function setup(opts: { config?: Partial<ClassifierConfig>; verdict?: ScreenVerdict | null; getPower?: () => PowerSpec } = {}) {
   let win: ActiveWindow = { appName: 'Preview', bundleId: 'com.apple.Preview', windowTitle: 'BIO101 Lecture 4.pdf', isSelf: false };
   let t = 1_000_000;
   const capture = jest.fn(
@@ -26,6 +27,7 @@ function setup(opts: { config?: Partial<ClassifierConfig>; verdict?: ScreenVerdi
     ollama: { classify, warmUp, unload },
     now: () => t,
     config: { ...CFG, ...opts.config },
+    getPower: opts.getPower,
   });
   return {
     c,
@@ -49,10 +51,28 @@ describe('classifier', () => {
   it('VLM path: takes exactly one screenshot and returns the verdict', async () => {
     const s = setup();
     const r = await s.c.classifyCurrent(fixtureModules);
-    expect(r).toEqual({ verdict: BIO_VERDICT, tookScreenshot: true, appName: 'Preview', key: BIO_KEY });
+    expect(r).toMatchObject({ verdict: BIO_VERDICT, tookScreenshot: true, appName: 'Preview', key: BIO_KEY, fellBehind: false });
     expect(s.capture).toHaveBeenCalledTimes(1);
     expect(s.capture).toHaveBeenCalledWith(CFG.CAPTURE);
     expect(s.classify).toHaveBeenCalledTimes(1);
+  });
+
+  it('getPower chooses the screenshot size and the Ollama keep_alive', async () => {
+    const captureOpts = { maxWidth: 768, jpegQuality: 0.5 };
+    const s = setup({
+      getPower: () => ({
+        id: 'eco',
+        chunkS: 30,
+        liveSettleMs: 3_000,
+        capture: captureOpts,
+        cacheTtlMs: 180_000,
+        keepAlive: '5m',
+        classifyTimeoutMs: 30_000,
+      }),
+    });
+    await s.c.classifyCurrent(fixtureModules);
+    expect(s.capture).toHaveBeenCalledWith(captureOpts);
+    expect(s.classify).toHaveBeenCalledWith(expect.anything(), fixtureModules, { timeoutMs: 30_000, keepAlive: '5m' });
   });
 
   it('rules path: no screenshot, rule verdict', async () => {
@@ -118,8 +138,8 @@ describe('classifier', () => {
     const second = s.c.classifyCurrent(fixtureModules);
     await tick();
     release(BIO_VERDICT);
-    expect(await first).toEqual({ verdict: BIO_VERDICT, tookScreenshot: true, appName: 'Preview', key: BIO_KEY });
-    expect(await second).toEqual({ verdict: { ...BIO_VERDICT, source: 'cache' }, tookScreenshot: false, appName: 'Preview', key: BIO_KEY });
+    expect(await first).toMatchObject({ verdict: BIO_VERDICT, tookScreenshot: true, appName: 'Preview', key: BIO_KEY });
+    expect(await second).toMatchObject({ verdict: { ...BIO_VERDICT, source: 'cache' }, tookScreenshot: false, appName: 'Preview', key: BIO_KEY });
     expect(s.capture).toHaveBeenCalledTimes(1);
     expect(s.classify).toHaveBeenCalledTimes(1);
   });
@@ -140,6 +160,30 @@ describe('classifier', () => {
     const r2 = await second;
     expect(r2).toMatchObject({ tookScreenshot: true, key: windowKey('Preview', 'MATH201 Problem set 3.pdf') });
     expect(s.capture).toHaveBeenCalledTimes(2);
+  });
+
+  it('three windows during one call: one follow-up shot of the last, and the call fell behind', async () => {
+    let release: (v: ScreenVerdict) => void = () => {};
+    const s = setup();
+    s.classify.mockImplementationOnce(() => new Promise<ScreenVerdict>((res) => (release = res)));
+    const first = s.c.classifyCurrent(fixtureModules);
+    await tick();
+    s.setWin({ windowTitle: 'MATH201 Problem set 3.pdf' });
+    const second = s.c.classifyCurrent(fixtureModules);
+    await tick();
+    s.setWin({ windowTitle: 'Other.pdf' });
+    const third = s.c.classifyCurrent(fixtureModules);
+    await tick();
+    expect(s.capture).toHaveBeenCalledTimes(1);
+    s.setWin({ windowTitle: 'FINAL notes.pdf' });
+    release(BIO_VERDICT);
+    expect((await first).key).toBe(BIO_KEY);
+    expect((await first).fellBehind).toBe(true);
+    const finalKey = windowKey('Preview', 'FINAL notes.pdf');
+    expect(await second).toMatchObject({ tookScreenshot: true, key: finalKey, fellBehind: true });
+    expect(await third).toMatchObject({ tookScreenshot: false, key: finalKey, fellBehind: true });
+    expect(s.capture).toHaveBeenCalledTimes(2);
+    expect(s.classify).toHaveBeenCalledTimes(2);
   });
 
   it('single flight, other window that is cached by then: no second screenshot', async () => {
@@ -173,13 +217,13 @@ describe('classifier', () => {
 
   it('VLM failure → null verdict with error vlm (screenshot was taken)', async () => {
     const s = setup({ verdict: null });
-    expect(await s.c.classifyCurrent(fixtureModules)).toEqual({ verdict: null, tookScreenshot: true, appName: 'Preview', key: BIO_KEY, error: 'vlm' });
+    expect(await s.c.classifyCurrent(fixtureModules)).toMatchObject({ verdict: null, tookScreenshot: true, appName: 'Preview', key: BIO_KEY, error: 'vlm' });
   });
 
   it('capture rejects: E_PERMISSION → permission, other → capture; not counted as a screenshot', async () => {
     const s = setup();
     s.capture.mockRejectedValueOnce(Object.assign(new Error('no'), { code: 'E_PERMISSION' }));
-    expect(await s.c.classifyCurrent(fixtureModules)).toEqual({ verdict: null, tookScreenshot: false, appName: 'Preview', key: BIO_KEY, error: 'permission' });
+    expect(await s.c.classifyCurrent(fixtureModules)).toMatchObject({ verdict: null, tookScreenshot: false, appName: 'Preview', key: BIO_KEY, error: 'permission' });
     s.capture.mockRejectedValueOnce(Object.assign(new Error('no'), { code: 'E_CAPTURE' }));
     expect((await s.c.classifyCurrent(fixtureModules)).error).toBe('capture');
     expect(s.classify).not.toHaveBeenCalled();
