@@ -44,6 +44,15 @@ describe('db', () => {
     expect(await db.updateChunk({ ...ch, id: 'other' })).toBe(false);
   });
 
+  it('settings saved before now playing still default the flag on', async () => {
+    const kv = createMemoryKv();
+    const db = createDb(kv);
+    await kv.setItem(KEYS.settings, JSON.stringify({ volume: 0.2 }));
+    const loaded = await db.loadSettings();
+    expect(loaded.nowPlayingEnabled).toBe(true);
+    expect(loaded).toEqual({ ...DEFAULT_SETTINGS, volume: 0.2 });
+  });
+
   it('settings merge over DEFAULT_SETTINGS; corrupt values fall back', async () => {
     const kv = createMemoryKv();
     const db = createDb(kv);
@@ -51,6 +60,15 @@ describe('db', () => {
     expect(await db.loadSettings()).toEqual({ ...DEFAULT_SETTINGS, volume: 0.9 });
     await kv.setItem(KEYS.settings, '{not json');
     expect(await db.loadSettings()).toEqual(DEFAULT_SETTINGS);
+    await kv.setItem(KEYS.settings, JSON.stringify({ powerProfile: 'turbo' }));
+    expect((await db.loadSettings()).powerProfile).toBe('medium');
+    await db.saveSettings({ ...DEFAULT_SETTINGS, powerProfile: 'turbo' } as unknown as typeof DEFAULT_SETTINGS);
+    expect(kv.map.get(KEYS.settings)).not.toContain('turbo');
+    expect((await db.loadSettings()).powerProfile).toBe('medium');
+    for (const junk of [null, '', 'HIGH', 1]) {
+      await db.saveSettings({ ...DEFAULT_SETTINGS, powerProfile: junk } as unknown as typeof DEFAULT_SETTINGS);
+      expect((await db.loadSettings()).powerProfile).toBe('medium');
+    }
     await kv.setItem(KEYS.modules, '"oops"');
     expect(await db.loadModules()).toEqual([]);
   });

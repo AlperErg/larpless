@@ -4,7 +4,7 @@ import type { NativeApis, PanelAction, PanelState } from '../../src/contracts/na
 import type { SessionStoreState } from '../../src/contracts/store';
 import { createClassifier } from '../../src/core/classifier';
 import { createDb, createMemoryKv } from '../../src/core/db';
-import { sessionOverride, resetSessionProfile } from '../../src/core/powerProfile';
+import { effectiveProfile, sessionOverride, resetSessionProfile } from '../../src/core/powerProfile';
 import { createSessionController, toPanelState } from '../../src/core/sessionController';
 import type { StoreApi } from '../../src/core/sessionController';
 import { fixtureChunks, fixtureModules, fixtureStates } from '../../src/fixtures/data';
@@ -72,6 +72,7 @@ function setup(opts: { settings?: Partial<Settings>; native?: Partial<NativeApis
     ollama,
     now: () => Date.now(),
     config: { USE_MOCK_CLASSIFIER: true, CACHE_TTL_MS: 120_000, CAPTURE: { maxWidth: 1280, jpegQuality: 0.7 } },
+    getPower: () => effectiveProfile(settings.powerProfile),
   });
   const warmUp = jest.spyOn(classifier, 'warmUp');
   const unload = jest.spyOn(classifier, 'unload');
@@ -85,7 +86,7 @@ function setup(opts: { settings?: Partial<Settings>; native?: Partial<NativeApis
     classifier,
     ollama,
     now: () => Date.now(),
-    config: { CHUNK_S: 30, DEMO_CHUNK_S: 10, WEBCAM_FPS: 1 },
+    config: { WEBCAM_FPS: 1 },
     onSessionSaved: (s) => saved.push(s.id),
     demoChunks: fixtureChunks,
     demoIntervalMs: 2000,
@@ -236,7 +237,7 @@ describe('sessionController', () => {
     expect(h.state.pomodoro).toMatchObject({ preset: 'demo', phase: 'focus' });
     await advance(120_000);
     expect(h.state.status).toBe('break');
-    expect(h.state.chunks).toHaveLength(12); // 10 s chunks in demoFast
+    expect(h.state.chunks).toHaveLength(12); // 10 s chunks on the high profile
     expect(h.state.timer).toEqual({ baseS: 120, runningSinceMs: null });
     expect(h.native.sound.duck).toHaveBeenCalledWith(0.3);
     expect(h.native.sound.chime).toHaveBeenCalledWith('phase');
@@ -299,7 +300,7 @@ describe('sessionController', () => {
   it('full session: start → chunks → level-2 alert → break → end → summary (mock native, demoFast)', async () => {
     const h = setup({ settings: { demoFast: true, powerProfile: 'high', webcamEnabled: false } });
     await h.ctrl.start({ pomodoro: 'demo' });
-    // 10 s chunks; mock screen: BIO ×2, MATH ×2, Instagram ×2, YouTube ×2 …
+    // High profile: 10 s chunks. Mock screen: BIO ×2, MATH ×2, Instagram ×2, YouTube ×2 …
     await advance(60_000);
     const alerts = (h.native.notifications.post as jest.Mock).mock.calls.map((c) => c[0].title);
     expect(alerts.some((t: string) => /You've been on Instagram for 20 s/.test(t))).toBe(true);
@@ -614,6 +615,155 @@ describe('sessionController', () => {
       await advance(11_000); // open window started at 10 s; medium closes it 15 s later
       expect(h.state.chunks).toHaveLength(2);
       expect(h.state.chunks[1]).toMatchObject({ durationS: 15, startedAt: T0 + 10_000 });
+      await h.ctrl.end();
+      expect(sessionOverride()).toBeNull();
+    });
+
+    it('dispose during an in-flight classify does not leave the slower profile behind', async () => {
+      let release: () => void = () => {};
+      const h = setup({ settings: { powerProfile: 'high', webcamEnabled: false } });
+      h.capture.mockImplementationOnce(
+        () =>
+          new Promise((res) => {
+            release = () =>
+              res({
+                appName: 'Preview',
+                bundleId: 'com.apple.Preview',
+                windowTitle: 'BIO101 Lecture 4.pdf',
+                isSelf: false,
+                jpegBase64: 'x',
+                width: 1,
+                height: 1,
+                capturedAt: Date.now(),
+              });
+          }),
+      );
+      await h.ctrl.start({ pomodoro: 'off' });
+      await advance(2_000); // high settles in 1 s, so the vision call is in flight
+      await advance(12_000); // past the 10 s chunk; still running, so finishing it would step down
+      h.ctrl.dispose();
+      release();
+      await advance(0);
+      expect(sessionOverride()).toBeNull();
+    });
+
+    it('a classify from a disposed session cannot slow down the next one', async () => {
+      let release: () => void = () => {};
+      const h = setup({ settings: { powerProfile: 'high', webcamEnabled: false } });
+      h.capture.mockImplementationOnce(
+        () =>
+          new Promise((res) => {
+            release = () =>
+              res({
+                appName: 'Preview',
+                bundleId: 'com.apple.Preview',
+                windowTitle: 'BIO101 Lecture 4.pdf',
+                isSelf: false,
+                jpegBase64: 'x',
+                width: 1,
+                height: 1,
+                capturedAt: Date.now(),
+              });
+          }),
+      );
+      await h.ctrl.start({ pomodoro: 'off' });
+      await advance(2_000);
+      await advance(12_000);
+      h.ctrl.dispose();
+      await h.ctrl.start({ pomodoro: 'off' });
+      release();
+      await advance(0);
+      expect(sessionOverride()).toBeNull();
+    });
+
+    it('a new session that waits on the previous call does not step down', async () => {
+      let release: () => void = () => {};
+      const h = setup({ settings: { powerProfile: 'high', webcamEnabled: false } });
+      h.capture.mockImplementationOnce(
+        () =>
+          new Promise((res) => {
+            release = () =>
+              res({
+                appName: 'Preview',
+                bundleId: 'com.apple.Preview',
+                windowTitle: 'BIO101 Lecture 4.pdf',
+                isSelf: false,
+                jpegBase64: 'x',
+                width: 1,
+                height: 1,
+                capturedAt: Date.now(),
+              });
+          }),
+      );
+      await h.ctrl.start({ pomodoro: 'off' });
+      await advance(14_000);
+      h.ctrl.dispose();
+      await h.ctrl.start({ pomodoro: 'off' });
+      await advance(2_000); // the new session joins the call that is still in flight
+      release();
+      await advance(0);
+      expect(sessionOverride()).toBeNull();
+    });
+
+    it('a window lookup that finishes while the session is saving cannot step the profile', async () => {
+      const h = setup({ settings: { powerProfile: 'high', webcamEnabled: false } });
+      const win = {
+        appName: 'Preview',
+        bundleId: 'com.apple.Preview',
+        windowTitle: 'BIO101 Lecture 4.pdf',
+        isSelf: false,
+      };
+      let releaseWin: (w: typeof win) => void = () => {};
+      const original = h.native.screen.getActiveWindow.bind(h.native.screen);
+      let lookups = 0;
+      h.native.screen.getActiveWindow = () => {
+        lookups += 1;
+        if (lookups < 2) return original();
+        return new Promise((resolve) => {
+          releaseWin = resolve;
+        });
+      };
+      let releaseCap: () => void = () => {};
+      h.capture.mockImplementation(
+        () =>
+          new Promise((res) => {
+            releaseCap = () =>
+              res({ ...win, jpegBase64: 'x', width: 1, height: 1, capturedAt: Date.now() });
+          }),
+      );
+      let releaseSave: () => void = () => {};
+      const save = h.db.saveSession.bind(h.db);
+      h.db.saveSession = (summary) =>
+        new Promise((resolve, reject) => {
+          releaseSave = () => {
+            save(summary).then(resolve, reject);
+          };
+        });
+      await h.ctrl.start({ pomodoro: 'off' });
+      await advance(1_000);
+      await advance(1_000);
+      const ended = h.ctrl.end();
+      await advance(0);
+      releaseWin(win);
+      await advance(12_000);
+      releaseCap();
+      await advance(0);
+      expect(sessionOverride()).toBeNull();
+      releaseSave();
+      await ended;
+      expect(sessionOverride()).toBeNull();
+    });
+
+    it('a failed live check can be tried again once the window has stayed frontmost', async () => {
+      const { h } = liveSetup('BIO101 Lecture 4.pdf');
+      h.capture.mockRejectedValueOnce(Object.assign(new Error('no'), { code: 'E_CAPTURE' }));
+      await h.ctrl.start({ pomodoro: 'off' });
+      await advance(4_000);
+      expect(h.capture).toHaveBeenCalledTimes(1);
+      expect(h.state.current?.kind).not.toBe('subject');
+      await advance(3_000);
+      expect(h.capture).toHaveBeenCalledTimes(2);
+      expect(h.state.current).toMatchObject({ kind: 'subject', moduleId: 'mod_biology' });
       await h.ctrl.end();
     });
 

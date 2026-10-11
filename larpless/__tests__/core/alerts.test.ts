@@ -54,7 +54,7 @@ describe('alerts', () => {
     expect(r.st.distractedSinceMs).toBe(30_000);
   });
 
-  it('demoFast: 20 s / 50 s with 10 s chunks', () => {
+  it('demoFast: alerts at 20 s and 50 s', () => {
     const r = run(['subject', ...Array(5).fill('distracted')], { ...S, demoFast: true }, 10);
     expect(r.levels).toEqual([0, 1, 2, 2, 2, 3]);
     expect(r.effects[2][0]).toMatchObject({ type: 'notify', title: "You've been on Instagram for 20 s" });
