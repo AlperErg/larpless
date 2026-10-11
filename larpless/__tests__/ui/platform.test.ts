@@ -35,6 +35,14 @@ describe.each(['macos', 'ios'])('on %s', (os) => {
     expect(platform.DEVICE).toBe('Mac');
   });
 
+  it('keeps the macOS Ollama setup copy', () => {
+    expect(platform.OLLAMA_DOWNLOAD_URL).toBe('https://ollama.com/download/Ollama.dmg');
+    expect(platform.OLLAMA_SERVE_COMMAND).toBe('LLAMA_ARG_CACHE_RAM=0 ollama serve');
+    expect(platform.SHELL_NAME).toBe('Terminal');
+    expect(platform.APP_LAUNCHER).toBe('Applications');
+    expect(platform.OLLAMA_INSTALL_HINT).toContain('Ollama.dmg');
+  });
+
   it('passes keyDownEvents through unchanged', () => {
     const keys = [{ key: 'Escape' }, { key: 'k', metaKey: true }];
     expect(mac.handledKeys(keys)).toBe(keys);
@@ -55,6 +63,14 @@ describe('on windows', () => {
     expect(`${platform.MOD}K`).toBe('Ctrl+K');
     expect(`${platform.ALT}click`).toBe('Alt+click');
     expect(platform.DEVICE).toBe('PC');
+  });
+
+  it('uses the Windows Ollama installer, PowerShell and Start menu', () => {
+    expect(platform.OLLAMA_DOWNLOAD_URL).toBe('https://ollama.com/download/OllamaSetup.exe');
+    expect(platform.OLLAMA_SERVE_COMMAND).toBe('$env:LLAMA_ARG_CACHE_RAM=0; ollama serve');
+    expect(platform.SHELL_NAME).toBe('PowerShell');
+    expect(platform.APP_LAUNCHER).toBe('the Start menu');
+    expect(platform.OLLAMA_INSTALL_HINT).toContain('OllamaSetup.exe');
   });
 
   it('maps keyDownEvents to the react-native-windows `code` shape', () => {

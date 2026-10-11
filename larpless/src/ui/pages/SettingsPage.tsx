@@ -16,6 +16,7 @@ import { isLive } from '../lib/actions';
 import { APPEARANCE_OPTIONS, POMODORO_OPTIONS, POWER_OPTIONS, SOUNDS, SOUND_ICON, SOUND_LABEL, STRICTNESS_OPTIONS } from '../lib/labels';
 import { ollamaLine } from '../layout/Sidebar';
 import { colors, fonts, layout, radius, space, tag, themed } from '../theme';
+import { OLLAMA_SERVE_COMMAND } from '../platform';
 
 /** Local mirror of settings so controls respond instantly; every change also goes to updateSettings. */
 function useSettingsDraft(): [Settings, (patch: Partial<Settings>) => void] {
@@ -151,7 +152,7 @@ export function SettingsPage() {
             ) : null}
           </View>
           {host.promptCache === 'default' && host.server !== 'app' ? (
-            <CodeBlock code="LLAMA_ARG_CACHE_RAM=0 ollama serve" style={styles.code} />
+            <CodeBlock code={OLLAMA_SERVE_COMMAND} style={styles.code} />
           ) : null}
           {prepared === 'failed' ? (
             <Text variant="small" color={tag.red.text}>

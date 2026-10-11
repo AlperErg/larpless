@@ -19,7 +19,7 @@ import { PageBody } from '../layout/Page';
 import { courseNameProblem, draftsFromModules, modulesFromDrafts } from '../lib/modules';
 import type { ModuleDraft } from '../lib/modules';
 import { colors, motion, radius, space, tag, themed } from '../theme';
-import { ANIMATE, DEVICE, IS_WINDOWS, MotionView } from '../platform';
+import { ANIMATE, APP_LAUNCHER, DEVICE, IS_WINDOWS, MotionView, OLLAMA_DOWNLOAD_URL, OLLAMA_INSTALL_HINT, OLLAMA_SERVE_COMMAND, SHELL_NAME } from '../platform';
 import { LIBRARY_MODULES } from '../../core/subjectLibrary';
 
 const STEPS = ['Your modules', 'Permissions', 'Ollama', 'AI model'] as const;
@@ -324,10 +324,10 @@ function OllamaStep({ onBack, onNext }: { onBack: () => void; onNext: () => void
     body = `Nothing answers at ${url}. Check the address in Settings.`;
   } else if (installed) {
     t = { label: 'Not running', color: 'orange' };
-    body = host?.appInstalled ? 'Installed. LarpLess opens it in the background.' : 'Installed. Start it in Terminal:';
+    body = host?.appInstalled ? 'Installed. LarpLess opens it in the background.' : `Installed. Start it in ${SHELL_NAME}:`;
   } else {
     t = { label: 'Not installed', color: 'gray' };
-    body = 'Free, and needs no account. Open the downloaded Ollama.dmg and drag Ollama into Applications; this page notices when it’s there.';
+    body = `Free, and needs no account. ${OLLAMA_INSTALL_HINT}`;
   }
 
   return (
@@ -357,7 +357,7 @@ function OllamaStep({ onBack, onNext }: { onBack: () => void; onNext: () => void
               icon="↓"
               variant="secondary"
               onPress={() => {
-                Linking.openURL(config.OLLAMA_DOWNLOAD_URL).catch(() => {});
+                Linking.openURL(OLLAMA_DOWNLOAD_URL).catch(() => {});
               }}
               style={styles.gapLeft}
             />
@@ -367,11 +367,11 @@ function OllamaStep({ onBack, onNext }: { onBack: () => void; onNext: () => void
           ) : null}
         </View>
         {local && !running && !starting && installed && !host?.appInstalled ? (
-          <CodeBlock code="LLAMA_ARG_CACHE_RAM=0 ollama serve" style={styles.permExtra} />
+          <CodeBlock code={OLLAMA_SERVE_COMMAND} style={styles.permExtra} />
         ) : null}
         {prepared === 'failed' && !running && !starting ? (
           <Text testID="ollama-open-failed" variant="small" color={tag.red.text} style={styles.permExtra}>
-            Ollama didn’t start. Try opening it from Applications.
+            Ollama didn’t start. Try opening it from {APP_LAUNCHER}.
           </Text>
         ) : null}
         {running && local ? <MemoryNote /> : null}
@@ -404,7 +404,7 @@ function MemoryNote() {
         <Text variant="small">
           Ollama keeps up to 8 GB of RAM in a prompt cache LarpLess never reuses. To turn it off, start Ollama with:
         </Text>
-        <CodeBlock code="LLAMA_ARG_CACHE_RAM=0 ollama serve" style={styles.codeGap} />
+        <CodeBlock code={OLLAMA_SERVE_COMMAND} style={styles.codeGap} />
       </View>
     );
   }
