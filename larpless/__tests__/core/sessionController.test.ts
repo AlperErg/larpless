@@ -63,7 +63,13 @@ function setup(opts: { settings?: Partial<Settings>; native?: Partial<NativeApis
     },
     notifications: { requestPermission: jest.fn(async () => 'granted' as const), post: jest.fn(async () => {}) },
     sound: { play: jest.fn(async () => {}), setVolume: jest.fn(), duck: jest.fn(), chime: jest.fn() },
-    appShell: { beginSessionActivity: jest.fn(), endSessionActivity: jest.fn(), bringToFront: jest.fn(), onMenuCommand: () => () => {} },
+    appShell: {
+      beginSessionActivity: jest.fn(),
+      endSessionActivity: jest.fn(),
+      bringToFront: jest.fn(),
+      stopOllama: jest.fn(),
+      onMenuCommand: () => () => {},
+    },
     ...opts.native,
   };
   const db = createDb(createMemoryKv());
@@ -282,6 +288,7 @@ describe('sessionController', () => {
     expect(h.native.panel.hide).toHaveBeenCalled();
     expect(h.native.sound.play).toHaveBeenLastCalledWith('off');
     expect(h.native.appShell.endSessionActivity).toHaveBeenCalled();
+    expect(h.native.appShell.stopOllama).toHaveBeenCalledTimes(1);
     expect(h.webcamStop).toHaveBeenCalled();
     expect(h.unload).toHaveBeenCalledTimes(1);
     expect(jest.getTimerCount()).toBe(0);
@@ -774,12 +781,14 @@ describe('sessionController', () => {
       expect(h.warmUp).toHaveBeenCalledWith(fixtureModules);
       await h.ctrl.end();
       expect(h.unload).toHaveBeenCalledTimes(1);
+      expect(h.native.appShell.stopOllama).toHaveBeenCalledTimes(1);
 
       const d = setup();
       await d.ctrl.start({ pomodoro: 'off', demo: true });
       await d.ctrl.end();
       expect(d.warmUp).not.toHaveBeenCalled();
       expect(d.unload).not.toHaveBeenCalled();
+      expect(d.native.appShell.stopOllama).not.toHaveBeenCalled();
     });
   });
 });

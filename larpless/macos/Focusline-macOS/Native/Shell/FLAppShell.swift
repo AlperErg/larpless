@@ -66,10 +66,37 @@ final class FLAppShell: RCTEventEmitter {
   private static var activityBeganAt: Date?
   private var hasListeners = false
 
+  private static var quitHooked = false
+
   override init() {
     super.init()
     FLAppShell.current = self
+    if !Self.quitHooked {
+      Self.quitHooked = true
+      NotificationCenter.default.addObserver(
+        forName: NSApplication.willTerminateNotification, object: nil, queue: .main
+      ) { _ in
+        FLAppShell.stopLocalOllama()
+      }
+    }
     DispatchQueue.main.async { MainActor.assumeIsolated { FLShellMenu.install() } }
+  }
+
+  /// Quits the Ollama menu app and its server. The loaded model lives in that process.
+  @objc static func stopLocalOllama() {
+    for app in NSWorkspace.shared.runningApplications {
+      let name = app.localizedName ?? ""
+      let id = app.bundleIdentifier ?? ""
+      if name == "Ollama" || id == "com.electron.ollama" {
+        app.forceTerminate()
+      }
+    }
+    let task = Process()
+    task.executableURL = URL(fileURLWithPath: "/usr/bin/killall")
+    task.arguments = ["ollama"]
+    task.standardOutput = FileHandle.nullDevice
+    task.standardError = FileHandle.nullDevice
+    try? task.run()
   }
 
   // Touches AppKit (main menu) at init.
@@ -103,6 +130,10 @@ final class FLAppShell: RCTEventEmitter {
     Self.activity = nil
     Self.activityBeganAt = nil
     flShellLog("[FLAppShell] session activity ended")
+  }
+
+  @objc func stopOllama() {
+    Self.stopLocalOllama()
   }
 
   @objc func bringToFront() {

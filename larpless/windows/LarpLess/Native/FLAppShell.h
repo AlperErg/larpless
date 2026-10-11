@@ -10,10 +10,39 @@
 
 #include <atomic>
 #include <mutex>
+#include <vector>
 
 #include "FLWindow.h"
 
+#include <TlHelp32.h>
+
 namespace LarpLess {
+
+// Quits the local Ollama tray app and its server. The loaded model lives in that process, so this
+// is what frees the weights when the session ends or the app closes. No-op when Ollama isn't running.
+inline void StopLocalOllama() noexcept {
+  const HANDLE snap{CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)};
+  if (snap == INVALID_HANDLE_VALUE) return;
+  std::vector<DWORD> apps, servers;
+  PROCESSENTRY32W entry{};
+  entry.dwSize = sizeof(entry);
+  if (Process32FirstW(snap, &entry)) {
+    do {
+      // The tray app restarts ollama.exe, so it has to go first.
+      if (_wcsicmp(entry.szExeFile, L"ollama app.exe") == 0) apps.push_back(entry.th32ProcessID);
+      else if (_wcsicmp(entry.szExeFile, L"ollama.exe") == 0) servers.push_back(entry.th32ProcessID);
+    } while (Process32NextW(snap, &entry));
+  }
+  CloseHandle(snap);
+  const auto kill = [](DWORD pid) noexcept {
+    const HANDLE process{OpenProcess(PROCESS_TERMINATE, FALSE, pid)};
+    if (!process) return;
+    TerminateProcess(process, 0);
+    CloseHandle(process);
+  };
+  for (const DWORD pid : apps) kill(pid);
+  for (const DWORD pid : servers) kill(pid);
+}
 
 REACT_MODULE(FLAppShell)
 struct FLAppShell {
@@ -98,6 +127,11 @@ struct FLAppShell {
   REACT_METHOD(BringToFront, L"bringToFront")
   void BringToFront() noexcept {
     BringMainWindowToFront(m_context);
+  }
+
+  REACT_METHOD(StopOllama, L"stopOllama")
+  void StopOllama() noexcept {
+    StopLocalOllama();
   }
 
   // NativeEventEmitter bookkeeping: only emit while JS listens.

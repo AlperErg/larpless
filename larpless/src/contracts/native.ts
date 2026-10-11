@@ -105,6 +105,7 @@ export interface AppShellApi {
   beginSessionActivity(): void;   // prevents App Nap from throttling JS timers
   endSessionActivity(): void;
   bringToFront(): void;
+  stopOllama(): void;             // quit the local Ollama app and server; the loaded model goes with them
   onMenuCommand(cb: (c: MenuCommand) => void): Unsubscribe;   // event 'FLMenuCommand'
 }
 
