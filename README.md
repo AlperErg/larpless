@@ -4,7 +4,7 @@
 
 <p align="center"><img src="docs/images/home-screen.webp" alt="LarpLess home screen: Start session, Pomodoro presets, streak heatmap and recent sessions" width="800"></p>
 
-**Strava for studying, as a native Mac app.** LarpLess watches your screen and webcam *on-device*, works out which subject you are studying or if you are distracted every 10 seconds, nudges you when you drift to Instagram on your screen or if you pick up your phone, and gives you a study session breakdown when you finish *(like Strava)*. If you want, you can then share the session stats with friends.
+**Strava for studying, as a native Mac app.** LarpLess watches your screen and webcam *on-device*, works out which subject you are studying or if you are distracted every 10 to 30 seconds, nudges you when you drift to Instagram on your screen or if you pick up your phone, and gives you a study session breakdown when you finish *(like Strava)*. If you want, you can then share the session stats with friends.
 
 It was built in one hackathon day with **react-native-macos**: one orchestrator ran four parallel Claude Code agents (plus a fifth for the social features), each in its own git worktree. It also runs on **Windows 10/11** through react-native-windows, with C++ versions of the same native modules (see [Windows](#windows)).
 
@@ -19,8 +19,10 @@ It was built in one hackathon day with **react-native-macos**: one orchestrator 
 | **Subjects out of the box** | A built-in library of subjects with keywords sets the labels automatically. Adding your own courses is optional. |
 | **Screen classification** | The frontmost app, the window title and (when needed) a screenshot go to a local vision model (`qwen3-vl:4b` via Ollama). It judges the *content*: a YouTube lecture counts as study, YouTube Shorts doesn't. |
 | **Rules + cache fast path** | Known distractions (Instagram, TikTok, Reddit, Netflix, Discord, …) are flagged from the window title alone, and an unchanged window reuses the last verdict. Most checks need no screenshot. |
-| **Webcam presence & phone detection** | Apple Vision detects whether you are there and CoreML **YOLO11n** spots a phone, at 1 fps, natively. |
+| **Power profiles** | Eco, Medium or High sets how often the screen is checked and how big the screenshot is. A session that falls behind steps down on its own, so slower Macs still get answers. |
+| **Webcam presence & phone detection** | CoreML **YOLO11n** detects whether you are there and spots a phone, at 1 fps, natively. |
 | **Floating timer** | A SwiftUI `NSPanel` that floats over every app and Space. It shows green when you're studying, red when you're distracted, grey when you're away and blue on breaks. Hover it for Pomodoro, sound and session controls. |
+| **Now playing** | A strip under the timer shows the current song, the time left, and previous / play / next. The title is shown, never saved. |
 | **Pomodoro** | An optional study format of 25 minutes of focus and a subsequent 5 minute break or 50/10 is available. |
 | **Escalating alerts** | Panel turns red → notification + soft chime → second notification + pulse. A "Back on track" flash when you return. Strictness: 2 / 5 / 10 min. |
 | **Ambient sound** | White, pink and brown noise generated with `AVAudioEngine`, ducked during breaks. |
@@ -38,7 +40,7 @@ The UI is styled after Notion: Inter + Instrument Serif, the Notion tag palette,
 flowchart LR
   subgraph swift [Swift, in process]
     SC[FLScreenCapture] -->|snapshot, memory only| F
-    WC[FLWebcam: Vision + YOLO 1 fps] -->|samples| F
+    WC[FLWebcam: YOLO 1 fps] -->|samples| F
     PN[FLFloatingPanel NSPanel] -->|panel actions| F
     AS[FLAppShell: menu, App Nap] -->|menu commands| F
     NT[FLNotifications]
@@ -56,7 +58,7 @@ flowchart LR
   UI -->|store actions| CTRL
 ```
 
-The session controller runs two cycles: a **live** one every second that keeps the floating panel current, and a **10 second chunk** that records what you did. Both label the screen the same way.
+The session controller runs two cycles: a **live** one every second that keeps the floating panel current, and a **chunk** of 10, 15 or 30 s (set by the [power profile](#power-profiles)) that records what you did. Both label the screen the same way.
 
 ### Labelling the screen
 
@@ -65,24 +67,38 @@ The classifier stops at the cheapest step that gives an answer:
 1. **LarpLess in front:** reuse the previous verdict.
 2. **Rules:** a distraction keyword in the app or window title → `distracted`. No screenshot.
 3. **Cache:** same app and title as a verdict less than 2 min old → reuse it. No screenshot.
-4. **VLM:** take a screenshot and classify it with the vision model in Ollama (about 3 s). If a check for the same window is already running, it waits for that result instead of taking a second screenshot.
+4. **VLM:** take a screenshot and classify it with the vision model in Ollama (about 3 s on a fast Mac). Only one vision call runs at a time, and it is allowed to finish. A check for the same window shares its result. If you switched windows meanwhile, one follow-up reads whatever is in front when the call returns, so windows you only passed through are never captured.
 
 ### Live: what the panel shows
 
-- **Window changes:** every second the controller reads the frontmost app and title, which needs no screenshot. Once a new window has stayed in front for a second, it is labelled straight away: about 1.5 s through a rule or the cache, about 4 s through the VLM. Quick ⌘-Tabs (Alt-Tabs on Windows) are ignored, and a result for a window you have already left is dropped.
+- **Window changes:** every second the controller reads the frontmost app and title, which needs no screenshot. Once a new window has stayed in front for the profile's settle time (1 s on High, 2 s on Medium, 3 s on Eco), it is labelled straight away: within about half a second through a rule or the cache, about 3 s later through the VLM. Quick ⌘-Tabs (Alt-Tabs on Windows) are ignored, and a result for a window you have already left is dropped.
 - **Webcam (1 fps):** `Away` after 5 s without you, `Phone` when it shows in 2 of the last 3 samples. While you are away, no window checks or screenshots happen.
 
-### Every 10 s: the chunk that is stored
+### Every chunk: what is stored
 
 1. **Webcam:** person absent for more than ⅔ of the chunk → `away`, with no screen check.
 2. **Screen:** otherwise label the screen as above. This usually reuses the live check from the cache, so the chunk costs no extra screenshot.
 3. **Fuse** the screen verdict with the chunk's webcam samples (phone visible for more than ⅙ → `distracted · phone`) into a `Chunk`, save it to the history and run the alerts, which escalate per chunk.
 
-Failed or timed-out checks give `unknown`, which is left out of the focus %.
+Failed or timed-out checks give `unknown`, which is left out of the focus %. A vision call may take up to 30 s. One that hits that limit pauses vision checks for one chunk, so a struggling Mac isn't handed the next screenshot straight away.
+
+### Power profiles
+
+Settings → Focus → **Power** picks how hard LarpLess works. Medium is the default.
+
+| | Chunk | Settle | Screenshot | Cache | Ollama keep-alive |
+| --- | --- | --- | --- | --- | --- |
+| **Eco** | 30 s | 3 s | 768 px, JPEG 0.5 | 3 min | 5 min |
+| **Medium** | 15 s | 2 s | 1024 px, JPEG 0.6 | 2 min | 15 min |
+| **High** | 10 s | 1 s | 1280 px, JPEG 0.7 | 2 min | 30 min |
+
+The keep-alive is how long Ollama keeps the model in memory after the last check. It only matters during long gaps such as Pomodoro breaks, because checks during a session keep resetting it.
+
+The saved profile is a ceiling. If a vision call takes longer than a chunk, or you go through three different windows during one call (the one being checked included), the session steps down one level (High → Medium → Eco) and stays there until it ends. The step is not saved, so the next session starts at your chosen profile again.
 
 ### The model
 
-Starting a session warms the model up, which takes about 3 s while the first window settles, so the first check doesn't also wait for the model to load. The subject list sits in the system prompt, which is identical on every check, so Ollama reuses it and only processes the new screenshot and window line. Ending a session unloads the model to free its memory.
+Starting a session warms the model up, which takes about 3 s while the first window settles, so the first check doesn't also wait for the model to load. The subject list sits in the system prompt, which is identical on every check, so Ollama reuses it and only processes the new screenshot and window line. Ending a session unloads the model to free its memory right away instead of waiting out the keep-alive.
 
 **Layering:** `ui → store → core → native facades → Swift`. `src/core` is pure TypeScript with injected dependencies, so the whole session loop runs under Jest with fake timers.
 
@@ -91,18 +107,35 @@ Starting a session warms the model up, which takes about 3 s while the first win
 - **App:** react-native 0.81.6 + react-native-macos 0.81.9, TypeScript, Hermes. It runs Fabric + bridgeless; the legacy-style native modules work through the interop layer.
 - **State / storage:** zustand 5, AsyncStorage 2.2.0 (pinned), date-fns 4.
 - **Native (Swift 5, macOS 14+):** ScreenCaptureKit, AVFoundation, Vision, CoreML, UserNotifications, AppKit, SwiftUI.
-- **Models:** Ollama `qwen3-vl:4b` and YOLO11n CoreML (`nms=True`, bundled).
+- **Now playing:** a vendored [mediaremote-adapter](https://github.com/ungive/mediaremote-adapter) (BSD-3-Clause) run through `/usr/bin/perl`. Since macOS 15.4, a Developer ID app can't read MediaRemote itself.
+- **Models:** Ollama `qwen3-vl:4b` and YOLO11n CoreML (`nms=True`, bundled; presence and phone).
 - **Social:** `@supabase/supabase-js` + `react-native-url-polyfill`.
-- **Windows:** react-native-windows 0.81 (C++ app, Fabric, WinAppSDK 1.8). Native modules in C++/WinRT: Direct2D + DirectWrite, XAudio2, MediaCapture + FaceDetector, WIC, toast notifications.
+- **Website:** Vite + TypeScript in `site/`.
+- **Windows:** react-native-windows 0.81 (C++ app, Fabric, WinAppSDK 1.8). Native modules in C++/WinRT: Direct2D + DirectWrite, XAudio2, MediaCapture, WIC, toast notifications.
 
 ## Getting started
 
-### Requirements
+### Hardware Requirements
 
-- An Apple-silicon Mac with 16 GB of RAM or more on **macOS 14.5** or above.
+#### Minimum Requirements
+
+- Mac with an apple silicon chip and 16 GB of RAM or more
+- **macOS 14.5** Sonoma or above.
+
+#### Recommended Requirements
+
+This app relies on a VLM which is a GPU-intensive process. For a responsive experience, processors with strong GPU performance is needed. M-series chips that have more GPU cores which are the Pro, Max and Ultra lineups will perform much better than a regular M-series chip.
+It is also worth considering that performance may degrade over time for MacBook Airs since they have no active cooling.
+
+- Mac with Apple M4 or M1 Pro or M1 Max chip
+- 24 GB of RAM or more
+
+### Software Requirements
+
 - **Xcode 16.1+**.
 - **Node 22** or above.
-- **Cocoapods**.
+- **Cocoapods** (`brew install cocoapods`).
+- **CMake** (`brew install cmake`).
 - **[Ollama](https://ollama.com)** running locally, with the vision model pulled:
 
 ```bash
@@ -115,7 +148,7 @@ LarpLess asks Ollama for a 4K context and unloads the model when a session ends.
 open --env LLAMA_ARG_CACHE_RAM=0 -a Ollama
 ```
 
-This lasts until Ollama is quit (`launchctl setenv` does not reach the Ollama app).
+This lasts until Ollama is quit.
 
 ### Install
 
@@ -200,7 +233,7 @@ This starts Metro on port 8081 if it isn't already running (log in `.logs/metro-
 ### Demo mode
 
 - **⌥-click Start** on Home, or ⌘K (Ctrl+K on Windows) → *Start demo session*: replays fixture chunks through the real store and floating panel.
-- ⌘K → *Toggle demo fast mode*: short alert thresholds (20 s / 50 s instead of minutes).
+- ⌘K → *Toggle demo fast mode*: short alert thresholds (20 s / 50 s instead of minutes). How often the screen is checked still follows the power profile.
 - `node scripts/demo-social.mjs seed`: creates demo accounts with friendships and sample posts. Also `accept`, `request <user>` and `status`.
 
 ## Development
@@ -218,6 +251,14 @@ Run the Jest suites (`__tests__/core`, `social`, `ui`):
 ```bash
 npm test
 ```
+
+Clean previous macOS build products before a fresh native rebuild:
+
+```bash
+./scripts/clean-build.sh
+```
+
+Run this from `larpless/`. The cleanup script stops a running `LarpLess` app and removes `macos/build` plus matching Xcode `Focusline-*` DerivedData.
 
 Build only:
 
@@ -245,7 +286,15 @@ log show --last 5m --style compact --predicate 'subsystem == "com.larpless.app"'
 
 **Classifier bench.** `node scripts/bench-classifier.ts --model qwen3-vl:4b` scores the prompt against `bench/<expected>__<desc>.png`. If that folder is empty it renders 10 synthetic mock-ups instead and never captures the real screen. Add `--clean` to delete the images afterwards.
 
-**Adding native code.** `macos/Focusline-macOS/Native/` is an Xcode *synchronized folder*: drop files in and they join the target, with no `project.pbxproj` edits. Resources are flattened into the bundle, so prefix every type and file name (`FLCapture…`, `FLShell…`).
+**Adding native code.** `macos/Focusline-macOS/Native/` is an Xcode *synchronized folder*: drop files in and they join the target, with no `project.pbxproj` edits. Resources are flattened into the bundle, so prefix every type and file name (`FLCapture…`, `FLShell…`). The one exception is the **Bundle MediaRemote adapter** run-script phase in `project.pbxproj`: it calls `macos/scripts/build-mediaremote-adapter.sh`, which builds `macos/vendor/mediaremote-adapter` with CMake and copies the framework and the perl launcher into the app's Resources.
+
+**Website.** The coming-soon page lives in `site/` at the repo root:
+
+```bash
+cd site && npm install && npm run dev
+```
+
+`npm run build` type-checks and writes the static site.
 
 On Windows each module is one header in `windows/LarpLess/Native/` (`REACT_MODULE` / `REACT_METHOD` / `REACT_EVENT`). Include it in `LarpLess.cpp` and add a `ClInclude` to `LarpLess.vcxproj`. Files to ship with the app go in `windows/LarpLess/Assets/` as `<None … DeploymentContent="true">` items. To rebuild without the script (Metro already running), use `npx @react-native-community/cli run-windows --no-packager --logging`. Two quirks of the bridgeless runtime: `ReactContext::JSDispatcher()` is empty, so emit events directly (that's thread-safe), and blocking `.get()` on WinRT async calls must run off the UI (STA) thread.
 
@@ -254,5 +303,7 @@ On Windows each module is one header in `windows/LarpLess/Native/` (`REACT_MODUL
 - Screen and webcam frames stay in memory only. They never go to disk, AsyncStorage, temp files, logs, or the network (except local Ollama).
 - Snapshots, base64 strings, pixel buffers and `CGImage`s are never logged. Logs carry sizes and timings only.
 - Only labels are persisted. Window titles are never stored.
+- The now-playing title and artist stay inside the Swift panel. They are never sent to JS, logged or stored, and the debug OCR scan skips the media strip. Settings keep only the on/off toggle and drop any key they don't know on load and on save.
+- The now-playing helper is started with `--no-artwork`, so no album art passes through the app.
 - `privacy.framesStored` is the constant `0`.
 - Nothing is captured during Pomodoro breaks or while you're away.

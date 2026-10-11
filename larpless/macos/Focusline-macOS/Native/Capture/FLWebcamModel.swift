@@ -3,7 +3,7 @@ import Foundation
 import Vision
 
 /// Lazily loads the bundled YOLO11n CoreML model (`Models/yolo11n.mlpackage`, nms=True) once per process.
-/// If loading fails, phone detection is disabled and presence detection keeps working.
+/// Presence and phone both come from this model. If loading fails, no webcam samples are emitted.
 final class FLWebcamModel: @unchecked Sendable {
   static let shared = FLWebcamModel()
 
@@ -52,7 +52,7 @@ final class FLWebcamModel: @unchecked Sendable {
         state = .loaded
         lock.unlock()
       } catch {
-        FLCaptureLog.log("[FLWebcam] YOLO load failed, phone detection disabled: \(error.localizedDescription)")
+        FLCaptureLog.log("[FLWebcam] YOLO load failed, webcam samples disabled: \(error.localizedDescription)")
         lock.lock()
         state = .failed
         lock.unlock()
