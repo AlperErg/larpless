@@ -55,10 +55,12 @@ export function SummaryPage() {
   // Optimistic relabels so the bar and tags react instantly; the store/db is the source of truth.
   const [overrides, setOverrides] = useState<Record<string, Patch>>({});
   useEffect(() => setOverrides({}), [summary?.id]);
-  const baseChunks = isCurrent ? storeChunks : loaded ?? [];
   const chunks = useMemo(
-    () => baseChunks.map((c) => (overrides[c.id] ? { ...c, ...overrides[c.id], source: 'user' as const } : c)),
-    [baseChunks, overrides],
+    () =>
+      (isCurrent ? storeChunks : loaded ?? []).map((c) =>
+        overrides[c.id] ? { ...c, ...overrides[c.id], source: 'user' as const } : c,
+      ),
+    [isCurrent, storeChunks, loaded, overrides],
   );
 
   if (!summary) {

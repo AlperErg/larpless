@@ -10,7 +10,6 @@ import { useNavStore } from '../../store/navStore';
 import { useOllamaStore } from '../../store/ollamaStore';
 import { useSessionStore } from '../../store/sessionStore';
 import { useSocialStore } from '../../store/socialStore';
-import { Button, MacPressable, MacTextInput, Segmented, Switch, Text } from '../components';
 import { Button, CodeBlock, MacPressable, MacTextInput, ModelDownload, Segmented, Switch, Text } from '../components';
 import { Page } from '../layout/Page';
 import { isLive } from '../lib/actions';
@@ -335,4 +334,4 @@ const styles = themed(() => StyleSheet.create({
   volPct: { marginLeft: space.sm, width: 36 },
   gapLeft: { marginLeft: space.md },
   code: { alignSelf: 'stretch', maxWidth: 420, marginTop: space.xs },
-});
+}));
