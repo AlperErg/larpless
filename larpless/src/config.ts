@@ -17,6 +17,7 @@ export const DEFAULT_SETTINGS: Settings = {
   powerProfile: 'medium',
   demoFast: false,
   webcamEnabled: true,
+  nowPlayingEnabled: true,
   soundsEnabled: true,
   defaultSound: 'off',
   volume: 0.5,

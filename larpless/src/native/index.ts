@@ -8,6 +8,7 @@ import { panel } from './panel';
 import { notifications } from './notifications';
 import { sound } from './sound';
 import { appShell } from './appShell';
+import { nowPlaying } from './nowPlaying';
 import { mockApis } from './mock';
 
 function pick<K extends keyof NativeApis>(key: K, moduleName: string, real: NativeApis[K]): NativeApis[K] {
@@ -27,4 +28,5 @@ export const native: NativeApis = {
   notifications: pick('notifications', 'FLNotifications', notifications),
   sound: pick('sound', 'FLSound', sound),
   appShell: pick('appShell', 'FLAppShell', appShell),
+  nowPlaying: pick('nowPlaying', 'FLNowPlaying', nowPlaying),
 };

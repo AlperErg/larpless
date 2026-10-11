@@ -12,6 +12,7 @@
 // Including them here registers them with AddAttributedModules below.
 #include "Native/FLAppShell.h"
 #include "Native/FLFloatingPanel.h"
+#include "Native/FLNowPlaying.h"
 #include "Native/FLNotifications.h"
 #include "Native/FLPermissions.h"
 #include "Native/FLPing.h"

@@ -1,11 +1,14 @@
 // FLFloatingPanel: the floating timer, the Windows twin of Native/Shell/FLFloatingPanel.swift + the SwiftUI
-// FLShellPanelView. A native always-on-top, non-activating 300x170 window drawn with Direct2D/DirectWrite
-// (bundled Inter + Instrument Serif), hosted on the UI thread.
+// FLShellPanelView. A native always-on-top, non-activating window drawn with Direct2D/DirectWrite
+// (bundled Inter + Instrument Serif), hosted on the UI thread. 300x170, growing to 300x206 (top edge
+// anchored) while a system media session is active.
 // - show() / hide() / update(partial state) / FLPanelAction events: same contract as macOS.
 // - Compact view: serif timer, status pill, subtitle, Pomodoro ring + dots + footer, tint crossfade, pulse,
 //   "Back on track" flash. Hover shows the control hub (hidden 600 ms after the mouse leaves).
 // - Drag anywhere that isn't a control to move it; excluded from screen capture.
 #pragma once
+
+#include "FLNowPlaying.h"
 
 #include <NativeModules.h>
 #include <d2d1_1.h>
@@ -41,7 +44,8 @@ using JSValue = winrt::Microsoft::ReactNative::JSValue;
 using JSValueObject = winrt::Microsoft::ReactNative::JSValueObject;
 using Microsoft::WRL::ComPtr;
 
-constexpr float kWidth{300}, kHeight{170}, kMargin{14}, kRadius{10}, kPad{14};
+constexpr float kWidth{300}, kHeight{170}, kMediaStrip{36}, kMargin{14}, kRadius{10}, kPad{14};
+constexpr UINT kMediaMessage{WM_APP + 41};
 
 struct Rgb {
   float r, g, b;
@@ -147,7 +151,9 @@ class Window {
 
   void Show() {
     if (!Create()) return;
+    m_mediaShown = FLNowPlayingState::Instance().Snapshot().active;
     if (!m_userMoved || !OnSomeMonitor()) PlaceDefault();
+    else FitMediaHeight();
     ShowWindow(m_hwnd, SW_SHOWNOACTIVATE);
     SetWindowPos(m_hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
     Render();
@@ -263,6 +269,9 @@ class Window {
     m_hwnd = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_LAYERED, wc.lpszClassName,
                              L"LarpLess timer", WS_POPUP, 0, 0, 1, 1, nullptr, nullptr, wc.hInstance, this);
     if (!m_hwnd) return false;
+    FLNowPlayingState::Instance().SetListener([] {
+      if (HWND hwnd = Window::Instance().Hwnd()) PostMessageW(hwnd, kMediaMessage, 0, 0);
+    });
     SetWindowDisplayAffinity(m_hwnd, m_capturable ? WDA_NONE : WDA_EXCLUDEFROMCAPTURE); // never in LarpLess's own captures
     m_scale = GetDpiForWindow(m_hwnd) / 96.0f;
     return true;
@@ -335,7 +344,7 @@ class Window {
     UINT dpiX{96}, dpiY{96};
     GetDpiForMonitor(MonitorFromPoint({0, 0}, MONITOR_DEFAULTTOPRIMARY), MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
     m_scale = dpiX / 96.0f;
-    const int w{Px(kWidth + 2 * kMargin)}, h{Px(kHeight + 2 * kMargin)};
+    const int w{Px(kWidth + 2 * kMargin)}, h{Px(PanelDipHeight() + 2 * kMargin)};
     const int x{mi.rcWork.right - Px(16) - Px(kWidth + kMargin)};
     const int y{mi.rcWork.top + Px(16) - Px(kMargin)};
     SetWindowPos(m_hwnd, HWND_TOPMOST, x, y, w, h, SWP_NOACTIVATE);
@@ -383,9 +392,9 @@ class Window {
     UINT delay{1000};
     if (fast) {
       delay = 16;
-    } else if (m_state.runningSinceMs) {
-      // Tick on whole displayed seconds.
-      const double ms{std::fmod(ElapsedS() * 1000.0, 1000.0)};
+    } else if (m_state.runningSinceMs || MediaPlaying()) {
+      // Tick on whole displayed seconds (study timer, or the track's time left).
+      const double ms{std::fmod((m_state.runningSinceMs ? ElapsedS() : TrackRemainingS()) * 1000.0, 1000.0)};
       delay = static_cast<UINT>(1000.0 - ms) + 5;
     }
     SetTimer(m_hwnd, kTickTimer, delay, nullptr);
@@ -437,18 +446,29 @@ class Window {
   void Render() {
     if (!m_hwnd) return;
     m_scale = GetDpiForWindow(m_hwnd) / 96.0f;
-    const int w{Px(kWidth + 2 * kMargin)}, h{Px(kHeight + 2 * kMargin)};
+    // One snapshot for this paint: the window height and the strip both follow it.
+    auto const snap{FLNowPlayingState::Instance().Snapshot()};
+    if (snap.active != m_mediaShown) {
+      m_mediaShown = snap.active;
+      RECT r{};
+      GetWindowRect(m_hwnd, &r);
+      SetWindowPos(m_hwnd, nullptr, r.left, r.top, Px(kWidth + 2 * kMargin), Px(PanelDipHeight() + 2 * kMargin),
+                   SWP_NOZORDER | SWP_NOACTIVATE);
+    }
+    const float panelH{PanelDipHeight()};
+    const int w{Px(kWidth + 2 * kMargin)}, h{Px(panelH + 2 * kMargin)};
     if (!EnsureSurface(w, h)) return;
 
     m_rt->BeginDraw();
     m_rt->Clear(D2D1::ColorF(0, 0, 0, 0));
     m_rt->SetTransform(D2D1::Matrix3x2F::Translation(kMargin, kMargin));
-    const D2D1_RECT_F panel{0, 0, kWidth, kHeight};
+    const D2D1_RECT_F panel{0, 0, kWidth, panelH};
+    const D2D1_RECT_F card{0, 0, kWidth, kHeight};
 
     // Soft shadow (stacked translucent rounded rects).
     for (int i = 6; i >= 1; --i) {
       const float g{static_cast<float>(i)};
-      RoundRect({-g, -g + 2, kWidth + g, kHeight + g + 2}, kRadius + g, {0, 0, 0}, 0.018f);
+      RoundRect({-g, -g + 2, kWidth + g, panelH + g + 2}, kRadius + g, {0, 0, 0}, 0.018f);
     }
     // White base, then the tint layer (crossfaded; modulated while pulsing).
     RoundRect(panel, kRadius, kBg);
@@ -458,18 +478,20 @@ class Window {
     const float mix{TintMix()};
     if (mix < 1) RoundRect(panel, kRadius, TintFor(m_prevTint).bg, tintAlpha * (1 - mix));
     RoundRect(panel, kRadius, tint.bg, tintAlpha * mix);
-    m_rt->DrawRoundedRectangle(D2D1::RoundedRect({0.5f, 0.5f, kWidth - 0.5f, kHeight - 0.5f}, kRadius, kRadius),
+    m_rt->DrawRoundedRectangle(D2D1::RoundedRect({0.5f, 0.5f, kWidth - 0.5f, panelH - 0.5f}, kRadius, kRadius),
                                Brush(m_state.pulse ? tint.text : kBorder, m_state.pulse ? 0.45f : 1).Get(), 1);
 
     const float hub{m_hubAlpha};
     if (hub < 1) DrawCompact(tint, 1 - hub);
     m_controls.clear();
+    m_mediaHits.clear();
     if (hub > 0) DrawHub(tint, hub);
+    if (snap.active) DrawMediaStrip(snap);
 
     if (const float flash{FlashAlpha()}; flash > 0) {
       const Tint green{TintFor("green")};
-      RoundRect(panel, kRadius, green.bg, flash);
-      Text(L"Back on track \u2713", Format(false, DWRITE_FONT_WEIGHT_SEMI_BOLD, 18, DWRITE_TEXT_ALIGNMENT_CENTER).Get(), panel,
+      RoundRect(card, kRadius, green.bg, flash);
+      Text(L"Back on track \u2713", Format(false, DWRITE_FONT_WEIGHT_SEMI_BOLD, 18, DWRITE_TEXT_ALIGNMENT_CENTER).Get(), card,
            green.text, flash);
     }
     m_rt->EndDraw();
@@ -707,6 +729,11 @@ class Window {
         return 0;
       case WM_LBUTTONDOWN: {
         const D2D1_POINT_2F p{ToPanel(lParam)};
+        for (auto const &hit : m_mediaHits) {
+          if (!InRect(hit.rect, p)) continue;
+          FLNowPlayingState::Instance().Command(hit.command);
+          return 0;
+        }
         if (m_hubTarget > 0 && m_hubAlpha > 0.05f) { // clickable as soon as the hub starts to appear
           for (auto const &control : m_controls) {
             if (!InRect(control.rect, p)) continue;
@@ -742,6 +769,11 @@ class Window {
         ReleaseCapture();
         Render();
         return 0;
+      case kMediaMessage:
+        FitMediaHeight();
+        Render();
+        Schedule();
+        return 0;
       case WM_TIMER:
         if (wParam == kLeaveTimer) {
           KillTimer(m_hwnd, kLeaveTimer);
@@ -757,6 +789,7 @@ class Window {
         SetWindowPos(m_hwnd, nullptr, suggested->left, suggested->top, suggested->right - suggested->left,
                      suggested->bottom - suggested->top, SWP_NOZORDER | SWP_NOACTIVATE);
         m_rt.Reset();
+        FitMediaHeight();
         Render();
         return 0;
       }
@@ -802,6 +835,58 @@ class Window {
   D2D1_POINT_2F m_mouse{};
   D2D1_RECT_F m_sliderTrack{};
   std::vector<Control> m_controls;
+  struct MediaHit {
+    D2D1_RECT_F rect;
+    int command;
+  };
+  std::vector<MediaHit> m_mediaHits;
+  bool m_mediaShown{false};
+
+  float PanelDipHeight() const {
+    return kHeight + (m_mediaShown ? kMediaStrip : 0);
+  }
+  bool MediaPlaying() const {
+    auto const snap{FLNowPlayingState::Instance().Snapshot()};
+    return snap.active && snap.rate > 0 && snap.hasDuration;
+  }
+  double TrackRemainingS() const {
+    return FLNowPlayingRemainingS(FLNowPlayingState::Instance().Snapshot(), NowMs());
+  }
+  // Keeps the top edge put and grows downward while a track is active.
+  void FitMediaHeight() {
+    if (!m_hwnd) return;
+    const bool show{FLNowPlayingState::Instance().Snapshot().active};
+    RECT r{};
+    GetWindowRect(m_hwnd, &r);
+    const int wantH{Px((kHeight + (show ? kMediaStrip : 0)) + 2 * kMargin)};
+    if (show == m_mediaShown && m_surfaceW != 0 && (r.bottom - r.top) == wantH) return;
+    m_mediaShown = show;
+    SetWindowPos(m_hwnd, nullptr, r.left, r.top, Px(kWidth + 2 * kMargin), Px(PanelDipHeight() + 2 * kMargin),
+                 SWP_NOZORDER | SWP_NOACTIVATE);
+  }
+  void DrawMediaStrip(FLNowPlayingTrack const &snap) {
+    if (!snap.active) return;
+    const float y{kHeight};
+    RoundRect({kPad, y, kWidth - kPad, y + 1}, 0, kBorder);
+    auto const icon{Format(false, DWRITE_FONT_WEIGHT_NORMAL, 12, DWRITE_TEXT_ALIGNMENT_CENTER, L"Segoe MDL2 Assets")};
+    auto add = [&](float x, wchar_t const *glyph, int command) {
+      const D2D1_RECT_F r{x, y + 6, x + 26, y + 32};
+      if (m_hover && InRect(r, m_mouse)) RoundRect(r, 4, kHover);
+      Text(glyph, icon.Get(), r, kText);
+      m_mediaHits.push_back({r, command});
+    };
+    add(8, L"\uE892", 0);
+    add(34, snap.rate > 0 ? L"\uE769" : L"\uE768", 1);
+    add(60, L"\uE893", 2);
+    std::wstring line{snap.title};
+    if (!snap.artist.empty()) line += L" \u00B7 " + snap.artist;
+    Text(line, Format(false, DWRITE_FONT_WEIGHT_MEDIUM, 11).Get(), {92, y + 4, kWidth - 58, y + 32}, kText);
+    if (snap.hasDuration) {
+      Text(Countdown(FLNowPlayingRemainingS(snap, NowMs())),
+           Format(false, DWRITE_FONT_WEIGHT_MEDIUM, 11, DWRITE_TEXT_ALIGNMENT_TRAILING).Get(),
+           {kWidth - 56, y + 4, kWidth - 8, y + 32}, kMuted);
+    }
+  }
 
   ComPtr<ID2D1Factory> m_d2d;
   ComPtr<IDWriteFactory5> m_dwrite;
@@ -876,6 +961,50 @@ struct FLFloatingPanel {
   REACT_METHOD(DebugSetCapturable, L"debugSetCapturable")
   void DebugSetCapturable(bool capturable) noexcept {
     m_context.UIDispatcher().Post([capturable] { Panel::Window::Instance().SetCapturable(capturable); });
+  }
+
+  // Dev harness. A dict with "title" shows that row; anything else clears it. The title is not logged.
+  REACT_METHOD(DebugSetTrack, L"debugSetTrack")
+  void DebugSetTrack(JSValueObject &&track) noexcept {
+    std::optional<FLNowPlayingTrack> parsed;
+    if (auto it{track.find("title")}; it != track.end()) {
+      auto trimmed = [](std::string const &s) {
+        const auto begin = s.find_first_not_of(" \t\r\n");
+        if (begin == std::string::npos) return std::string{};
+        const auto end = s.find_last_not_of(" \t\r\n");
+        return s.substr(begin, end - begin + 1);
+      };
+      if (auto title{it->second.TryGetString()}) {
+        auto text = trimmed(*title);
+        if (text.empty()) {
+          FLNowPlayingState::Instance().DebugSetTrack(std::nullopt);
+          return;
+        }
+        FLNowPlayingTrack row;
+        row.active = true;
+        row.title = std::wstring{winrt::to_hstring(text)};
+        if (auto artist{track.find("artist")}; artist != track.end()) {
+          if (auto artistText{artist->second.TryGetString()}) row.artist = std::wstring{winrt::to_hstring(*artistText)};
+        }
+        auto num = [&](char const *key) -> std::optional<double> {
+          auto found{track.find(key)};
+          if (found == track.end()) return std::nullopt;
+          if (auto d{found->second.TryGetDouble()}) return *d;
+          if (auto i{found->second.TryGetInt64()}) return static_cast<double>(*i);
+          return std::nullopt;
+        };
+        if (auto duration{num("durationS")}; duration && *duration > 0) {
+          row.hasDuration = true;
+          row.durationS = *duration;
+        }
+        if (auto position{num("positionS")}) row.positionS = *position;
+        if (auto at{num("positionAtMs")}) row.positionAtMs = *at;
+        else row.positionAtMs = EpochMs();
+        if (auto rate{num("rate")}) row.rate = *rate;
+        parsed = std::move(row);
+      }
+    }
+    FLNowPlayingState::Instance().DebugSetTrack(std::move(parsed));
   }
 
   REACT_METHOD(AddListener, L"addListener")

@@ -92,6 +92,11 @@ export interface SoundApi {
   chime(kind: ChimeKind): void;
 }
 
+/* ---------- FLNowPlaying ---------- */
+export interface NowPlayingApi {
+  setEnabled(on: boolean): void;
+}
+
 /* ---------- FLAppShell (WS-B) ---------- */
 export type MenuCommand = 'commandPalette' | 'startSession' | 'endSession';
 export interface AppShellApi {
@@ -109,4 +114,5 @@ export interface NativeApis {
   notifications: NotificationsApi;
   sound: SoundApi;
   appShell: AppShellApi;
+  nowPlaying: NowPlayingApi;
 }

@@ -113,6 +113,9 @@ export function SettingsPage() {
       <Row label="Webcam" hint="Presence and phone detection, on device at 1 fps.">
         <Switch testID="settings-webcam" accessibilityLabel="Webcam" value={s.webcamEnabled} onChange={(v) => update({ webcamEnabled: v })} />
       </Row>
+      <Row label="Now playing" hint="Song, time left, and skip on the timer. The title is never saved.">
+        <Switch testID="settings-now-playing" accessibilityLabel="Now playing" value={s.nowPlayingEnabled} onChange={(v) => update({ nowPlayingEnabled: v })} />
+      </Row>
 
       <SectionTitle>Sound</SectionTitle>
       <Row label="Chimes & alerts">

@@ -1,0 +1,6 @@
+source: https://github.com/ungive/mediaremote-adapter
+commit: 797729d9b16316dc313844476c153d7a107ca0df
+license: BSD-3-Clause (see LICENSE)
+
+Local change: CMakeLists.txt no longer forces a universal (x86_64 + arm64) binary.
+The Xcode run script passes CMAKE_OSX_ARCHITECTURES. A hand configure defaults to arm64.

@@ -44,6 +44,29 @@ describe('db', () => {
     expect(await db.updateChunk({ ...ch, id: 'other' })).toBe(false);
   });
 
+  it('drops a track title stuffed into settings', async () => {
+    const kv = createMemoryKv();
+    const db = createDb(kv);
+    await kv.setItem(KEYS.settings, JSON.stringify({ volume: 0.4, title: 'Secret Song', artist: 'Band' }));
+    const loaded = await db.loadSettings();
+    expect(loaded).toEqual({ ...DEFAULT_SETTINGS, volume: 0.4 });
+    expect(JSON.stringify(loaded)).not.toContain('Secret Song');
+    await db.saveSettings({ ...loaded, title: 'Nope' } as unknown as typeof DEFAULT_SETTINGS);
+    const raw = kv.map.get(KEYS.settings)!;
+    expect(raw).not.toContain('Nope');
+    expect(raw).not.toContain('title');
+    expect(raw).toContain('"volume":0.4');
+  });
+
+  it('settings saved before now playing still default the flag on', async () => {
+    const kv = createMemoryKv();
+    const db = createDb(kv);
+    await kv.setItem(KEYS.settings, JSON.stringify({ volume: 0.2 }));
+    const loaded = await db.loadSettings();
+    expect(loaded.nowPlayingEnabled).toBe(true);
+    expect(loaded).toEqual({ ...DEFAULT_SETTINGS, volume: 0.2 });
+  });
+
   it('settings merge over DEFAULT_SETTINGS; corrupt values fall back', async () => {
     const kv = createMemoryKv();
     const db = createDb(kv);

@@ -6,6 +6,7 @@ import type { Settings } from '../../src/contracts/domain';
 import { initialAppState, useAppStore } from '../../src/store/appStore';
 import { useNavStore } from '../../src/store/navStore';
 import { initialSessionState, useSessionStore } from '../../src/store/sessionStore';
+import { mockNowPlaying } from '../../src/native/mock/nowPlaying';
 import { SettingsPage } from '../../src/ui/pages/SettingsPage';
 
 function render(): ReactTestRenderer {
@@ -119,6 +120,23 @@ describe('Settings page', () => {
     await press(byTestID(r, 'settings-webcam'));
     expect(settings().webcamEnabled).toBe(true);
     expect((await stored()).webcamEnabled).toBe(true);
+    act(() => r.unmount());
+  });
+
+  it('now playing switch persists the flag and never stores a track title', async () => {
+    const r = render();
+    expect(isOn(r, 'settings-now-playing')).toBe(true);
+
+    await press(byTestID(r, 'settings-now-playing'));
+    expect(settings().nowPlayingEnabled).toBe(false);
+    expect((await stored()).nowPlayingEnabled).toBe(false);
+    expect(mockNowPlaying.enabled).toBe(false);
+    expect(mockNowPlaying).not.toHaveProperty('title');
+    expect(await AsyncStorage.getItem('fl:settings')).not.toContain('artist');
+
+    await press(byTestID(r, 'settings-now-playing'));
+    expect(settings().nowPlayingEnabled).toBe(true);
+    expect(mockNowPlaying.enabled).toBe(true);
     act(() => r.unmount());
   });
 

@@ -80,6 +80,8 @@ export interface Settings {
   powerProfile: PowerProfile;
   demoFast: boolean;                    // shorter alerts; check rate comes from powerProfile
   webcamEnabled: boolean;
+  /** System now-playing strip on the floating panel. The track title is never stored. */
+  nowPlayingEnabled: boolean;
   soundsEnabled: boolean;               // chimes + notification sound
   defaultSound: SoundId;
   volume: number;                       // 0..1

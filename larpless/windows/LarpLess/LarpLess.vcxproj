@@ -107,6 +107,7 @@
     <ClInclude Include="targetver.h" />
     <ClInclude Include="Native\FLAppShell.h" />
     <ClInclude Include="Native\FLFloatingPanel.h" />
+    <ClInclude Include="Native\FLNowPlaying.h" />
     <ClInclude Include="Native\FLNotifications.h" />
     <ClInclude Include="Native\FLPermissions.h" />
     <ClInclude Include="Native\FLPing.h" />
