@@ -188,6 +188,14 @@ Run the Jest suites (`__tests__/core`, `social`, `ui`):
 npm test
 ```
 
+Clean previous macOS build products before a fresh native rebuild:
+
+```bash
+./scripts/clean-build.sh
+```
+
+Run this from `larpless/`. The cleanup script stops a running `LarpLess` app and removes `macos/build` plus matching Xcode `Focusline-*` DerivedData.
+
 Build only:
 
 ```bash
