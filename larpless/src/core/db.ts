@@ -57,6 +57,9 @@ export function cleanSettings(raw: unknown): Settings {
     if (src[key] !== undefined) (out as unknown as Record<string, unknown>)[key] = src[key];
   }
   if (!isPowerProfile(out.powerProfile)) out.powerProfile = DEFAULT_SETTINGS.powerProfile;
+  if (out.appearance !== 'system' && out.appearance !== 'light' && out.appearance !== 'dark') {
+    out.appearance = DEFAULT_SETTINGS.appearance;
+  }
   return out;
 }
 

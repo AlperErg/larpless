@@ -16,7 +16,7 @@ import { Button, Callout, CodeBlock, EditableTable, Muted, SubjectLibrary, PageH
 import { PageBody } from '../layout/Page';
 import { courseNameProblem, draftsFromModules, modulesFromDrafts } from '../lib/modules';
 import type { ModuleDraft } from '../lib/modules';
-import { colors, motion, radius, space, tag } from '../theme';
+import { colors, motion, radius, space, tag, themed } from '../theme';
 import { ANIMATE, DEVICE, IS_WINDOWS, MotionView } from '../platform';
 import { LIBRARY_MODULES } from '../../core/subjectLibrary';
 
@@ -350,7 +350,7 @@ function OllamaStep({ onBack, onFinish }: { onBack: () => void; onFinish: () => 
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   presets: { marginTop: space.lg },
   scroll: { flex: 1, backgroundColor: colors.bg },
   scrollContent: { paddingBottom: 96 },
@@ -387,4 +387,4 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
   },
   stepLabel: { marginTop: space.lg, marginBottom: space.xs },
-});
+}));

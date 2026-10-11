@@ -27,31 +27,48 @@ struct FLNotionTag: Equatable {
   var text: Color { Color(flHex: textHex) }
 }
 
+/// Set from JS (`setColorScheme`). Views read the computed colors below.
+enum FLScheme {
+  static var dark = false
+}
+
 enum FLNotionColors {
-  // Base (light)
-  static let bg = Color(flHex: "#FFFFFF")
-  static let sidebar = Color(flHex: "#F7F6F3")
-  static let text = Color(flHex: "#37352F")
-  static let muted = Color(flHex: "#787774")
-  static let border = Color(flHex: "#E9E9E7")
-  static let hover = Color(flHex: "#EFEFED")
-  static let accent = Color(flHex: "#2383E2")
+  // Mirrors src/ui/theme.ts. Light is the cool paper canvas; dark is the landing site.
+  static var bg: Color { Color(flHex: FLScheme.dark ? "#10110F" : "#F3F5F8") }
+  static var sidebar: Color { Color(flHex: FLScheme.dark ? "#10110F" : "#F3F5F8") }
+  static var text: Color { Color(flHex: FLScheme.dark ? "#F4F1EA" : "#152033") }
+  static var muted: Color { Color(flHex: FLScheme.dark ? "#C8C3B8" : "#4C5D72") }
+  static var border: Color { Color(flHex: FLScheme.dark ? "#F4F1EA29" : "#E2E7EE") }
+  static var hover: Color { Color(flHex: FLScheme.dark ? "#2A2B28" : "#E8EDF3") }
+  static var accent: Color { Color(flHex: FLScheme.dark ? "#F4F1EA" : "#1E4ED8") }
 
-  // Base (dark, cut item; kept for completeness)
-  static let darkBg = Color(flHex: "#191919")
-  static let darkSidebar = Color(flHex: "#202020")
-  static let darkText = Color(flHex: "#FFFFFFCF")
-
-  // Tags (bg / text)
-  static let gray = FLNotionTag(bgHex: "#F1F1EF", textHex: "#787774")
-  static let brown = FLNotionTag(bgHex: "#F4EEEE", textHex: "#9F6B53")
-  static let orange = FLNotionTag(bgHex: "#FBECDD", textHex: "#D9730D")
-  static let yellow = FLNotionTag(bgHex: "#FBF3DB", textHex: "#CB912F")
-  static let green = FLNotionTag(bgHex: "#EDF3EC", textHex: "#448361")
-  static let blue = FLNotionTag(bgHex: "#E7F3F8", textHex: "#337EA9")
-  static let purple = FLNotionTag(bgHex: "#F6F3F9", textHex: "#9065B0")
-  static let pink = FLNotionTag(bgHex: "#FAF1F5", textHex: "#C14C8A")
-  static let red = FLNotionTag(bgHex: "#FDEBEC", textHex: "#D44C47")
+  static var gray: FLNotionTag {
+    FLScheme.dark ? FLNotionTag(bgHex: "#222220", textHex: "#C8C3B8") : FLNotionTag(bgHex: "#E7ECF2", textHex: "#4C5D72")
+  }
+  static var brown: FLNotionTag {
+    FLScheme.dark ? FLNotionTag(bgHex: "#3F2F28", textHex: "#DEB3A0") : FLNotionTag(bgHex: "#F4EEEE", textHex: "#9F6B53")
+  }
+  static var orange: FLNotionTag {
+    FLScheme.dark ? FLNotionTag(bgHex: "#432D1F", textHex: "#EBAF85") : FLNotionTag(bgHex: "#FBECDD", textHex: "#D9730D")
+  }
+  static var yellow: FLNotionTag {
+    FLScheme.dark ? FLNotionTag(bgHex: "#3F301B", textHex: "#DFB67B") : FLNotionTag(bgHex: "#FBF3DB", textHex: "#CB912F")
+  }
+  static var green: FLNotionTag {
+    FLScheme.dark ? FLNotionTag(bgHex: "#1A2420", textHex: "#6FBF8E") : FLNotionTag(bgHex: "#EDF3EC", textHex: "#448361")
+  }
+  static var blue: FLNotionTag {
+    FLScheme.dark ? FLNotionTag(bgHex: "#1A242C", textHex: "#7EB0D4") : FLNotionTag(bgHex: "#E7F3F8", textHex: "#337EA9")
+  }
+  static var purple: FLNotionTag {
+    FLScheme.dark ? FLNotionTag(bgHex: "#392D42", textHex: "#CFAEEA") : FLNotionTag(bgHex: "#F6F3F9", textHex: "#9065B0")
+  }
+  static var pink: FLNotionTag {
+    FLScheme.dark ? FLNotionTag(bgHex: "#432A36", textHex: "#EBA6C5") : FLNotionTag(bgHex: "#FAF1F5", textHex: "#C14C8A")
+  }
+  static var red: FLNotionTag {
+    FLScheme.dark ? FLNotionTag(bgHex: "#2A1C1B", textHex: "#E07A74") : FLNotionTag(bgHex: "#FDEBEC", textHex: "#D44C47")
+  }
 
   /// TagColor / PanelTint name → pair. Unknown names fall back to gray.
   static func tag(_ name: String) -> FLNotionTag {

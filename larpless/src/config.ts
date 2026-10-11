@@ -23,4 +23,5 @@ export const DEFAULT_SETTINGS: Settings = {
   volume: 0.5,
   pomodoroDefault: 'off',
   onboarded: false,
+  appearance: 'system',
 };

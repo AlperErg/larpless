@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { StyleSheet, Text as NativeText, View } from 'react-native';
-import { colors, fonts, layout, radius, space } from '../theme';
+import { colors, fonts, layout, radius, space, themed } from '../theme';
 import { MacTextInput } from './mac';
 import type { MacTextInputProps } from './mac';
 
@@ -62,7 +62,7 @@ function MaskedTextField({ style, ...props }: MacTextInputProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   input: {
     height: layout.controlHeight,
     paddingHorizontal: space.sm + 2,
@@ -98,4 +98,4 @@ const styles = StyleSheet.create({
   placeholder: {
     color: colors.faint,
   },
-});
+}));

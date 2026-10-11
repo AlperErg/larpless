@@ -55,6 +55,13 @@ final class FLFloatingPanel: RCTEventEmitter {
     }
   }
 
+  @objc func setColorScheme(_ scheme: NSString) {
+    let name = scheme as String
+    DispatchQueue.main.async {
+      MainActor.assumeIsolated { FLShellPanelController.shared.setColorScheme(name) }
+    }
+  }
+
   // MARK: Debug (dev harness only; see src/native/panel.ts panelDebug)
 
   @objc func debugInfo(_ resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {

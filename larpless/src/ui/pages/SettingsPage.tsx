@@ -10,9 +10,9 @@ import { useSocialStore } from '../../store/socialStore';
 import { Button, MacPressable, MacTextInput, Segmented, Switch, Text } from '../components';
 import { Page } from '../layout/Page';
 import { isLive } from '../lib/actions';
-import { POMODORO_OPTIONS, POWER_OPTIONS, SOUNDS, SOUND_ICON, SOUND_LABEL, STRICTNESS_OPTIONS } from '../lib/labels';
+import { APPEARANCE_OPTIONS, POMODORO_OPTIONS, POWER_OPTIONS, SOUNDS, SOUND_ICON, SOUND_LABEL, STRICTNESS_OPTIONS } from '../lib/labels';
 import { ollamaLine } from '../layout/Sidebar';
-import { colors, fonts, layout, radius, space, tag } from '../theme';
+import { colors, fonts, layout, radius, space, tag, themed } from '../theme';
 
 /** Local mirror of settings so controls respond instantly; every change also goes to updateSettings. */
 function useSettingsDraft(): [Settings, (patch: Partial<Settings>) => void] {
@@ -63,6 +63,15 @@ export function SettingsPage() {
 
   return (
     <Page testID="page-settings" header={{ icon: '⚙️', title: 'Settings' }}>
+      <SectionTitle>Appearance</SectionTitle>
+      <Row label="Theme" hint="System follows the display. Dark is warm paper on near-black.">
+        <Segmented
+          testID="settings-appearance"
+          options={APPEARANCE_OPTIONS}
+          value={s.appearance}
+          onChange={(v) => update({ appearance: v })}
+        />
+      </Row>
       <AccountSection />
       <SectionTitle>Local AI</SectionTitle>
       <Row label="Model" hint="Ollama vision model used to read the screen.">
@@ -235,7 +244,7 @@ function VolumeBar({ value, onChange }: { value: number; onChange: (v: number) =
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   section: { marginTop: space.xxl, marginBottom: space.xs },
   row: {
     flexDirection: 'row',
@@ -265,4 +274,4 @@ const styles = StyleSheet.create({
   volStep: { width: 14, height: 14, borderRadius: 2, marginRight: 3 },
   volPct: { marginLeft: space.sm, width: 36 },
   gapLeft: { marginLeft: space.md },
-});
+}));

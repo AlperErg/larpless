@@ -83,6 +83,8 @@ describe('db', () => {
       await db.saveSettings({ ...DEFAULT_SETTINGS, powerProfile: junk } as unknown as typeof DEFAULT_SETTINGS);
       expect((await db.loadSettings()).powerProfile).toBe('medium');
     }
+    await kv.setItem(KEYS.settings, JSON.stringify({ appearance: 'neon' }));
+    expect((await db.loadSettings()).appearance).toBe('system');
     await kv.setItem(KEYS.modules, '"oops"');
     expect(await db.loadModules()).toEqual([]);
   });

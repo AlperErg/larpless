@@ -9,7 +9,7 @@ import { useSessionStore } from '../../store/sessionStore';
 import { MacPressable } from '../components/mac';
 import { StatusDot } from '../components/StatusDot';
 import type { DotKind } from '../components/StatusDot';
-import { colors, fonts, layout, radius, space, tag } from '../theme';
+import { colors, fonts, layout, radius, space, tag, themed } from '../theme';
 import { MOD } from '../platform';
 import type { TagColor } from '../../contracts/domain';
 
@@ -149,7 +149,7 @@ function SidebarRow({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   sidebar: {
     width: layout.sidebarWidth,
     backgroundColor: colors.sidebar,
@@ -190,4 +190,4 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   ollama: { paddingHorizontal: space.sm, paddingVertical: space.xs + 2, borderRadius: radius },
   ollamaText: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16, color: colors.muted },
-});
+}));

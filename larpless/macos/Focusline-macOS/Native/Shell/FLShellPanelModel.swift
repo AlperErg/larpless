@@ -7,6 +7,15 @@ final class FLShellPanelModel: ObservableObject {
   @Published private(set) var state = FLShellPanelState()
   @Published private(set) var hubVisible = false
   @Published private(set) var flashVisible = false
+  /// "light" or "dark". The view's identity follows this so the panel repaints.
+  @Published private(set) var colorScheme = "light"
+
+  func setColorScheme(_ scheme: String) {
+    let dark = scheme == "dark"
+    FLScheme.dark = dark
+    let next = dark ? "dark" : "light"
+    if colorScheme != next { colorScheme = next }
+  }
 
   /// Hub control frames in the "flpanel" coordinate space (top-left origin). Used by the debug click synthesizer.
   var buttonFrames: [String: CGRect] = [:]

@@ -4,7 +4,7 @@
  * Opened by the native menu (FLMenuCommand 'commandPalette'), the sidebar "Search" row, or Dev tools.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text as RNText, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text as RNText, useColorScheme, View } from 'react-native';
 import type { TextInput } from 'react-native';
 import { config } from '../../config';
 import type { SessionStatus } from '../../contracts/store';
@@ -16,7 +16,7 @@ import { useSocialStore } from '../../store/socialStore';
 import { MacPressable, MacTextInput, MacView, handledKeys } from '../components/mac';
 import type { MacKeyEvent } from '../components/mac';
 import { endSession, isLive, startSession, togglePause } from '../lib/actions';
-import { colors, fonts, radius, space } from '../theme';
+import { colors, fonts, radius, space, themed } from '../theme';
 
 export interface PaletteCommand {
   id: string;
@@ -43,6 +43,9 @@ export function buildCommands(ctx: {
   devTools: boolean;
   auth?: 'signedIn' | 'signedOut';
   username?: string | null;
+  appearance?: 'system' | 'light' | 'dark';
+  /** Resolved light or dark, after `system` has followed the display. */
+  scheme?: 'light' | 'dark';
 }): PaletteCommand[] {
   const nav = useNavStore.getState();
   const out: PaletteCommand[] = [];
@@ -92,6 +95,21 @@ export function buildCommands(ctx: {
     });
   }
 
+  const appearance = ctx.appearance ?? useAppStore.getState().settings.appearance;
+  const dark = (ctx.scheme ?? (appearance === 'dark' ? 'dark' : 'light')) === 'dark';
+  out.push({
+    id: 'appearance',
+    group: 'Settings',
+    icon: '🌙',
+    title: dark ? 'Use light mode' : 'Use dark mode',
+    hint: appearance === 'system' ? 'following the system' : appearance,
+    run: () => {
+      useAppStore
+        .getState()
+        .updateSettings({ appearance: dark ? 'light' : 'dark' })
+        .catch(() => {});
+    },
+  });
   out.push({
     id: 'demo-fast',
     group: 'Settings',
@@ -127,6 +145,9 @@ function PaletteOverlay() {
   const status = useSessionStore((s) => s.status);
   const hasSummary = useSessionStore((s) => s.lastSummary != null);
   const demoFast = useAppStore((s) => s.settings.demoFast);
+  const appearance = useAppStore((s) => s.settings.appearance);
+  const system = useColorScheme();
+  const scheme = appearance === 'dark' || (appearance !== 'light' && system === 'dark') ? 'dark' : 'light';
   const social = useSocialStore((s) => s.status);
   const username = useSocialStore((s) => s.profile?.username);
   const auth = social === 'signedIn' || social === 'signedOut' ? social : undefined;
@@ -136,8 +157,8 @@ function PaletteOverlay() {
   const ran = useRef(false);
 
   const commands = useMemo(
-    () => buildCommands({ status, demoFast, hasSummary, devTools: config.SHOW_DEV_TOOLS, auth, username }),
-    [status, demoFast, hasSummary, auth, username],
+    () => buildCommands({ status, demoFast, hasSummary, devTools: config.SHOW_DEV_TOOLS, auth, username, appearance, scheme }),
+    [status, demoFast, hasSummary, auth, username, appearance, scheme],
   );
   const filtered = filterCommands(commands, query);
   const selected = Math.min(sel, Math.max(0, filtered.length - 1));
@@ -248,7 +269,7 @@ function PaletteOverlay() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   overlay: { zIndex: 100 },
   backdrop: { backgroundColor: colors.backdrop },
   cardWrap: { position: 'absolute', top: '20%', left: 0, right: 0, alignItems: 'center' },
@@ -313,4 +334,4 @@ const styles = StyleSheet.create({
     backgroundColor: colors.sidebar,
   },
   footerText: { fontFamily: fonts.regular, fontSize: 11, color: colors.faint },
-});
+}));

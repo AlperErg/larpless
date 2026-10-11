@@ -21,7 +21,7 @@ import { uiLabel, uiMeasure, uiOverflow, uiPress, uiStyle, uiText, uiType } from
 import { caughtErrors } from '../layout/ErrorBoundary';
 import { useViewport } from '../lib/viewport';
 import { Page } from '../layout/Page';
-import { colors, space } from '../theme';
+import { colors, space, themed } from '../theme';
 import { MOD } from '../platform';
 
 const FIXTURES: FixtureName[] = ['idle', 'running', 'distracted', 'break', 'summary'];
@@ -146,7 +146,7 @@ export function installUiIntrospection(): void {
   };
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   h: { marginTop: space.xl, marginBottom: space.sm },
   row: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center' },
   btn: { marginRight: space.sm, marginBottom: space.sm },
@@ -158,4 +158,4 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     minHeight: 120,
   },
-});
+}));

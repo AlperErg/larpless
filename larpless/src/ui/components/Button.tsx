@@ -32,7 +32,7 @@ export function Button({
   style,
 }: ButtonProps) {
   const [hover, setHover] = useState(false);
-  const v = VARIANTS[variant];
+  const v = variants()[variant];
   return (
     <MacPressable
       testID={testID}
@@ -62,12 +62,14 @@ export function Button({
   );
 }
 
-const VARIANTS: Record<ButtonVariant, { bg: string; hoverBg: string; text: string; border: string }> = {
-  primary: { bg: colors.accent, hoverBg: colors.accentHover, text: colors.onAccent, border: colors.accent },
-  ghost: { bg: 'transparent', hoverBg: colors.hover, text: colors.text, border: 'transparent' },
-  secondary: { bg: colors.raised, hoverBg: colors.hover, text: colors.text, border: colors.border },
-  danger: { bg: 'transparent', hoverBg: tag.red.bg, text: tag.red.text, border: 'transparent' },
-};
+function variants(): Record<ButtonVariant, { bg: string; hoverBg: string; text: string; border: string }> {
+  return {
+    primary: { bg: colors.accent, hoverBg: colors.accentHover, text: colors.onAccent, border: colors.accent },
+    ghost: { bg: 'transparent', hoverBg: colors.hover, text: colors.text, border: 'transparent' },
+    secondary: { bg: colors.raised, hoverBg: colors.hover, text: colors.text, border: colors.border },
+    danger: { bg: 'transparent', hoverBg: tag.red.bg, text: tag.red.text, border: 'transparent' },
+  };
+}
 
 const styles = StyleSheet.create({
   base: {

@@ -7,7 +7,7 @@ import { Callout, Heatmap, Strong, Tag, Text, ToggleList, sessionToggleItem } fr
 import { Page } from '../layout/Page';
 import { groupByWeek, totalsBySubject } from '../lib/derive';
 import { formatDuration, formatHours } from '../lib/format';
-import { colors, space } from '../theme';
+import { colors, space, themed } from '../theme';
 import { useAllModules } from '../lib/useAllModules';
 
 export function HistoryPage() {
@@ -69,7 +69,7 @@ export function HistoryPage() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   section: { marginTop: space.xxl },
   h3: { marginBottom: space.sm },
   totals: { flexDirection: 'row', flexWrap: 'wrap' },
@@ -85,4 +85,4 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   weekTotal: { marginLeft: space.md },
-});
+}));

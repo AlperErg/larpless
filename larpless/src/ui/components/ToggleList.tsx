@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Animated, Easing, StyleSheet, Text as RNText, View } from 'react-native';
+import { StyleSheet, Animated, Easing, Text as RNText, View } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
-import { colors, motion, radius, space } from '../theme';
+import { colors, motion, radius, space, themed } from '../theme';
 import { ANIMATE, MotionView } from '../platform';
 import { MacPressable } from './mac';
 
@@ -96,7 +96,7 @@ export function ToggleRow({ item, open, onToggle }: { item: ToggleItem; open: bo
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -110,4 +110,4 @@ const styles = StyleSheet.create({
   chevron: { fontSize: 12, lineHeight: 14, color: colors.muted },
   header: { flex: 1, flexDirection: 'row', alignItems: 'center' },
   body: { paddingLeft: 26, paddingRight: space.xs, paddingTop: space.xs, paddingBottom: space.sm },
-});
+}));
