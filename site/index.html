@@ -61,6 +61,7 @@
         <nav class="nav" aria-label="Page">
           <a class="nav-link" href="#how">How it works</a>
           <a class="nav-link" href="#friends">Friends</a>
+          <a class="nav-link" href="#privacy">Privacy</a>
           <button type="button" class="soon" disabled>Coming soon</button>
         </nav>
       </div>
@@ -164,21 +165,17 @@
         <section class="band" id="how">
           <div class="section-head">
             <h2>How it works.</h2>
-            <p>The screen, the webcam, then one label. The frame does not stay.</p>
+            <p>Using the screen, the camera and the window titles.</p>
           </div>
 
           <ol class="steps">
             <li>
               <h3>The screen</h3>
-              <p>A known distraction is labelled from the window title. A new window goes to qwen3-vl.</p>
+              <p>A known distraction is spotted immediately from the window title. When you open a new window, a screenshot is analysed to see if you are studying.</p>
             </li>
             <li>
               <h3>The webcam</h3>
-              <p>YOLO11n checks that you are there, and looks for a phone.</p>
-            </li>
-            <li>
-              <h3>One label</h3>
-              <p>Every 10 seconds that becomes one label, and the frame is deleted.</p>
+              <p>An on-device computer vision model checks that you are there and looks for a phone.</p>
             </li>
           </ol>
 
@@ -317,6 +314,32 @@
               </div>
             </article>
           </div>
+        </section>
+
+        <section class="band" id="privacy">
+          <div class="section-head">
+            <h2>Privacy.</h2>
+            <p>Everything runs on your device using on-device AI models.</p>
+          </div>
+
+          <ol class="steps">
+            <li>
+              <h3>Recordings are never kept</h3>
+              <p>Screen and camera recordings are analysed and deleted during an active session. They are never retained.</p>
+            </li>
+            <li>
+              <h3>Analysis is offline</h3>
+              <p>A study session is analysed completely offline using local AI models on your device, meaning your screen and camera recordings never reach the internet.</p>
+            </li>
+            <li>
+              <h3>Storage</h3>
+              <p>Only the analysis of what you did during your study session is stored on your device. No screenshots, camera recordings, or even window titles are stored.</p>
+            </li>
+            <li>
+              <h3>Stats only</h3>
+              <p>Only your score and its breakdown is shared when you choose to share your session.</p>
+            </li>
+          </ol>
         </section>
 
         <section class="band closer" id="download">
