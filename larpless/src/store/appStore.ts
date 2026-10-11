@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { DEFAULT_SETTINGS } from '../config';
+import { native } from '../native';
 import type { SessionSummary } from '../contracts/domain';
 import type { AppDataState, AppStore } from '../contracts/store';
 import { createDb } from '../core/db';
@@ -24,9 +25,11 @@ export const useAppStore = create<AppStore>()((set, get) => ({
       const [modules, settings, sessions] = await Promise.all([appDb.loadModules(), appDb.loadSettings(), appDb.listSessions()]);
       // Own courses are optional (the built-in subject library is always on), so onboarding doesn't depend on them.
       set({ loaded: true, modules, sessions, settings });
+      native.nowPlaying.setEnabled(settings.nowPlayingEnabled);
     } catch {
       console.warn('[appStore] load failed, using defaults');
       set({ loaded: true });
+      native.nowPlaying.setEnabled(get().settings.nowPlayingEnabled);
     }
   },
 
@@ -38,6 +41,7 @@ export const useAppStore = create<AppStore>()((set, get) => ({
   updateSettings: async (patch) => {
     const settings = { ...get().settings, ...patch };
     set({ settings });
+    native.nowPlaying.setEnabled(settings.nowPlayingEnabled);
     await appDb.saveSettings(settings);
   },
 

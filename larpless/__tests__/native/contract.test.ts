@@ -13,6 +13,7 @@ import {
   readExternModules,
   readModuleNames,
   readSwiftModules,
+  readWindowsModules,
 } from '../../test/nativeSources';
 
 const externs = readExternModules();
@@ -230,5 +231,31 @@ describe('JS facades ↔ native modules', () => {
     }
     expect(problems).toEqual([]);
     expect(checked).toBeGreaterThan(10);
+  });
+
+  it('windows REACT_METHOD names match the contract when that tree is present', () => {
+    const windows = readWindowsModules();
+    if (!windows) {
+      expect(windows).toBeNull();
+      return;
+    }
+    const problems: string[] = [];
+    for (const api of contract) {
+      const moduleName = moduleNames.get(api.key);
+      if (!moduleName) {
+        problems.push(`${api.key}: no native module name`);
+        continue;
+      }
+      const methods = windows.get(moduleName);
+      if (!methods) {
+        problems.push(`${moduleName}: no REACT_MODULE`);
+        continue;
+      }
+      for (const method of api.methods) {
+        if (method.returns === 'unsubscribe') continue;
+        if (!methods.has(method.name)) problems.push(`${moduleName}.${method.name}`);
+      }
+    }
+    expect(problems).toEqual([]);
   });
 });

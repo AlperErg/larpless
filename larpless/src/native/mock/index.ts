@@ -6,6 +6,7 @@ import { mockPanel } from './panel';
 import { mockNotifications } from './notifications';
 import { mockSound } from './sound';
 import { mockAppShell } from './appShell';
+import { mockNowPlaying } from './nowPlaying';
 
 export const mockApis: NativeApis = {
   screen: mockScreen,
@@ -15,4 +16,5 @@ export const mockApis: NativeApis = {
   notifications: mockNotifications,
   sound: mockSound,
   appShell: mockAppShell,
+  nowPlaying: mockNowPlaying,
 };

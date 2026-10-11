@@ -49,6 +49,17 @@ export function createMemoryKv(map: Map<string, string> = new Map()): KeyValue &
   };
 }
 
+/** Known settings only. A stuffed-in track title must not survive a load or a save. */
+function cleanSettings(raw: unknown): Settings {
+  const src = raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
+  const out: Settings = { ...DEFAULT_SETTINGS };
+  for (const key of Object.keys(DEFAULT_SETTINGS) as (keyof Settings)[]) {
+    if (src[key] !== undefined) (out as unknown as Record<string, unknown>)[key] = src[key];
+  }
+  if (!isPowerProfile(out.powerProfile)) out.powerProfile = DEFAULT_SETTINGS.powerProfile;
+  return out;
+}
+
 /** Only the Chunk fields, so nothing else (e.g. a stray window title) is ever persisted. */
 function cleanChunk(c: Chunk): Chunk {
   return {
@@ -97,16 +108,9 @@ export function createDb(kv: KeyValue): Db {
     saveModules: (m) => serial(() => writeJson(KEYS.modules, m)),
 
     async loadSettings() {
-      const s = await readJson<unknown>(KEYS.settings, {});
-      const merged = { ...DEFAULT_SETTINGS, ...(s && typeof s === 'object' && !Array.isArray(s) ? (s as Partial<Settings>) : {}) };
-      if (!isPowerProfile(merged.powerProfile)) merged.powerProfile = DEFAULT_SETTINGS.powerProfile;
-      return merged;
+      return cleanSettings(await readJson<unknown>(KEYS.settings, {}));
     },
-    saveSettings: (s) =>
-      serial(() => {
-        const powerProfile = isPowerProfile(s.powerProfile) ? s.powerProfile : DEFAULT_SETTINGS.powerProfile;
-        return writeJson(KEYS.settings, { ...s, powerProfile });
-      }),
+    saveSettings: (s) => serial(() => writeJson(KEYS.settings, cleanSettings(s))),
 
     listSessions: () => readArray<SessionSummary>(KEYS.sessions),
     saveSession: (s) =>

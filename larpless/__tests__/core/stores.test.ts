@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { config } from '../../src/config';
 import { fixtureModules } from '../../src/fixtures/data';
+import { mockNowPlaying } from '../../src/native/mock/nowPlaying';
 import { resetMockScreen } from '../../src/native/mock/screen';
 import { useAppStore } from '../../src/store/appStore';
 import { getSessionController, useSessionStore } from '../../src/store/sessionStore';
@@ -19,9 +20,13 @@ describe('appStore (AsyncStorage)', () => {
     await useAppStore.getState().load();
     expect(useAppStore.getState()).toMatchObject({ loaded: true, modules: [], sessions: [] });
     expect(useAppStore.getState().settings).toMatchObject({ onboarded: true, volume: 0.8, model: 'qwen3-vl:4b' });
+    expect(useAppStore.getState().settings.nowPlayingEnabled).toBe(true);
+    expect(mockNowPlaying.enabled).toBe(true);
+    expect(mockNowPlaying).not.toHaveProperty('title');
 
     await useAppStore.getState().saveModules(fixtureModules);
-    await useAppStore.getState().updateSettings({ onboarded: true, strictness: 5 });
+    await useAppStore.getState().updateSettings({ onboarded: true, strictness: 5, nowPlayingEnabled: false });
+    expect(mockNowPlaying.enabled).toBe(false);
     expect(JSON.parse((await AsyncStorage.getItem('fl:modules'))!)).toEqual(fixtureModules);
     expect(JSON.parse((await AsyncStorage.getItem('fl:settings'))!)).toMatchObject({ onboarded: true, strictness: 5 });
 

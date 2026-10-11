@@ -31,6 +31,10 @@ final class FLShellHoverTracker: NSResponder {
 final class FLShellPanelController {
   static let shared = FLShellPanelController()
   static let size = NSSize(width: 300, height: 170)
+  static let mediaStripHeight: CGFloat = 36
+  static func size(showingMedia: Bool) -> NSSize {
+    NSSize(width: size.width, height: size.height + (showingMedia ? mediaStripHeight : 0))
+  }
   static let inset: CGFloat = 16
 
   let model = FLShellPanelModel()
@@ -48,6 +52,7 @@ final class FLShellPanelController {
 
   private init() {
     model.dragHandler = { [weak self] point in self?.handleDrag(point) }
+    FLNowPlaying.shared.onTrackChanged = { [weak self] in self?.syncMediaFrame() }
   }
 
   // MARK: Lifecycle
@@ -102,12 +107,14 @@ final class FLShellPanelController {
     hostingView = host
     hoverTracker = tracker
     trackingArea = area
+    syncMediaFrame()
     flShellLog("[FLPanel] created level=\(p.level.rawValue) nonactivating=\(p.styleMask.contains(.nonactivatingPanel))")
     return p
   }
 
   func show() {
     let p = ensurePanel()
+    syncMediaFrame()
     if !userMoved || !isOnSomeScreen(p.frame) { moveToDefaultPosition() }
     p.orderFrontRegardless()
     flShellLog("[FLPanel] show frame=\(NSStringFromRect(p.frame)) visible=\(p.isVisible)")
@@ -132,14 +139,30 @@ final class FLShellPanelController {
   private func moveToDefaultPosition() {
     guard let p = panel else { return }
     let vf = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
-    let origin = NSPoint(x: vf.maxX - Self.size.width - Self.inset, y: vf.maxY - Self.size.height - Self.inset)
+    let size = Self.size(showingMedia: FLNowPlaying.shared.track != nil)
+    let origin = NSPoint(x: vf.maxX - size.width - Self.inset, y: vf.maxY - size.height - Self.inset)
     programmaticMove = true
-    p.setFrameOrigin(origin)
+    p.setFrame(NSRect(origin: origin, size: size), display: true)
+    hostingView?.frame = NSRect(origin: .zero, size: size)
     programmaticMove = false
   }
 
   private func isOnSomeScreen(_ frame: NSRect) -> Bool {
     NSScreen.screens.contains { $0.visibleFrame.intersects(frame) }
+  }
+
+  /// Grows the window downward when a track is showing. The top edge stays put.
+  private func syncMediaFrame() {
+    guard let p = panel, let host = hostingView else { return }
+    let next = Self.size(showingMedia: FLNowPlaying.shared.track != nil)
+    let current = p.frame
+    if abs(current.width - next.width) < 0.5, abs(current.height - next.height) < 0.5,
+       abs(host.frame.height - next.height) < 0.5 { return }
+    let frame = NSRect(x: current.origin.x, y: current.maxY - next.height, width: next.width, height: next.height)
+    programmaticMove = true
+    p.setFrame(frame, display: true)
+    host.frame = NSRect(origin: .zero, size: next)
+    programmaticMove = false
   }
 
   /// Drag driven from SwiftUI (screen coordinates). nil ends the drag.
@@ -197,6 +220,7 @@ final class FLShellPanelController {
       "actionLog": model.actionLog,
       "buttonIds": model.buttonFrames.keys.sorted(),
       "userMoved": userMoved,
+      "mediaVisible": FLNowPlaying.shared.track != nil,
       "fonts": [
         "serif": FLNotionFonts.isAvailable(FLNotionFonts.serifRegular),
         "interMedium": FLNotionFonts.isAvailable(FLNotionFonts.interMedium),
@@ -280,13 +304,18 @@ final class FLShellPanelController {
             "rgb": [Int(c.redComponent * 255), Int(c.greenComponent * 255), Int(c.blueComponent * 255)]]
   }
 
-  /// Renders the live hosting view offscreen and OCRs it (text only leaves this method; the bitmap is dropped).
+  /// OCRs the study card only. The media strip is below it, and its title must not cross into JS.
+  /// The bitmap is dropped; only recognized card text leaves this method.
   func debugRenderText() -> [String: Any] {
     guard let host = hostingView else { return ["ok": false, "error": "no panel"] }
-    guard let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) else {
+    let cardHeight = min(Self.size.height, host.bounds.height)
+    // NSHostingView is flipped (origin at the top). The strip sits under the card, so the card is minY.
+    let cardY = host.isFlipped ? host.bounds.minY : host.bounds.maxY - cardHeight
+    let card = NSRect(x: host.bounds.minX, y: cardY, width: host.bounds.width, height: cardHeight)
+    guard let rep = host.bitmapImageRepForCachingDisplay(in: card) else {
       return ["ok": false, "error": "no bitmap rep"]
     }
-    host.cacheDisplay(in: host.bounds, to: rep)
+    host.cacheDisplay(in: card, to: rep)
     var result: [String: Any] = ["ok": true, "px": ["w": rep.pixelsWide, "h": rep.pixelsHigh]]
     // Background sample near the top-left corner (inside the rounded rect, away from text).
     if let c = rep.colorAt(x: Int(Double(rep.pixelsWide) * 0.97), y: Int(Double(rep.pixelsHigh) * 0.5))?

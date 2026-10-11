@@ -28,44 +28,103 @@ private extension View {
 
 struct FLShellPanelView: View {
   @ObservedObject var model: FLShellPanelModel
+  @ObservedObject private var nowPlaying = FLNowPlaying.shared
 
   var body: some View {
     let s = model.state
     let tag = FLNotionColors.tag(s.tint)
-    ZStack {
-      FLShellPanelBackground(tag: tag, pulse: s.pulse)
-        .animation(.easeInOut(duration: 0.3), value: s.tint)
+    let media = nowPlaying.track
+    let height = FLShellPanelController.size(showingMedia: media != nil).height
+    VStack(spacing: 0) {
+      ZStack {
+        FLShellPanelBackground(tag: tag, pulse: s.pulse)
+          .animation(.easeInOut(duration: 0.3), value: s.tint)
 
-      FLShellCompactView(model: model, state: s, tag: tag)
-        .opacity(model.hubVisible ? 0 : 1)
+        FLShellCompactView(model: model, state: s, tag: tag)
+          .opacity(model.hubVisible ? 0 : 1)
 
-      if model.hubVisible {
-        FLShellHubView(model: model, state: s, tag: tag)
-          .transition(.move(edge: .bottom).combined(with: .opacity))
+        if model.hubVisible {
+          FLShellHubView(model: model, state: s, tag: tag)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+
+        if model.flashVisible {
+          FLShellFlashOverlay()
+            .transition(.opacity)
+        }
       }
+      .frame(width: FLShellPanelController.size.width, height: FLShellPanelController.size.height)
+      .contentShape(Rectangle())
+      // Drag the study card only. The strip's buttons sit outside this gesture.
+      .gesture(
+        DragGesture(minimumDistance: 2, coordinateSpace: .global)
+          .onChanged { _ in model.dragHandler?(NSEvent.mouseLocation) }
+          .onEnded { _ in model.dragHandler?(nil) }
+      )
 
-      if model.flashVisible {
-        FLShellFlashOverlay()
-          .transition(.opacity)
+      if let media {
+        FLShellNowPlayingStrip(track: media)
       }
     }
-    .frame(width: FLShellPanelController.size.width, height: FLShellPanelController.size.height)
+    .frame(width: FLShellPanelController.size.width, height: height)
     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     .overlay(
       RoundedRectangle(cornerRadius: 10, style: .continuous)
         .strokeBorder(s.pulse ? tag.text.opacity(0.45) : FLNotionColors.border, lineWidth: 1)
     )
-    .contentShape(Rectangle())
-    // Window drag from any non-control area (controls' own gestures take precedence).
-    .gesture(
-      DragGesture(minimumDistance: 2, coordinateSpace: .global)
-        .onChanged { _ in model.dragHandler?(NSEvent.mouseLocation) }
-        .onEnded { _ in model.dragHandler?(nil) }
-    )
     .coordinateSpace(name: "flpanel")
     .onPreferenceChange(FLShellButtonFramesKey.self) { frames in
       MainActor.assumeIsolated { model.buttonFrames = frames }
     }
+  }
+}
+
+/// Title, artist, time left, and previous / play / next. Shown only while a session is active.
+private struct FLShellNowPlayingStrip: View {
+  let track: FLNowPlayingTrack
+
+  var body: some View {
+    TimelineView(.periodic(from: Date(), by: 1)) { ctx in
+      HStack(spacing: 4) {
+        FLShellIconButton(id: "mediaPrevious", systemName: "backward.end.fill", active: false, tag: FLNotionColors.gray) {
+          FLNowPlaying.shared.previous()
+        }
+        FLShellIconButton(id: "mediaToggle", systemName: track.rate > 0 ? "pause.fill" : "play.fill",
+                          active: false, tag: FLNotionColors.gray) {
+          FLNowPlaying.shared.toggle()
+        }
+        FLShellIconButton(id: "mediaNext", systemName: "forward.end.fill", active: false, tag: FLNotionColors.gray) {
+          FLNowPlaying.shared.next()
+        }
+        Text(line)
+          .font(FLShellFont.medium(11))
+          .lineLimit(1)
+          .truncationMode(.tail)
+        Spacer(minLength: 4)
+        if let remaining = track.remainingS(at: ctx.date) {
+          Text(FLShellPanelState.formatCountdown(remaining))
+            .font(FLShellFont.medium(11))
+            .monospacedDigit()
+            .foregroundColor(FLNotionColors.muted)
+        }
+      }
+      .padding(.horizontal, 8)
+      .frame(width: FLShellPanelController.size.width, height: FLShellPanelController.mediaStripHeight)
+      .background(FLNotionColors.bg)
+      .overlay(alignment: .top) {
+        Rectangle().fill(FLNotionColors.border).frame(height: 1)
+      }
+    }
+  }
+
+  private var line: AttributedString {
+    var title = AttributedString(track.title)
+    title.foregroundColor = FLNotionColors.text
+    guard let artist = track.artist, !artist.isEmpty else { return title }
+    var rest = AttributedString(" · \(artist)")
+    rest.foregroundColor = FLNotionColors.muted
+    title.append(rest)
+    return title
   }
 }
 

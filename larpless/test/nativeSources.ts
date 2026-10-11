@@ -11,6 +11,7 @@ import * as ts from 'typescript';
 
 export const ROOT = join(__dirname, '..');
 export const NATIVE_DIR = join(ROOT, 'macos/Focusline-macOS/Native');
+export const WINDOWS_NATIVE_DIR = join(ROOT, 'windows/LarpLess/Native');
 export const CONTRACT_FILE = join(ROOT, 'src/contracts/native.ts');
 
 const PROMISE_BLOCKS = ['RCTPromiseResolveBlock', 'RCTPromiseRejectBlock'];
@@ -290,6 +291,34 @@ export function readContract(): ContractApi[] {
     });
     return { key: prop.name.getText(sf), interfaceName, methods };
   });
+}
+
+/**
+ * JS names of REACT_METHOD on the Windows tree, keyed by REACT_MODULE name.
+ * Null when this checkout has no windows/ sources (the macOS branch).
+ */
+export function readWindowsModules(): Map<string, Set<string>> | null {
+  let entries: string[];
+  try {
+    entries = walk(WINDOWS_NATIVE_DIR, '.h');
+  } catch {
+    return null;
+  }
+  if (!entries.length) return null;
+  const out = new Map<string, Set<string>>();
+  for (const file of entries) {
+    const src = readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+    const parts = src.split(/REACT_MODULE\(/);
+    for (const part of parts.slice(1)) {
+      const name = /^(\w+)/.exec(part)?.[1];
+      if (!name) continue;
+      const body = part.slice(0, part.indexOf('REACT_MODULE') >= 0 ? part.indexOf('REACT_MODULE') : part.length);
+      const names = new Set(out.get(name) ?? []);
+      for (const m of body.matchAll(/REACT_METHOD\(\s*\w+\s*,\s*L"([^"]+)"/g)) names.add(m[1]);
+      out.set(name, names);
+    }
+  }
+  return out;
 }
 
 /** `pick('screen', 'FLScreenCapture', …)` in src/native/index.ts: contract key → native module name. */

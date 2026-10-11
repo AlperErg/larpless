@@ -71,6 +71,14 @@ final class FLFloatingPanel: RCTEventEmitter {
     }
   }
 
+  /// Injects a fake now-playing row. Pass a dict without `title` to clear it. Dev harness only.
+  @objc func debugSetTrack(_ track: NSDictionary) {
+    let copy = track.copy() as? NSDictionary ?? track
+    DispatchQueue.main.async {
+      MainActor.assumeIsolated { FLNowPlaying.shared.debugSetTrack(copy) }
+    }
+  }
+
   /// Same code path as a hub button, minus the hit testing.
   @objc func debugPerform(_ action: NSDictionary) {
     let body = action as? [String: Any] ?? [:]
