@@ -169,7 +169,7 @@
        package gets one copy, next to the exe, instead of two entries for the same target path. -->
   <Target Name="PackageOnnxRuntimeDll" BeforeTargets="AssignTargetPaths">
     <ItemGroup>
-      <None Remove="@(None)" Condition="'%(None.Filename)' == 'onnxruntime' and '%(None.Extension)' == '.dll'" />
+      <None Remove="@(None)" Condition="'%(None.Filename)' == 'onnxruntime' and '%(None.Extension)' == '.dll' and '$(OnnxRuntimeBinary)' != '' and Exists('$(OnnxRuntimeBinary)')" />
       <None Include="$(OnnxRuntimeBinary)" Condition="'$(OnnxRuntimeBinary)' != '' and Exists('$(OnnxRuntimeBinary)')">
         <Link>onnxruntime.dll</Link>
         <DeploymentContent>true</DeploymentContent>

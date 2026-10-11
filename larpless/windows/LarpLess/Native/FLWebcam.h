@@ -296,6 +296,8 @@ struct FLWebcam {
         StopLocked();
         try {
           StartLocked();
+          // Stop() may have landed while StartLocked held the camera lock.
+          if (m_stopping.load() || !m_wantCamera.load()) StopLocked();
           return;
         } catch (...) {
           StopLocked();
