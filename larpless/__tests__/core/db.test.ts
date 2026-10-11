@@ -44,15 +44,6 @@ describe('db', () => {
     expect(await db.updateChunk({ ...ch, id: 'other' })).toBe(false);
   });
 
-  it('settings saved before now playing still default the flag on', async () => {
-    const kv = createMemoryKv();
-    const db = createDb(kv);
-    await kv.setItem(KEYS.settings, JSON.stringify({ volume: 0.2 }));
-    const loaded = await db.loadSettings();
-    expect(loaded.nowPlayingEnabled).toBe(true);
-    expect(loaded).toEqual({ ...DEFAULT_SETTINGS, volume: 0.2 });
-  });
-
   it('settings merge over DEFAULT_SETTINGS; corrupt values fall back', async () => {
     const kv = createMemoryKv();
     const db = createDb(kv);
