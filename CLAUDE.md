@@ -62,7 +62,7 @@ These are product guarantees; preserve them in any change:
 
 ## Windows
 
-There is also a Windows build (react-native-windows, C++ native modules in `larpless/windows/LarpLess/Native/`). Its commands, gotchas, module status and open issues (Ollama speed on CPU-only PCs, planned YOLO body detection) are in [`larpless/windows/CLAUDE.md`](larpless/windows/CLAUDE.md). UI differences go through `src/ui/platform.ts` and must leave the Mac output unchanged.
+There is also a Windows build (react-native-windows, C++ native modules in `larpless/windows/LarpLess/Native/`). Its commands, gotchas, module status and open issues (Ollama speed on CPU-only PCs) are in [`larpless/windows/CLAUDE.md`](larpless/windows/CLAUDE.md). Webcam presence and phones use the same YOLO11n thresholds as Mac, through ONNX Runtime. UI differences go through `src/ui/platform.ts` and must leave the Mac output unchanged.
 
 ## Stale references
 

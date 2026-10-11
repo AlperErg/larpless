@@ -51,11 +51,21 @@ struct FLWebcam {
 
   ~FLWebcam() noexcept {
     m_stopping = true;
+    m_wantCamera = false;
     {
       std::lock_guard lock{m_mutex};
       StopLocked();
     }
     while (m_busy.load()) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    std::thread loader;
+    std::thread retry;
+    {
+      std::lock_guard lock{m_threadMutex};
+      loader = std::move(m_loader);
+      retry = std::move(m_retry);
+    }
+    if (loader.joinable()) loader.join();
+    if (retry.joinable()) retry.join();
   }
 
   // Rejects E_INVALID_ARG (fps outside (0, 30]), E_PERMISSION (camera denied) or E_CAMERA (no / busy camera).
@@ -69,6 +79,7 @@ struct FLWebcam {
       return;
     }
     m_intervalMs = 1000.0 / fps * 0.97;
+    m_wantCamera = true;
     LoadModelIfNeeded();
     // MediaCapture's async calls are awaited off the JS thread (.get() isn't allowed on an STA thread).
     std::thread([this, result = std::move(result)]() mutable noexcept {
@@ -98,6 +109,7 @@ struct FLWebcam {
   // Harmless when not running or called twice.
   REACT_METHOD(Stop, L"stop")
   void Stop(ReactPromise<void> &&result) noexcept {
+    m_wantCamera = false;
     std::thread([this, result = std::move(result)]() mutable noexcept {
       winrt::init_apartment(winrt::apartment_type::multi_threaded);
       std::lock_guard lock{m_mutex};
@@ -238,7 +250,6 @@ struct FLWebcam {
       throw winrt::hresult_error{E_FAIL}; // busy / unavailable -> E_CAMERA
     }
     m_failedToken = m_capture.Failed([this](auto &&, auto &&) { OnCaptureFailed(); });
-    m_retries = 0;
   }
 
   void StopLocked() noexcept {
@@ -262,15 +273,27 @@ struct FLWebcam {
   }
 
   // The camera was taken by another app or unplugged: retry 3 times, 0.5 s apart, then release it (JS just stops
-  // receiving samples, like macOS).
+  // receiving samples, like macOS). A Stop() or teardown sets m_wantCamera false so a late retry cannot reopen it.
   void OnCaptureFailed() noexcept {
-    std::thread([this]() noexcept {
+    std::lock_guard lock{m_threadMutex};
+    if (m_stopping.load() || !m_wantCamera.load()) return;
+    if (m_retry.joinable()) {
+      if (m_retryRunning.load()) return;
+      m_retry.join();
+    }
+    m_retryRunning = true;
+    m_retry = std::thread([this]() noexcept {
+      struct Clear {
+        std::atomic<bool> *flag;
+        ~Clear() { flag->store(false); }
+      } clear{&m_retryRunning};
       winrt::init_apartment(winrt::apartment_type::multi_threaded);
-      std::lock_guard lock{m_mutex};
-      StopLocked();
-      while (m_retries < 3) {
-        ++m_retries;
+      for (int attempt{0}; attempt < 3; ++attempt) {
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        if (m_stopping.load() || !m_wantCamera.load()) return;
+        std::lock_guard camera{m_mutex};
+        if (m_stopping.load() || !m_wantCamera.load()) return;
+        StopLocked();
         try {
           StartLocked();
           return;
@@ -278,7 +301,7 @@ struct FLWebcam {
           StopLocked();
         }
       }
-    }).detach();
+    });
   }
 
   void OnFrame(winrt::Windows::Media::Capture::Frames::MediaFrameReader const &sender,
@@ -306,7 +329,7 @@ struct FLWebcam {
           float person{0};
           float phone{0};
           if (Detect(bytes + plane.StartIndex, static_cast<int>(plane.Width), static_cast<int>(plane.Height),
-                     static_cast<int>(plane.Stride), person, phone) &&
+                     static_cast<int>(plane.Stride), plane.StartIndex, capacity, person, phone) &&
               m_listeners > 0) {
             Sample(JSValueObject{{"t", EpochMs()},
                                  {"personPresent", person > kPersonThreshold},
@@ -331,7 +354,12 @@ struct FLWebcam {
   void LoadModelIfNeeded() noexcept {
     int expected{0};
     if (!m_modelState.compare_exchange_strong(expected, 1)) return;
-    std::thread([this]() noexcept {
+    std::lock_guard lock{m_threadMutex};
+    if (m_stopping.load()) {
+      m_modelState.store(3);
+      return;
+    }
+    m_loader = std::thread([this]() noexcept {
       winrt::init_apartment(winrt::apartment_type::multi_threaded);
       const auto t0{std::chrono::steady_clock::now()};
       try {
@@ -375,7 +403,7 @@ struct FLWebcam {
         OutputDebugStringA("[FLWebcam] YOLO load failed, webcam samples disabled\n");
         m_modelState.store(3);
       }
-    }).detach();
+    });
   }
 
   // Single file lands next to the exe; a wildcard asset lands one directory up, at the package root.
@@ -415,8 +443,11 @@ struct FLWebcam {
   }
 
   // False when the model output is not the NMS layout, in which case the caller emits nothing.
-  bool Detect(uint8_t const *bgra, int width, int height, int stride, float &person, float &phone) {
-    if (width <= 0 || height <= 0) return false;
+  bool Detect(uint8_t const *bgra, int width, int height, int stride, int start, uint32_t capacity, float &person,
+              float &phone) {
+    if (width <= 0 || height <= 0 || stride <= 0 || static_cast<int64_t>(stride) < static_cast<int64_t>(width) * 4) return false;
+    const uint64_t need{uint64_t(start) + uint64_t(height - 1) * uint64_t(stride) + uint64_t(width) * 4};
+    if (start < 0 || need > capacity) return false;
     Letterbox(bgra, width, height, stride);
     std::array<int64_t, 4> shape{1, 3, kInput, kInput};
     auto memory{Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeCPU)};
@@ -425,7 +456,7 @@ struct FLWebcam {
     const char *outputNames[]{m_outputName.c_str()};
     auto outputs{m_session->Run(Ort::RunOptions{nullptr}, inputNames, &input, 1, outputNames, 1)};
     const auto dims{outputs[0].GetTensorTypeAndShapeInfo().GetShape()};
-    if (dims.size() < 2 || dims.back() < 6) {
+    if (dims.size() < 2 || dims.back() != 6) {
       if (!m_loggedShape) {
         m_loggedShape = true;
         OutputDebugStringA("[FLWebcam] YOLO output is not [N, 6], webcam samples disabled\n");
@@ -489,6 +520,10 @@ struct FLWebcam {
 
   std::mutex m_mutex;
   std::mutex m_modelMutex;
+  std::mutex m_threadMutex;
+  std::thread m_loader;
+  std::thread m_retry;
+  std::atomic<bool> m_retryRunning{false};
   winrt::Windows::Media::Capture::MediaCapture m_capture{nullptr};
   winrt::Windows::Media::Capture::Frames::MediaFrameReader m_reader{nullptr};
   winrt::event_token m_frameToken{};
@@ -504,10 +539,10 @@ struct FLWebcam {
   std::atomic<double> m_lastFrameMs{0};
   std::atomic<bool> m_busy{false};
   std::atomic<bool> m_stopping{false};
+  std::atomic<bool> m_wantCamera{false};
   std::atomic<bool> m_modelReady{false};
   std::atomic<int> m_modelState{0}; // 0 idle, 1 loading, 2 loaded, 3 failed
   std::atomic<int> m_listeners{0};
-  int m_retries{0};
   int m_timingLogsLeft{3};
   bool m_loggedShape{false};
 };
