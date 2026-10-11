@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#10110f" />
+    <title>LarpLess. Score the session.</title>
+    <meta
+      name="description"
+      content="It names the subject or the distraction, then deletes the frame. Coming soon on Mac and Windows."
+    />
+    <meta name="application-name" content="LarpLess" />
+    <meta property="og:site_name" content="LarpLess" />
+    <meta property="og:title" content="LarpLess. Score the session." />
+    <meta
+      property="og:description"
+      content="It names the subject or the distraction, then deletes the frame. Coming soon on Mac and Windows."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:image" content="./og.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="LarpLess. Score the session. Coming soon." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="LarpLess. Score the session." />
+    <meta
+      name="twitter:description"
+      content="It names the subject or the distraction, then deletes the frame. Coming soon on Mac and Windows."
+    />
+    <meta name="twitter:image" content="./og.png" />
+    <meta name="twitter:image:alt" content="LarpLess. Score the session. Coming soon." />
+    <link rel="icon" href="./logo.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./logo.png" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "LarpLess",
+        "operatingSystem": "macOS, Windows",
+        "applicationCategory": "EducationalApplication",
+        "description": "It names the subject or the distraction, then deletes the frame. Coming soon on Mac and Windows.",
+        "image": "./og.png"
+      }
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header class="top">
+      <div class="top-inner">
+        <a class="brand" href="#top">
+          <img src="./logo.svg" width="28" height="28" alt="" />
+          LarpLess
+        </a>
+        <nav class="nav" aria-label="Page">
+          <a class="nav-link" href="#how">How it works</a>
+          <a class="nav-link" href="#friends">Friends</a>
+          <button type="button" class="soon" disabled>Coming soon</button>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="column hero" id="top">
+        <div class="scroll-stage" id="scroll-stage">
+          <div class="scroll-scene">
+            <div class="scroll-copy" id="scroll-copy">
+              <h1>
+                <span>Score the</span>
+                <span>session.</span>
+              </h1>
+              <p class="lede">It names the subject or the distraction, then deletes the frame.</p>
+              <div class="poster-action">
+                <button type="button" class="soon soon-lg" disabled>Coming soon</button>
+              </div>
+            </div>
+            <div class="ipad" id="ipad">
+              <div class="ipad-screen">
+                <img
+                  src="./home.webp"
+                  width="2000"
+                  height="1364"
+                  alt="LarpLess home screen: Start session, Pomodoro presets, a streak heatmap, and recent sessions"
+                  draggable="false"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="column">
+        <section class="band" id="score">
+          <div class="section-head">
+            <h2>The score.</h2>
+            <p>One afternoon, broken into what you were actually doing.</p>
+          </div>
+
+          <div class="summary">
+            <div class="summary-top">
+              <div>
+                <p class="example"><span>Example</span></p>
+                <p class="time">1:42:10</p>
+                <p class="when">Thursday afternoon</p>
+              </div>
+              <p class="pct"><span>86%</span> focused</p>
+            </div>
+            <div
+              class="bar"
+              role="img"
+              aria-label="Biology 62 percent, problem sets 18 percent, distracted 12 percent, away 8 percent"
+            >
+              <span class="seg bio"></span>
+              <span class="seg sets"></span>
+              <span class="seg drift"></span>
+              <span class="seg gone"></span>
+            </div>
+            <ul class="legend">
+              <li><i class="swatch bio" aria-hidden="true"></i> Biology 62%</li>
+              <li><i class="swatch sets" aria-hidden="true"></i> Problem sets 18%</li>
+              <li><i class="swatch drift" aria-hidden="true"></i> Distracted 12%</li>
+              <li><i class="swatch gone" aria-hidden="true"></i> Away 8%</li>
+            </ul>
+            <div class="heat-wrap">
+              <div class="heat-days" aria-hidden="true">
+                <span>Mon</span><span></span><span>Wed</span><span></span><span>Fri</span><span></span><span></span>
+              </div>
+              <div>
+                <div id="heat" class="heat" aria-hidden="true"></div>
+                <p class="heat-key" aria-hidden="true">
+                  <span>Less</span>
+                  <i data-l="0"></i><i data-l="1"></i><i data-l="2"></i><i data-l="3"></i><i data-l="4"></i>
+                  <span>More</span>
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="band" id="how">
+          <div class="section-head">
+            <h2>How it works.</h2>
+            <p>The screen, the webcam, then one label. The frame does not stay.</p>
+          </div>
+
+          <ol class="steps">
+            <li>
+              <h3>The screen</h3>
+              <p>A known distraction is labelled from the window title. A new window goes to qwen3-vl.</p>
+            </li>
+            <li>
+              <h3>The webcam</h3>
+              <p>The webcam checks that you are there. YOLO11n looks for a phone.</p>
+            </li>
+            <li>
+              <h3>One label</h3>
+              <p>Every 10 seconds that becomes one label, and the frame is deleted.</p>
+            </li>
+          </ol>
+
+          <div class="stage" id="stage" data-tone="green">
+            <div class="float" id="float">
+              <span class="mark" aria-hidden="true"></span>
+              <span class="float-time" id="float-time">24:18</span>
+              <span class="float-label" id="float-label">Biology</span>
+            </div>
+          </div>
+          <div class="panel-tools">
+          <div class="chips" role="tablist" aria-label="Floating panel state">
+            <button
+              type="button"
+              class="chip"
+              role="tab"
+              id="tab-studying"
+              data-panel
+              data-tone="green"
+              data-time="24:18"
+              data-label="Biology"
+              data-note="Green means the screen looks like study."
+              aria-selected="true"
+              aria-controls="float"
+              tabindex="0"
+            >
+              Studying
+            </button>
+            <button
+              type="button"
+              class="chip"
+              role="tab"
+              id="tab-distracted"
+              data-panel
+              data-tone="red"
+              data-time="24:18"
+              data-label="Instagram"
+              data-note="Red means a distraction, or a phone in frame."
+              aria-selected="false"
+              aria-controls="float"
+              tabindex="-1"
+            >
+              Distracted
+            </button>
+            <button
+              type="button"
+              class="chip"
+              role="tab"
+              id="tab-away"
+              data-panel
+              data-tone="gray"
+              data-time="24:18"
+              data-label="Away"
+              data-note="Grey means you left. Screenshots pause."
+              aria-selected="false"
+              aria-controls="float"
+              tabindex="-1"
+            >
+              Away
+            </button>
+            <button
+              type="button"
+              class="chip"
+              role="tab"
+              id="tab-break"
+              data-panel
+              data-tone="blue"
+              data-time="04:12"
+              data-label="Break"
+              data-note="Blue is a break. Capturing stops."
+              aria-selected="false"
+              aria-controls="float"
+              tabindex="-1"
+            >
+              Break
+            </button>
+          </div>
+          <p id="panel-note">Green means the screen looks like study.</p>
+          </div>
+        </section>
+
+        <section class="band" id="friends">
+          <div class="section-head">
+            <h2>Friends.</h2>
+            <p>Friends see the score you post. Time, focus, and what it was.</p>
+          </div>
+          <div class="feed">
+            <article class="post">
+              <div class="post-top">
+                <p class="who">@maya</p>
+                <p class="ago">Thursday</p>
+              </div>
+              <p class="caption">Problem sets until the library closed.</p>
+              <div class="post-stats">
+                <p><span>1:42:10</span></p>
+                <p><span>86%</span> focused</p>
+                <p class="streak">12 day streak</p>
+              </div>
+              <div class="bar" role="img" aria-label="Biology 62 percent, problem sets 18 percent, distracted 12 percent, away 8 percent">
+                <span class="seg bio" style="flex: 62"></span>
+                <span class="seg sets" style="flex: 18"></span>
+                <span class="seg drift" style="flex: 12"></span>
+                <span class="seg gone" style="flex: 8"></span>
+              </div>
+              <ul class="legend">
+                <li><i class="swatch bio" aria-hidden="true"></i> Biology 62%</li>
+                <li><i class="swatch sets" aria-hidden="true"></i> Problem sets 18%</li>
+                <li><i class="swatch drift" aria-hidden="true"></i> Distracted 12%</li>
+                <li><i class="swatch gone" aria-hidden="true"></i> Away 8%</li>
+              </ul>
+            </article>
+            <article class="post">
+              <div class="post-top">
+                <p class="who">@leo</p>
+                <p class="ago">Wednesday</p>
+              </div>
+              <p class="caption">Back at the essay.</p>
+              <div class="post-stats">
+                <p><span>54:20</span></p>
+                <p><span>71%</span> focused</p>
+                <p class="streak">4 day streak</p>
+              </div>
+              <div class="bar" role="img" aria-label="History 71 percent, distracted 19 percent, away 10 percent">
+                <span class="seg bio" style="flex: 71"></span>
+                <span class="seg drift" style="flex: 19"></span>
+                <span class="seg gone" style="flex: 10"></span>
+              </div>
+              <ul class="legend">
+                <li><i class="swatch bio" aria-hidden="true"></i> History 71%</li>
+                <li><i class="swatch drift" aria-hidden="true"></i> Distracted 19%</li>
+                <li><i class="swatch gone" aria-hidden="true"></i> Away 10%</li>
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section class="band closer" id="download">
+          <h2>Coming soon on Mac and Windows.</h2>
+          <button type="button" class="soon soon-lg" disabled>Coming soon</button>
+        </section>
+      </div>
+    </main>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>
