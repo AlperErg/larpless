@@ -4,8 +4,9 @@
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
   xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
+  xmlns:uap7="http://schemas.microsoft.com/appx/manifest/uap/windows10/7"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
-  IgnorableNamespaces="uap uap3 rescap">
+  IgnorableNamespaces="uap uap3 uap7 rescap">
 
   <Identity
     Name="LarpLess"
@@ -45,7 +46,7 @@
 
   <Capabilities>
     <Capability Name="internetClient" />
-    <uap3:Capability Name="globalMediaControl" />
+    <uap7:Capability Name="globalMediaControl" />
     <rescap:Capability Name="runFullTrust" />
     <DeviceCapability Name="webcam" />
   </Capabilities>
