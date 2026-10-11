@@ -653,8 +653,13 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
           log('[session] saveSession failed');
         }
         teardownNative();
-        // Free the model's RAM (several GB) now rather than after keep_alive. Demo never loads it.
-        if (!demo) deps.classifier.unload().catch(noop);
+        // Drop the model, then quit Ollama so it doesn't keep the weights until keep_alive.
+        // Demo never loaded it. Closing the app quits Ollama from native code too, because
+        // this JS may already be gone by then.
+        if (!demo) {
+          await deps.classifier.unload().catch(noop);
+          native.appShell.stopOllama();
+        }
         native.panel.hide().catch(noop);
         native.sound.play('off').catch(noop);
         native.sound.duck(1);

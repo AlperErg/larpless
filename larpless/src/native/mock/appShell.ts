@@ -10,5 +10,8 @@ export const mockAppShell: AppShellApi = {
   bringToFront: () => {
     console.log('[mock appShell] bringToFront');
   },
+  stopOllama: () => {
+    console.log('[mock appShell] stopOllama');
+  },
   onMenuCommand: () => () => {},
 };

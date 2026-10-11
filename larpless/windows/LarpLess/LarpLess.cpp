@@ -111,6 +111,8 @@ _Use_decl_annotations_ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE, PSTR 
                           .WorkArea()};
   const auto size{appWindow.Size()};
   appWindow.Move({workArea.X + (workArea.Width - size.Width) / 2, workArea.Y + (workArea.Height - size.Height) / 2});
+  // Closing the window quits the process. JS may already be gone, so unload Ollama here too.
+  appWindow.Closing([](auto&&, auto&&) { LarpLess::StopLocalOllama(); });
 
   // Get the ReactViewOptions so we can set the initial RN component to load
   auto viewOptions{reactNativeWin32App.ReactViewOptions()};

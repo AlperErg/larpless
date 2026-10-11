@@ -8,6 +8,7 @@ export const appShell: AppShellApi = {
   beginSessionActivity: () => M.beginSessionActivity(),
   endSessionActivity: () => M.endSessionActivity(),
   bringToFront: () => M.bringToFront(),
+  stopOllama: () => M.stopOllama?.(),
   onMenuCommand: cb => {
     const sub = emitter!.addListener('FLMenuCommand', cb);
     return () => sub.remove();
