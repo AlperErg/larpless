@@ -100,7 +100,7 @@ describe('every page renders in every fixture state', () => {
 describe('⌘K palette', () => {
   it('commands depend on status and filter by substring', () => {
     const idle = buildCommands({ status: 'idle', demoFast: false, hasSummary: false, devTools: true }).map((c) => c.id);
-    expect(idle).toEqual(expect.arrayContaining(['start', 'start-demo', 'go-home', 'go-dev', 'demo-fast']));
+    expect(idle).toEqual(expect.arrayContaining(['start', 'start-demo', 'go-home', 'go-dev', 'demo-fast', 'appearance']));
     expect(idle).not.toContain('end');
     const running = buildCommands({ status: 'running', demoFast: false, hasSummary: false, devTools: false }).map((c) => c.id);
     expect(running).toEqual(expect.arrayContaining(['pause', 'end']));

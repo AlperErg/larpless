@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef } from 'react';
 import type { ReactNode } from 'react';
-import { Animated, Easing, StyleSheet, View } from 'react-native';
+import { StyleSheet, Animated, Easing, View } from 'react-native';
 import type { Route } from '../../store/navStore';
-import { colors, motion } from '../theme';
+import { colors, motion, themed } from '../theme';
 import { ErrorBoundary } from './ErrorBoundary';
 import { Sidebar } from './Sidebar';
 
@@ -35,7 +35,7 @@ export function AppLayout({ route, children }: AppLayoutProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   root: { flex: 1, flexDirection: 'row', backgroundColor: colors.bg },
   content: { flex: 1, backgroundColor: colors.bg },
-});
+}));

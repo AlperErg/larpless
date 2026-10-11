@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
-import { Animated, Easing, StyleSheet } from 'react-native';
-import { colors, motion } from '../theme';
+import { StyleSheet, Animated, Easing } from 'react-native';
+import { colors, motion, themed } from '../theme';
 import { MacPressable } from './mac';
 
 export interface SwitchProps {
@@ -43,8 +43,8 @@ export function Switch({ value, onChange, disabled, testID, accessibilityLabel }
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   track: { width: W, height: H, borderRadius: H / 2, justifyContent: 'center' },
   knob: { width: KNOB, height: KNOB, borderRadius: KNOB / 2, backgroundColor: colors.raised },
   disabled: { opacity: 0.4 },
-});
+}));

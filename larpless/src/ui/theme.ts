@@ -1,14 +1,18 @@
 /**
  * LarpLess design tokens. CONTRACTS.md §9.
  *
- * Cool desk-paper canvas, white raised surfaces, one cobalt accent.
+ * Light: cool desk-paper canvas, white raised surfaces, one cobalt accent.
+ * Dark: the landing site (site/src/style.css). Warm paper ink on #10110F,
+ * cream as the accent, borders instead of shadows. Same hue, lightness steps only.
  * This is the ONLY file in src/ui that may contain hex colour values.
- * Tokens are grouped per scheme so a `dark` set can be added later (cut item 4);
- * only `light` ships today, and `colors` / `tag` point at it.
+ *
+ * `colors`, `tag`, and `heat` are mutated in place by `applyScheme`. Style
+ * objects that must follow the scheme go through `themed()` so they read the
+ * tokens at render time instead of baking them in at load.
  */
 import type { ChunkKind, TagColor } from '../contracts/domain';
 
-export type SchemeName = 'light';
+export type SchemeName = 'light' | 'dark';
 
 export interface Palette {
   bg: string;
@@ -87,14 +91,58 @@ const lightHeat: [string, string, string, string, string] = [
   '#448361',
 ];
 
-export const schemes = {
-  light: { colors: lightPalette, tag: lightTags, heat: lightHeat },
-} as const;
+/**
+ * Dark ramp from the landing site. Faint is one step lighter than the site's
+ * #8F8A82 so hints still clear 4.5:1 on a selected row.
+ */
+const darkPalette: Palette = {
+  bg: '#10110F',
+  raised: '#1C1D1A',
+  wash: '#242522',
+  sidebar: '#10110F',
+  text: '#F4F1EA',
+  muted: '#C8C3B8',
+  faint: '#9B968E',
+  border: '#F4F1EA29',
+  hover: '#2A2B28',
+  active: '#343532',
+  accent: '#F4F1EA',
+  accentHover: '#E4DFD4',
+  accentSoft: '#30302E',
+  onAccent: '#161614',
+  backdrop: '#10110FCC',
+  codeBg: '#1C1D1A',
+  codeText: '#E07A74',
+  shadow: '#000000',
+};
 
-/** Active scheme. Light only for now. */
-export const colors: Palette = schemes.light.colors;
-export const tag: Record<TagColor, TagTone> = schemes.light.tag;
-export const heat = schemes.light.heat;
+/** Green, blue, red, and gray match the site's stage colors. The rest keep their hue, lifted in OKLCH. */
+const darkTags: Record<TagColor, TagTone> = {
+  gray: { bg: '#222220', text: '#C8C3B8' },
+  brown: { bg: '#3F2F28', text: '#DEB3A0' },
+  orange: { bg: '#432D1F', text: '#EBAF85' },
+  yellow: { bg: '#3F301B', text: '#DFB67B' },
+  green: { bg: '#1A2420', text: '#6FBF8E' },
+  blue: { bg: '#1A242C', text: '#7EB0D4' },
+  purple: { bg: '#392D42', text: '#CFAEEA' },
+  pink: { bg: '#432A36', text: '#EBA6C5' },
+  red: { bg: '#2A1C1B', text: '#E07A74' },
+};
+
+const darkHeat: [string, string, string, string, string] = [
+  '#2A2B28',
+  '#3D6B4E',
+  '#4F8A62',
+  '#7DBA8E',
+  '#C8EAD4',
+];
+
+const schemes: Record<SchemeName, { colors: Palette; tag: Record<TagColor, TagTone>; heat: typeof lightHeat }> = {
+  light: { colors: lightPalette, tag: lightTags, heat: lightHeat },
+  dark: { colors: darkPalette, tag: darkTags, heat: darkHeat },
+};
+
+let activeScheme: SchemeName = 'light';
 
 export const TAG_COLORS: TagColor[] = [
   'gray',
@@ -107,6 +155,49 @@ export const TAG_COLORS: TagColor[] = [
   'pink',
   'red',
 ];
+
+function cloneTags(src: Record<TagColor, TagTone>): Record<TagColor, TagTone> {
+  const out = {} as Record<TagColor, TagTone>;
+  for (const key of TAG_COLORS) out[key] = { ...src[key] };
+  return out;
+}
+
+/** Live tokens. Mutated by `applyScheme`; identity stays stable. */
+export const colors: Palette = { ...lightPalette };
+export const tag: Record<TagColor, TagTone> = cloneTags(lightTags);
+export const heat: [string, string, string, string, string] = [...lightHeat];
+
+/** Point the live tokens at a scheme. Safe to call during render; a no-op when it already matches. */
+export function applyScheme(name: SchemeName): void {
+  if (name === activeScheme) return;
+  activeScheme = name;
+  const next = schemes[name];
+  Object.assign(colors, next.colors);
+  for (const key of TAG_COLORS) {
+    tag[key].bg = next.tag[key].bg;
+    tag[key].text = next.tag[key].text;
+  }
+  for (let i = 0; i < heat.length; i++) heat[i] = next.heat[i];
+}
+
+/**
+ * Style objects that read tokens when a property is touched, so a scheme
+ * change restyles the next render. The factory must be module-level.
+ */
+export function themed<T extends Record<string, unknown>>(factory: () => T): T {
+  let cachedScheme: SchemeName | null = null;
+  let cached: T | null = null;
+  return new Proxy({} as T, {
+    get(_target, prop) {
+      if (typeof prop !== 'string') return undefined;
+      if (cached === null || cachedScheme !== activeScheme) {
+        cached = factory();
+        cachedScheme = activeScheme;
+      }
+      return cached[prop as keyof T];
+    },
+  });
+}
 
 /** PostScript names of the bundled fonts (CONTRACTS.md §9, verified with mdls). */
 export const fonts = {

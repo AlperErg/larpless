@@ -74,6 +74,8 @@ export interface FloatingPanelApi {
   show(): Promise<void>;
   hide(): Promise<void>;
   update(state: PanelState): void;                       // fire-and-forget
+  /** Light or dark. `system` is resolved in JS before this is called. */
+  setColorScheme(scheme: 'light' | 'dark'): void;
   onAction(cb: (a: PanelAction) => void): Unsubscribe;   // event 'FLPanelAction'
 }
 

@@ -1,6 +1,6 @@
 import { StyleSheet, Text as RNText, View } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
-import { colors, fonts, radius, space } from '../theme';
+import { colors, fonts, radius, space, themed } from '../theme';
 
 export interface PrivacyBadgeProps {
   framesAnalysed: number;
@@ -27,7 +27,7 @@ export function PrivacyBadge({ framesAnalysed, checksWithoutScreenshot, framesSt
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   badge: {
     alignSelf: 'flex-start',
     borderWidth: StyleSheet.hairlineWidth,
@@ -38,4 +38,4 @@ const styles = StyleSheet.create({
   },
   text: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 17, color: colors.muted },
   num: { fontFamily: fonts.semibold, color: colors.text },
-});
+}));

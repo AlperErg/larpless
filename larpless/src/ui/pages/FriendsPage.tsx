@@ -10,7 +10,7 @@ import { Avatar, PostCard } from '../components/PostCard';
 import { TextField } from '../components/TextField';
 import { Page } from '../layout/Page';
 import { errorText } from '../lib/social';
-import { colors, space, tag } from '../theme';
+import { colors, space, tag, themed } from '../theme';
 import { AuthGate } from './LoginPage';
 
 type Tab = 'feed' | 'friends';
@@ -246,7 +246,7 @@ function FriendRow({ f, note, children }: { f: Friendship; note?: string; childr
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   flex: { flex: 1 },
   row: { flexDirection: 'row', alignItems: 'center' },
   gapLeft: { marginLeft: space.md },
@@ -267,4 +267,4 @@ const styles = StyleSheet.create({
   },
   friendRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: space.xs + 2 },
   note: { marginLeft: space.sm },
-});
+}));

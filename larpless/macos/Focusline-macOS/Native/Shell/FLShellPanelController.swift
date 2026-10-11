@@ -126,6 +126,10 @@ final class FLShellPanelController {
     flShellLog("[FLPanel] hide")
   }
 
+  func setColorScheme(_ scheme: String) {
+    model.setColorScheme(scheme)
+  }
+
   func update(_ dict: NSDictionary) {
     let next = FLShellPanelState.parse(dict, previous: model.state)
     model.apply(next)

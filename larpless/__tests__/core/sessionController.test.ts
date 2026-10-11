@@ -53,6 +53,7 @@ function setup(opts: { settings?: Partial<Settings>; native?: Partial<NativeApis
       update: jest.fn((s: PanelState) => {
         panelUpdates.push(s);
       }),
+      setColorScheme: jest.fn(),
       onAction: jest.fn((cb) => {
         panelAction = cb;
         return () => {

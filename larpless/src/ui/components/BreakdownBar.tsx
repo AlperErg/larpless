@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, View } from 'react-native';
+import { StyleSheet, Animated, View } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { BreakdownEntry } from '../../contracts/domain';
-import { colors, space, tag } from '../theme';
+import { colors, space, tag, themed } from '../theme';
 import { formatDuration } from '../lib/format';
 import { Tag } from './Tag';
 
@@ -71,7 +71,7 @@ function Segment({ entry, last }: { entry: BreakdownEntry; last: boolean }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   track: {
     flexDirection: 'row',
     overflow: 'hidden',
@@ -83,4 +83,4 @@ const styles = StyleSheet.create({
   legend: { flexDirection: 'row', flexWrap: 'wrap', marginTop: space.sm },
   legendOnly: { marginTop: 0 },
   legendTag: { marginRight: space.xs + 2, marginBottom: space.xs },
-});
+}));

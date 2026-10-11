@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Clipboard, StyleSheet, Text as RNText, View } from 'react-native';
+import { StyleSheet, Clipboard, Text as RNText, View } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
-import { colors, fonts, radius, space } from '../theme';
+import { colors, fonts, radius, space, themed } from '../theme';
 import { MacPressable } from './mac';
 
 export interface CodeBlockProps {
@@ -45,7 +45,7 @@ export function CodeBlock({ code, testID, style }: CodeBlockProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   box: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -57,4 +57,4 @@ const styles = StyleSheet.create({
   code: { flex: 1, fontFamily: 'Menlo', fontSize: 13, lineHeight: 18, color: colors.text },
   copy: { paddingHorizontal: space.sm, paddingVertical: 2, borderRadius: radius },
   copyText: { fontFamily: fonts.medium, fontSize: 12, color: colors.muted },
-});
+}));

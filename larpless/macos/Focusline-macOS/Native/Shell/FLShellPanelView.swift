@@ -76,6 +76,7 @@ struct FLShellPanelView: View {
     .onPreferenceChange(FLShellButtonFramesKey.self) { frames in
       MainActor.assumeIsolated { model.buttonFrames = frames }
     }
+    .id(model.colorScheme)
   }
 }
 
@@ -278,14 +279,16 @@ private struct FLShellSoundOption: Identifiable {
   let tag: FLNotionTag
 }
 
-private let flShellSoundOptions: [FLShellSoundOption] = [
-  .init(id: "off", label: "Off", tag: FLNotionColors.gray),
-  .init(id: "white", label: "White", tag: FLNotionColors.gray),
-  .init(id: "pink", label: "Pink", tag: FLNotionColors.pink),
-  .init(id: "brown", label: "Brown", tag: FLNotionColors.brown),
-  .init(id: "rain", label: "Rain", tag: FLNotionColors.blue),
-  .init(id: "cafe", label: "Cafe", tag: FLNotionColors.orange),
-]
+private func flShellSoundOptions() -> [FLShellSoundOption] {
+  [
+    .init(id: "off", label: "Off", tag: FLNotionColors.gray),
+    .init(id: "white", label: "White", tag: FLNotionColors.gray),
+    .init(id: "pink", label: "Pink", tag: FLNotionColors.pink),
+    .init(id: "brown", label: "Brown", tag: FLNotionColors.brown),
+    .init(id: "rain", label: "Rain", tag: FLNotionColors.blue),
+    .init(id: "cafe", label: "Cafe", tag: FLNotionColors.orange),
+  ]
+}
 
 private struct FLShellHubView: View {
   @ObservedObject var model: FLShellPanelModel
@@ -321,7 +324,7 @@ private struct FLShellHubView: View {
 
       // Row 2: sound chips
       HStack(spacing: 4) {
-        ForEach(flShellSoundOptions) { opt in
+        ForEach(flShellSoundOptions()) { opt in }
           FLShellChip(id: "sound:\(opt.id)", label: opt.label, tag: opt.tag, selected: state.soundId == opt.id) {
             model.perform(["type": "sound", "id": opt.id])
           }

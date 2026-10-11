@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { StyleSheet, Text as RNText, View } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
-import { colors, fonts, radius, space } from '../theme';
+import { colors, fonts, radius, space, themed } from '../theme';
 import type { ModuleDraft } from '../lib/modules';
 import { blankDraft, nextTagColor } from '../lib/modules';
 import { MacPressable, MacTextInput, MacView } from './mac';
@@ -150,7 +150,7 @@ function NewRow({ onPress }: { onPress: () => void }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   table: {
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -190,4 +190,4 @@ const styles = StyleSheet.create({
   invisible: { opacity: 0 },
   newRow: { height: 32, justifyContent: 'center', paddingHorizontal: space.sm },
   newText: { fontFamily: fonts.regular, fontSize: 14, color: colors.faint },
-});
+}));

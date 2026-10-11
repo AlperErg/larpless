@@ -278,4 +278,16 @@ describe('Settings page', () => {
     expect(useNavStore.getState()).toMatchObject({ route: 'feed', params: { auth: 'signUp' } });
     act(() => signedOut.unmount());
   });
+
+  it('pins dark mode and follows the system again', async () => {
+    const r = render();
+    expect(isSelected(r, 'settings-appearance-system')).toBe(true);
+    await press(byTestID(r, 'settings-appearance-dark'));
+    expect(settings().appearance).toBe('dark');
+    expect((await stored()).appearance).toBe('dark');
+    expect(isSelected(r, 'settings-appearance-dark')).toBe(true);
+    await press(byTestID(r, 'settings-appearance-system'));
+    expect(settings().appearance).toBe('system');
+    act(() => r.unmount());
+  });
 });

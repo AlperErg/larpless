@@ -1,13 +1,13 @@
 /** Signed-out Friends: a sign-in screen, and a separate create-account screen. */
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, StyleSheet, View } from 'react-native';
+import { StyleSheet, Animated, Easing, View } from 'react-native';
 import { useNavStore } from '../../store/navStore';
 import { useSocialStore } from '../../store/socialStore';
 import { Button, Callout, Text } from '../components';
 import { TextField } from '../components/TextField';
 import { Page } from '../layout/Page';
 import { errorText } from '../lib/social';
-import { colors, motion, space, tag } from '../theme';
+import { colors, motion, space, tag, themed } from '../theme';
 
 type AuthScreen = 'signIn' | 'signUp';
 
@@ -202,7 +202,7 @@ function ErrorLine({ testID, text }: { testID: string; text: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   fill: { flex: 1 },
   card: {
     marginTop: space.xl,
@@ -221,4 +221,4 @@ const styles = StyleSheet.create({
   submit: { marginTop: space.lg, alignSelf: 'stretch' },
   hint: { marginTop: space.md },
   switchRow: { flexDirection: 'row', alignItems: 'center', marginTop: space.xs },
-});
+}));

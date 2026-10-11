@@ -10,5 +10,6 @@ export const mockPanel: FloatingPanelApi = {
   update: (state) => {
     console.log('[mock panel] update', state.status, state.title);
   },
+  setColorScheme: () => {},
   onAction: () => () => {},
 };

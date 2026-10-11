@@ -8,6 +8,9 @@ export const panel: FloatingPanelApi = {
   show: () => M.show(),
   hide: () => M.hide(),
   update: state => M.update(state),
+  setColorScheme: (scheme) => {
+    if (typeof M?.setColorScheme === 'function') M.setColorScheme(scheme);
+  },
   onAction: cb => {
     const sub = emitter!.addListener('FLPanelAction', cb);
     return () => sub.remove();
