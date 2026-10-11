@@ -66,6 +66,8 @@ export interface SessionControllerDeps {
   getSettings(): Settings;
   classifier: Pick<Classifier, 'classifyCurrent' | 'reset' | 'warmUp' | 'unload'>;
   ollama: Pick<OllamaClient, 'checkHealth'>;
+  /** Runs before the warm-up of a real session: starts Ollama, or restarts it without its prompt cache. */
+  prepareOllama?(): Promise<unknown>;
   now(): number;
   config: ControllerConfig;
   /** Called after a summary is saved (end, relabel) so the app store can refresh its session list. */
@@ -565,8 +567,14 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
         lastSummary: null,
       });
 
-      // Load the model and its system prompt now, so the first check doesn't pay for it.
-      if (!demo) deps.classifier.warmUp(deps.getModules()).catch(noop);
+      // Get Ollama up (without its prompt cache), then load the model and its system prompt now, so the
+      // first check doesn't pay for it. A session that ended meanwhile skips the warm-up.
+      if (!demo) {
+        (deps.prepareOllama?.() ?? Promise.resolve())
+          .catch(noop)
+          .then(() => (sessionId === sid ? deps.classifier.warmUp(deps.getModules()) : undefined))
+          .catch(noop);
+      }
       native.appShell.beginSessionActivity();
       unsubAction = native.panel.onAction((a) => controller.handlePanelAction(a));
       await startWebcam();

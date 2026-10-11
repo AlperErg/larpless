@@ -10,6 +10,7 @@ import { fixtureModules, fixtureSessions, fixtureStates } from '../../src/fixtur
 import { initialAppState, useAppStore } from '../../src/store/appStore';
 import { useNavStore } from '../../src/store/navStore';
 import type { Route } from '../../src/store/navStore';
+import { initialOllamaSetupState, useOllamaStore } from '../../src/store/ollamaStore';
 import { initialSessionState, useSessionStore } from '../../src/store/sessionStore';
 import { EditableTable } from '../../src/ui/components';
 import { buildCommands, filterCommands } from '../../src/ui/layout/CommandPalette';
@@ -42,7 +43,11 @@ async function mountApp(): Promise<ReactTestRenderer> {
   return r!;
 }
 
-const actionsBackup = { session: { ...useSessionStore.getState() }, app: { ...useAppStore.getState() } };
+const actionsBackup = {
+  session: { ...useSessionStore.getState() },
+  app: { ...useAppStore.getState() },
+  ollama: { ...useOllamaStore.getState() },
+};
 
 beforeAll(() => {
   jest.spyOn(console, 'log').mockImplementation(() => {});
@@ -52,6 +57,7 @@ afterEach(() => {
   act(() => {
     useSessionStore.setState({ ...actionsBackup.session, ...initialSessionState });
     useAppStore.setState({ ...actionsBackup.app, ...initialAppState });
+    useOllamaStore.setState({ ...actionsBackup.ollama, ...initialOllamaSetupState });
     useNavStore.setState({ route: 'home', params: {}, paletteOpen: false });
   });
 });
@@ -158,7 +164,9 @@ describe('full flow with fake store actions (stand-in for WS-C)', () => {
         saveModules: async (m) => useAppStore.setState({ modules: m }),
         updateSettings: async (p) => useAppStore.setState((s) => ({ settings: { ...s.settings, ...p } })),
       });
+      useOllamaStore.setState({ refreshHost: async () => {}, prepare: async () => 'ready' });
       useSessionStore.setState({
+        refreshOllama: async () => {},
         start: async (o) => {
           started.push(o);
           useSessionStore.setState(fixtureStates.running);
@@ -185,7 +193,8 @@ describe('full flow with fake store actions (stand-in for WS-C)', () => {
     act(() => byTestID(r, 'onboarding-next').props.onPress());
     expect(useAppStore.getState().modules.map((m) => m.name)).toEqual(['Biology BIO101']);
     act(() => byTestID(r, 'onboarding-next').props.onPress()); // permissions
-    await act(async () => byTestID(r, 'onboarding-finish').props.onPress()); // ollama
+    act(() => byTestID(r, 'onboarding-next').props.onPress()); // ollama
+    await act(async () => byTestID(r, 'onboarding-finish').props.onPress()); // model
     expect(useAppStore.getState().settings.onboarded).toBe(true);
     expect(useNavStore.getState().route).toBe('home');
 

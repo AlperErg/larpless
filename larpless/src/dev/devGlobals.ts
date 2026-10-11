@@ -12,6 +12,7 @@ import { config } from '../config';
 import { native } from '../native';
 import { useSessionStore } from '../store/sessionStore';
 import { useAppStore } from '../store/appStore';
+import { useOllamaStore } from '../store/ollamaStore';
 import { applyFixture } from '../fixtures/apply';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -31,6 +32,7 @@ export function installDevGlobals(): void {
     config,
     useSessionStore,
     useAppStore,
+    useOllamaStore,
     applyFixture,
     harness,
     storage: AsyncStorage,

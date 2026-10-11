@@ -2,9 +2,10 @@ import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { StyleSheet, Text as RNText, View } from 'react-native';
 import { config } from '../../config';
-import type { OllamaStatus, SessionStatus } from '../../contracts/store';
+import type { ModelPull, OllamaStatus, SessionStatus } from '../../contracts/store';
 import { useNavStore } from '../../store/navStore';
 import type { Route } from '../../store/navStore';
+import { useOllamaStore } from '../../store/ollamaStore';
 import { useSessionStore } from '../../store/sessionStore';
 import { MacPressable } from '../components/mac';
 import { StatusDot } from '../components/StatusDot';
@@ -42,7 +43,11 @@ export function sessionDot(status: SessionStatus): { kind: DotKind; pulsing: boo
   }
 }
 
-export function ollamaLine(status: OllamaStatus, model: string): { color: TagColor; text: string } {
+export function ollamaLine(status: OllamaStatus, model: string, pull?: ModelPull): { color: TagColor; text: string } {
+  if (pull?.status === 'pulling') {
+    const pct = pull.total > 0 ? ` · ${Math.floor((pull.completed / pull.total) * 100)}%` : '';
+    return { color: 'blue', text: `Downloading ${model}${pct}` };
+  }
   switch (status) {
     case 'ok':
       return { color: 'green', text: `${model} ready` };
@@ -62,9 +67,10 @@ export function Sidebar() {
   const status = useSessionStore((s) => s.status);
   const ollama = useSessionStore((s) => s.ollama);
   const refreshOllama = useSessionStore((s) => s.refreshOllama);
+  const pull = useOllamaStore((s) => s.pull);
   const dot = sessionDot(status);
   const items = config.SHOW_DEV_TOOLS ? [...ITEMS, DEV_ITEM] : ITEMS;
-  const ol = ollamaLine(ollama.status, ollama.model);
+  const ol = ollamaLine(ollama.status, ollama.model, pull);
 
   return (
     <View testID="sidebar" style={styles.sidebar}>

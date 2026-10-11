@@ -1,6 +1,6 @@
 import { createOllama } from '../../src/core/ollama';
 import { buildSystem } from '../../src/core/prompt';
-import type { FetchLike } from '../../src/core/ollama';
+import type { FetchLike, PullProgress, StreamLike } from '../../src/core/ollama';
 import type { ScreenSnapshot } from '../../src/contracts/native';
 import { fixtureModules } from '../../src/fixtures/data';
 
@@ -212,5 +212,83 @@ describe('ollama', () => {
       expect(await o.checkHealth()).toBe('ok');
       expect(fetchImpl.mock.calls[0][0]).toBe('http://h:1/api/tags');
     });
+  });
+});
+
+describe('ollama loadedModels', () => {
+  it('lists /api/ps names, null when Ollama is unreachable', async () => {
+    const fetchImpl = jest.fn<ReturnType<FetchLike>, Parameters<FetchLike>>(() =>
+      jsonRes({ models: [{ name: 'qwen3-vl:4b', model: 'qwen3-vl:4b' }, { model: 'llama3' }] }),
+    );
+    const o = createOllama({ baseUrl: 'http://x/', model: 'm', fetchImpl });
+    expect(await o.loadedModels()).toEqual(['qwen3-vl:4b', 'llama3']);
+    expect(fetchImpl.mock.calls[0][0]).toBe('http://x/api/ps');
+    const down = createOllama({ baseUrl: 'http://x', model: 'm', fetchImpl: () => Promise.reject(new Error('refused')) });
+    expect(await down.loadedModels()).toBeNull();
+  });
+});
+
+describe('ollama pull', () => {
+  type Init = Parameters<StreamLike>[1];
+  /** A StreamLike that sends `chunks` in order, then resolves with `status`. */
+  const stream = (chunks: string[], status = 200) =>
+    jest.fn<ReturnType<StreamLike>, Parameters<StreamLike>>(async (_url, _init, onText) => {
+      chunks.forEach(onText);
+      return { ok: status >= 200 && status < 300, status };
+    });
+  const line = (o: object) => `${JSON.stringify(o)}\n`;
+  const BIG = 'sha256:aaaa';
+  const SMALL = 'sha256:bbbb';
+
+  it('posts the model and sums progress over layers, across split lines', async () => {
+    const text = [
+      line({ status: 'pulling manifest' }),
+      line({ status: 'pulling aaaa', digest: BIG, total: 3000, completed: 0 }),
+      line({ status: 'pulling aaaa', digest: BIG, total: 3000, completed: 1500 }),
+      line({ status: 'pulling bbbb', digest: SMALL, total: 100, completed: 100 }),
+      line({ status: 'pulling aaaa', digest: BIG, total: 3000, completed: 3000 }),
+      line({ status: 'verifying sha256 digest' }),
+      line({ status: 'success' }),
+    ].join('');
+    // Cut the stream mid-line to check the line buffering.
+    const streamImpl = stream([text.slice(0, 50), text.slice(50, 140), text.slice(140)]);
+    const progress: PullProgress[] = [];
+    const o = createOllama({ baseUrl: 'http://127.0.0.1:11434/', model: 'qwen3-vl:4b', streamImpl, log: () => {} });
+    await o.pull((p) => progress.push(p));
+
+    const [url, init] = streamImpl.mock.calls[0];
+    expect(url).toBe('http://127.0.0.1:11434/api/pull');
+    expect((init as Init).method).toBe('POST');
+    expect(JSON.parse((init as Init).body!)).toEqual({ model: 'qwen3-vl:4b', stream: true });
+    expect(progress).toEqual([
+      { completed: 0, total: 3000 },
+      { completed: 1500, total: 3000 },
+      { completed: 1600, total: 3100 },
+      { completed: 3100, total: 3100 },
+    ]);
+  });
+
+  it("rejects with Ollama's error line, an HTTP error, or a stream that stops early", async () => {
+    const pull = (streamImpl: StreamLike) => createOllama({ baseUrl: 'http://x', model: 'nope', streamImpl, log: () => {} }).pull(() => {});
+    await expect(pull(stream([line({ error: 'pull model manifest: file does not exist' })], 500))).rejects.toThrow(
+      'pull model manifest: file does not exist',
+    );
+    await expect(pull(stream(['not json\n'], 502))).rejects.toThrow('HTTP 502');
+    await expect(pull(stream([line({ status: 'pulling manifest' })]))).rejects.toThrow('stopped early');
+  });
+
+  it('passes the abort signal through and rethrows the AbortError', async () => {
+    const abort = new AbortController();
+    const streamImpl: StreamLike = (_url, init) =>
+      new Promise((_resolve, reject) => {
+        init.signal?.addEventListener('abort', () => {
+          const e = new Error('aborted');
+          e.name = 'AbortError';
+          reject(e);
+        });
+      });
+    const done = createOllama({ baseUrl: 'http://x', model: 'm', streamImpl, log: () => {} }).pull(() => {}, { signal: abort.signal });
+    abort.abort();
+    await expect(done).rejects.toMatchObject({ name: 'AbortError' });
   });
 });

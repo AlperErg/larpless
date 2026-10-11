@@ -9,6 +9,7 @@ import type { SessionController } from '../core/sessionController';
 import { fixtureChunks } from '../fixtures/data';
 import { native } from '../native';
 import { appDb, upsertSessionSummary, useAppStore } from './appStore';
+import { useOllamaStore } from './ollamaStore';
 import { allSubjects } from '../core/subjectLibrary';
 
 export const initialSessionState: SessionStoreState = {
@@ -55,6 +56,7 @@ export function getSessionController(): SessionController {
       ollama,
       now: Date.now,
       config,
+      prepareOllama: () => useOllamaStore.getState().prepare({ launch: true }),
       onSessionSaved: upsertSessionSummary,
       demoChunks: fixtureChunks,
     });
@@ -75,3 +77,15 @@ export const useSessionStore = create<SessionStore>()(() => ({
   skipPomodoroPhase: () => getSessionController().skipPomodoroPhase(),
   refreshOllama: () => getSessionController().refreshOllama(),
 }));
+
+// A finished launch, restart or download changes what the health check reports (sidebar, settings).
+useOllamaStore.subscribe((s, prev) => {
+  const started = prev.starting && !s.starting;
+  const pulled = prev.pull.status === 'pulling' && s.pull.status !== 'pulling';
+  if (started || pulled) {
+    useSessionStore
+      .getState()
+      .refreshOllama()
+      .catch(() => {});
+  }
+});

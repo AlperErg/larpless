@@ -28,7 +28,7 @@ const INITIAL: SessionStoreState = {
 
 const T0 = new Date(2026, 9, 9, 14, 0, 0).getTime();
 
-function setup(opts: { settings?: Partial<Settings>; native?: Partial<NativeApis> } = {}) {
+function setup(opts: { settings?: Partial<Settings>; native?: Partial<NativeApis>; prepareOllama?: () => Promise<unknown> } = {}) {
   let state: SessionStoreState = { ...INITIAL };
   const store: StoreApi = {
     getState: () => state,
@@ -85,6 +85,7 @@ function setup(opts: { settings?: Partial<Settings>; native?: Partial<NativeApis
     getSettings: () => settings,
     classifier,
     ollama,
+    prepareOllama: opts.prepareOllama,
     now: () => Date.now(),
     config: { WEBCAM_FPS: 1 },
     onSessionSaved: (s) => saved.push(s.id),
@@ -779,6 +780,39 @@ describe('sessionController', () => {
       await d.ctrl.end();
       expect(d.warmUp).not.toHaveBeenCalled();
       expect(d.unload).not.toHaveBeenCalled();
+    });
+
+    it('gets Ollama ready before the warm-up; a session that ended meanwhile skips it', async () => {
+      const releases: (() => void)[] = [];
+      const prepareOllama = jest.fn(() => new Promise<void>((resolve) => releases.push(resolve)));
+      const h = setup({ prepareOllama });
+      await h.ctrl.start({ pomodoro: 'off' });
+      expect(prepareOllama).toHaveBeenCalledTimes(1);
+      expect(h.warmUp).not.toHaveBeenCalled();
+      releases[0]();
+      await advance(0);
+      expect(h.warmUp).toHaveBeenCalledWith(fixtureModules);
+      await h.ctrl.end();
+
+      const e = setup({ prepareOllama });
+      await e.ctrl.start({ pomodoro: 'off' });
+      await e.ctrl.end();
+      releases[1]();
+      await advance(0);
+      expect(e.warmUp).not.toHaveBeenCalled();
+
+      const d = setup({ prepareOllama });
+      await d.ctrl.start({ pomodoro: 'off', demo: true });
+      await d.ctrl.end();
+      expect(prepareOllama).toHaveBeenCalledTimes(2);
+    });
+
+    it('still warms up when getting Ollama ready fails', async () => {
+      const h = setup({ prepareOllama: async () => Promise.reject(new Error('E_TIMEOUT')) });
+      await h.ctrl.start({ pomodoro: 'off' });
+      await advance(0);
+      expect(h.warmUp).toHaveBeenCalledTimes(1);
+      await h.ctrl.end();
     });
   });
 });

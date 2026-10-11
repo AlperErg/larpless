@@ -16,10 +16,26 @@ export type FetchLike = (
   init?: { method?: string; headers?: Record<string, string>; body?: string; signal?: AbortSignal },
 ) => Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>;
 
+/** POST whose response body arrives in pieces through `onText` (Ollama's NDJSON progress). */
+export type StreamLike = (
+  url: string,
+  init: { method: string; headers?: Record<string, string>; body?: string; signal?: AbortSignal },
+  onText: (text: string) => void,
+) => Promise<{ ok: boolean; status: number }>;
+
+export interface PullProgress {
+  /** Bytes downloaded across the layers Ollama has announced so far. */
+  completed: number;
+  /** Size of those layers; 0 until Ollama has read the manifest. */
+  total: number;
+}
+
 export interface OllamaOptions {
   baseUrl: string | (() => string);
   model: string | (() => string);
   fetchImpl?: FetchLike;
+  /** Used by pull(); defaults to XMLHttpRequest, whose responseText grows as the body arrives. */
+  streamImpl?: StreamLike;
   /** Timeout for classify() when a call does not pass its own. Default 30 s. */
   timeoutMs?: number;
   /** Timeout for checkHealth() and unload(); default 3 s. */
@@ -47,11 +63,65 @@ export interface OllamaClient {
   warmUp(modules: StudyModule[], call?: Pick<OllamaCallOptions, 'keepAlive'>): Promise<void>;
   /** Ask Ollama to unload the model now instead of after keep_alive. Never rejects. */
   unload(): Promise<void>;
+  /** Names of the models Ollama has in memory (GET /api/ps); null when it can't be reached. */
+  loadedModels(): Promise<string[] | null>;
+  /**
+   * Download the model (POST /api/pull), reporting bytes as they arrive. Rejects with Ollama's error, or an
+   * AbortError when `signal` fires; Ollama keeps the partial download and resumes it on the next pull.
+   */
+  pull(onProgress: (p: PullProgress) => void, call?: { signal?: AbortSignal }): Promise<void>;
 }
 
 const read = (v: string | (() => string)) => (typeof v === 'function' ? v() : v);
 const stripLatest = (name: string) => name.replace(/:latest$/, '');
 const trimSlash = (url: string) => url.replace(/\/+$/, '');
+
+/** Ollama treats `name` and `name:latest` as the same model. */
+export const sameModel = (a: string, b: string) => stripLatest(a) === stripLatest(b);
+
+function abortError(message: string): Error {
+  const err = new Error(message);
+  err.name = 'AbortError';
+  return err;
+}
+
+const xhrStream: StreamLike = (url, init, onText) =>
+  new Promise((resolve, reject) => {
+    if (init.signal?.aborted) {
+      reject(abortError('aborted'));
+      return;
+    }
+    const xhr = new XMLHttpRequest();
+    let seen = 0;
+    const flush = () => {
+      const text = xhr.responseText;
+      if (text.length > seen) {
+        onText(text.slice(seen));
+        seen = text.length;
+      }
+    };
+    const onAbort = () => xhr.abort();
+    const settle = () => init.signal?.removeEventListener('abort', onAbort);
+    xhr.open(init.method, url);
+    for (const [k, v] of Object.entries(init.headers ?? {})) xhr.setRequestHeader(k, v);
+    // Setting onprogress is what makes React Native deliver the body incrementally.
+    xhr.onprogress = flush;
+    xhr.onload = () => {
+      settle();
+      flush();
+      resolve({ ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status });
+    };
+    xhr.onerror = () => {
+      settle();
+      reject(new Error('network error'));
+    };
+    xhr.onabort = () => {
+      settle();
+      reject(abortError('aborted'));
+    };
+    init.signal?.addEventListener('abort', onAbort);
+    xhr.send(init.body ?? null);
+  });
 
 /**
  * Run `fn` with an AbortSignal that fires after `ms`. Also rejects on the timeout by itself, in case
@@ -63,9 +133,7 @@ async function withTimeout<T>(ms: number, fn: (signal: AbortSignal) => Promise<T
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
       ctrl.abort();
-      const err = new Error('timeout');
-      err.name = 'AbortError';
-      reject(err);
+      reject(abortError('timeout'));
     }, ms);
   });
   try {
@@ -77,6 +145,7 @@ async function withTimeout<T>(ms: number, fn: (signal: AbortSignal) => Promise<T
 
 export function createOllama(opts: OllamaOptions): OllamaClient {
   const fetchImpl: FetchLike = opts.fetchImpl ?? (globalThis.fetch as unknown as FetchLike);
+  const streamImpl = opts.streamImpl ?? xhrStream;
   const timeoutMs = opts.timeoutMs ?? 30_000;
   const healthTimeoutMs = opts.healthTimeoutMs ?? 3_000;
   const warmUpTimeoutMs = opts.warmUpTimeoutMs ?? 30_000;
@@ -93,9 +162,8 @@ export function createOllama(opts: OllamaOptions): OllamaClient {
         });
         const models = (data as { models?: { name?: unknown; model?: unknown }[] } | null)?.models;
         if (!Array.isArray(models)) return 'down';
-        const wanted = stripLatest(model);
         const found = models.some((m) =>
-          [m?.name, m?.model].some((n) => typeof n === 'string' && stripLatest(n) === wanted),
+          [m?.name, m?.model].some((n) => typeof n === 'string' && sameModel(n, model)),
         );
         return found ? 'ok' : 'modelMissing';
       } catch {
@@ -209,6 +277,78 @@ export function createOllama(opts: OllamaOptions): OllamaClient {
         log(`[ollama] ${model} unloaded`);
       } catch {
         log(`[ollama] ${model} unload failed`);
+      }
+    },
+
+    async loadedModels() {
+      try {
+        const data = await withTimeout(healthTimeoutMs, async (signal) => {
+          const res = await fetchImpl(`${trimSlash(read(opts.baseUrl))}/api/ps`, { method: 'GET', signal });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return res.json();
+        });
+        const models = (data as { models?: { name?: unknown; model?: unknown }[] } | null)?.models;
+        if (!Array.isArray(models)) return null;
+        return models
+          .map((m) => (typeof m?.name === 'string' ? m.name : typeof m?.model === 'string' ? m.model : ''))
+          .filter(Boolean);
+      } catch {
+        return null;
+      }
+    },
+
+    async pull(onProgress, call) {
+      const model = read(opts.model);
+      const t0 = Date.now();
+      // Ollama reports each layer (blob) separately; progress is the sum over the layers seen so far.
+      const layers = new Map<string, PullProgress>();
+      let error: string | null = null;
+      let success = false;
+      let pending = '';
+      const onLine = (line: string) => {
+        if (!line.trim()) return;
+        let msg: { status?: unknown; digest?: unknown; total?: unknown; completed?: unknown; error?: unknown };
+        try {
+          msg = JSON.parse(line);
+        } catch {
+          return;
+        }
+        if (typeof msg.error === 'string') error = msg.error;
+        if (msg.status === 'success') success = true;
+        if (typeof msg.digest !== 'string' || typeof msg.total !== 'number') return;
+        layers.set(msg.digest, { total: msg.total, completed: typeof msg.completed === 'number' ? msg.completed : 0 });
+        let completed = 0;
+        let total = 0;
+        for (const l of layers.values()) {
+          completed += l.completed;
+          total += l.total;
+        }
+        onProgress({ completed, total });
+      };
+      try {
+        const res = await streamImpl(
+          `${trimSlash(read(opts.baseUrl))}/api/pull`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model, stream: true }),
+            signal: call?.signal,
+          },
+          (text) => {
+            const lines = (pending + text).split('\n');
+            pending = lines.pop() ?? '';
+            lines.forEach(onLine);
+          },
+        );
+        onLine(pending);
+        if (error) throw new Error(error);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!success) throw new Error('the download stopped early');
+        log(`[ollama] ${model} pulled in ${Date.now() - t0} ms`);
+      } catch (e) {
+        const aborted = (e as { name?: string })?.name === 'AbortError';
+        log(`[ollama] ${model} pull ${aborted ? 'cancelled' : 'failed'} after ${Date.now() - t0} ms`);
+        throw e;
       }
     },
   };

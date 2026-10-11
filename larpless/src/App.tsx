@@ -13,6 +13,7 @@ import { native } from './native';
 import { useAppStore } from './store/appStore';
 import { useNavStore } from './store/navStore';
 import type { Route } from './store/navStore';
+import { useOllamaStore } from './store/ollamaStore';
 import { useSessionStore } from './store/sessionStore';
 import { useSocialStore } from './store/socialStore';
 import { CommandPalette } from './ui/layout/CommandPalette';
@@ -72,6 +73,11 @@ function useBootRouting(): boolean {
           .getState()
           .refreshOllama()
           .catch((e: unknown) => console.warn('[ui] refreshOllama failed:', e instanceof Error ? e.message : String(e)));
+        // Restart an idle Ollama without its 8 GB prompt cache now rather than at session start. Never opens it.
+        useOllamaStore
+          .getState()
+          .prepare({ launch: false })
+          .catch(() => {});
         if (!alive) return;
         const { settings } = useAppStore.getState();
         const nav = useNavStore.getState();

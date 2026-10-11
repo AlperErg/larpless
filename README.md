@@ -98,7 +98,9 @@ The saved profile is a ceiling. If a vision call takes longer than a chunk, or y
 
 ### The model
 
-Starting a session warms the model up, which takes about 3 s while the first window settles, so the first check doesn't also wait for the model to load. The subject list sits in the system prompt, which is identical on every check, so Ollama reuses it and only processes the new screenshot and window line. Ending a session unloads the model to free its memory right away instead of waiting out the keep-alive.
+Starting a session opens Ollama in the background if it isn't running, then warms the model up, which takes about 3 s while the first window settles, so the first check doesn't also wait for the model to load. LarpLess asks for a 4K context. The subject list sits in the system prompt, which is identical on every check, so Ollama reuses it and only processes the new screenshot and window line. Ending a session unloads the model to free its memory right away instead of waiting out the keep-alive.
+
+**Memory saver.** Ollama 0.30+ runs models in llama.cpp's server, which keeps old prompts in a RAM cache of up to 8 GB. LarpLess never reuses one, so the cache only grows (about 340 MB per screenshot) and can push a 16–24 GB Mac into swap. Only `LLAMA_ARG_CACHE_RAM=0` in Ollama's environment at launch turns it off, so LarpLess applies it itself. It opens Ollama.app with that variable, and at app launch and session start it restarts an Ollama.app running without it, as long as no other model is loaded. Your own `OLLAMA_*` settings carry over. **Settings → Local AI → Memory saver** shows the state and has a **Restart Ollama** button. If you run the server yourself (a terminal or Homebrew), start it with `LLAMA_ARG_CACHE_RAM=0 ollama serve`.
 
 **Layering:** `ui → store → core → native facades → Swift`. `src/core` is pure TypeScript with injected dependencies, so the whole session loop runs under Jest with fake timers.
 
@@ -135,19 +137,7 @@ It is also worth considering that performance may degrade over time for MacBook 
 - **Node 20** or above.
 - **Cocoapods** (`brew install cocoapods`).
 - **CMake** (`brew install cmake`).
-- **[Ollama](https://ollama.com)** running locally, with the vision model pulled:
-
-```bash
-ollama pull qwen3-vl:4b
-```
-
-LarpLess asks Ollama for a 4K context and unloads the model when a session ends. Ollama's model runner also keeps a prompt cache in RAM (up to 8 GB by default) that fills up during long sessions without helping LarpLess. On a 16–24 GB Mac you can turn it off by quitting Ollama and starting it with:
-
-```bash
-open --env LLAMA_ARG_CACHE_RAM=0 -a Ollama
-```
-
-This lasts until Ollama is quit.
+- **[Ollama](https://ollama.com)** to run the vision model. Onboarding installs it and downloads the model for you (see [First launch](#first-launch)); from a terminal it's `ollama pull qwen3-vl:4b`.
 
 ### Install
 
@@ -182,9 +172,7 @@ This starts Metro on the port, builds the Debug app with that port baked in, and
 pkill -f "$PWD/macos/build/Build/Products/Debug/LarpLess.app"
 ```
 
-On first launch, grant **Screen Recording** (macOS needs an app relaunch afterwards; onboarding has a button for it), **Camera** and **Notifications**.
-
-The Debug app is signed ad-hoc, so no Apple ID is needed, but macOS forgets those permissions after every rebuild. To keep them, sign with your own Apple Development certificate (**any Apple ID works**, via Xcode → Settings → Accounts → Manage Certificates). Create `larpless/macos/signing.local` (gitignored) and `run-mac.sh` picks it up:
+The Debug app is signed ad-hoc, so no Apple ID is needed, but macOS forgets its Screen Recording and Camera permissions after every rebuild. To keep them, sign with your own Apple Development certificate (**any Apple ID works**, via Xcode → Settings → Accounts → Manage Certificates). Create `larpless/macos/signing.local` (gitignored) and `run-mac.sh` picks it up:
 
 ```bash
 CODE_SIGN_IDENTITY="Apple Development: Your Name (XXXXXXXXXX)"
@@ -198,6 +186,19 @@ The Release configuration is set up for distribution: Developer ID signing for t
 ```bash
 xcodebuild -workspace macos/Focusline.xcworkspace -scheme Focusline-macOS -configuration Release -derivedDataPath macos/build CODE_SIGN_IDENTITY="Apple Development: Your Name (XXXXXXXXXX)" DEVELOPMENT_TEAM=YOURTEAMID build
 ```
+
+### First launch
+
+Onboarding takes four steps:
+
+1. **Your modules.** Optional. LarpLess recognises the built-in subjects on its own; add your own courses (course codes, topics, lecturer names) for sharper labels.
+2. **Permissions.** **Screen Recording** (macOS only applies it after a relaunch; the **Relaunch** button does that), **Camera** (optional: presence and phone detection) and **Notifications**.
+3. **Ollama.** LarpLess checks whether Ollama is installed and running, and the page updates by itself.
+   - Not installed: **Download Ollama** downloads `Ollama.dmg`. Open it and drag Ollama into Applications.
+   - Installed but not running: **Open Ollama** starts it in the background, with the [memory saver](#the-model) on.
+4. **AI model.** **Download model** pulls `qwen3-vl:4b` (about 3.3 GB) through Ollama with a progress bar. Cancel stops it, and the next download picks up where it left off. The download keeps going if you finish onboarding, and the sidebar shows its progress.
+
+You can finish without Ollama or the model and set them up later: **Settings → Local AI** has the same **Open Ollama** and **Download model** buttons, and demo mode works offline. In dev builds, Settings → **Run onboarding again** shows it again.
 
 ### Demo mode
 

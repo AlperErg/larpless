@@ -3,10 +3,13 @@ import type { ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { config } from '../../config';
 import type { Settings, SoundId } from '../../contracts/domain';
+import type { OllamaHostInfo } from '../../contracts/native';
+import { isLocalUrl } from '../../core/ollamaHost';
 import { useAppStore } from '../../store/appStore';
 import { useNavStore } from '../../store/navStore';
+import { useOllamaStore } from '../../store/ollamaStore';
 import { useSessionStore } from '../../store/sessionStore';
-import { Button, MacPressable, MacTextInput, Segmented, Switch, Text } from '../components';
+import { Button, CodeBlock, MacPressable, MacTextInput, ModelDownload, Segmented, Switch, Text } from '../components';
 import { Page } from '../layout/Page';
 import { isLive } from '../lib/actions';
 import { POMODORO_OPTIONS, POWER_OPTIONS, SOUNDS, SOUND_ICON, SOUND_LABEL, STRICTNESS_OPTIONS } from '../lib/labels';
@@ -38,12 +41,26 @@ export function SettingsPage() {
   useEffect(() => setModel(s.model), [s.model]);
   useEffect(() => setUrl(s.ollamaUrl), [s.ollamaUrl]);
   const [checking, setChecking] = useState(false);
+  const host = useOllamaStore((st) => st.host);
+  const starting = useOllamaStore((st) => st.starting);
+  const prepared = useOllamaStore((st) => st.prepared);
+  const pull = useOllamaStore((st) => st.pull);
+  const prepare = useOllamaStore((st) => st.prepare);
+  const refreshHost = useOllamaStore((st) => st.refreshHost);
+  const local = isLocalUrl(s.ollamaUrl);
+  useEffect(() => {
+    refreshHost().catch(() => {});
+  }, [refreshHost]);
 
   const retry = () => {
     setChecking(true);
+    refreshHost().catch(() => {});
     refreshOllama()
       .catch(() => {})
       .finally(() => setChecking(false));
+  };
+  const startOllama = (force: boolean) => {
+    prepare({ launch: true, force }).catch(() => {});
   };
   const commitModel = () => {
     const v = model.trim();
@@ -58,7 +75,7 @@ export function SettingsPage() {
     update({ volume: clamped });
     if (isLive(status)) setVolume(clamped);
   };
-  const ol = ollamaLine(ollama.status, ollama.model);
+  const ol = ollamaLine(ollama.status, ollama.model, pull);
 
   return (
     <Page testID="page-settings" header={{ icon: '⚙️', title: 'Settings' }}>
@@ -94,8 +111,44 @@ export function SettingsPage() {
             {ol.text}
           </Text>
           <Button title={checking ? 'Checking…' : 'Retry'} icon="↻" variant="ghost" disabled={checking} onPress={retry} />
+          {ollama.status === 'down' && local && host?.appInstalled ? (
+            <Button
+              testID="settings-open-ollama"
+              title={starting ? 'Opening…' : 'Open Ollama'}
+              variant="secondary"
+              disabled={starting}
+              onPress={() => startOllama(false)}
+            />
+          ) : null}
         </View>
+        {ollama.status === 'modelMissing' || pull.status === 'pulling' ? <ModelDownload testID="settings-pull" /> : null}
       </Row>
+      {local && host?.promptCache ? (
+        <Row label="Memory saver" hint="Runs Ollama without the prompt cache that can hold 8 GB of RAM.">
+          <View style={styles.inline}>
+            <Text testID="settings-memory" style={styles.statusText}>
+              {MEMORY_TEXT[host.promptCache]}
+            </Text>
+            {host.promptCache === 'default' && host.server === 'app' ? (
+              <Button
+                testID="settings-restart-ollama"
+                title={starting ? 'Restarting…' : 'Restart Ollama'}
+                variant="secondary"
+                disabled={starting}
+                onPress={() => startOllama(true)}
+              />
+            ) : null}
+          </View>
+          {host.promptCache === 'default' && host.server !== 'app' ? (
+            <CodeBlock code="LLAMA_ARG_CACHE_RAM=0 ollama serve" style={styles.code} />
+          ) : null}
+          {prepared === 'failed' ? (
+            <Text variant="small" color={tag.red.text}>
+              Couldn’t restart Ollama.
+            </Text>
+          ) : null}
+        </Row>
+      ) : null}
 
       <SectionTitle>Focus</SectionTitle>
       <Row label="Power" hint="Slower machines use Eco so the model can finish.">
@@ -146,6 +199,12 @@ export function SettingsPage() {
     </Page>
   );
 }
+
+const MEMORY_TEXT: Record<NonNullable<OllamaHostInfo['promptCache']>, string> = {
+  off: 'On',
+  default: 'Off: Ollama may hold up to 8 GB more RAM',
+  custom: 'Custom prompt cache size',
+};
 
 function SectionTitle({ children }: { children: ReactNode }) {
   return (
@@ -221,4 +280,5 @@ const styles = StyleSheet.create({
   volStep: { width: 14, height: 14, borderRadius: 2, marginRight: 3 },
   volPct: { marginLeft: space.sm, width: 36 },
   gapLeft: { marginLeft: space.md },
+  code: { alignSelf: 'stretch', maxWidth: 420, marginTop: space.xs },
 });

@@ -79,3 +79,11 @@ export function formatLongDate(at: number): string {
 export function capitalize(s: string): string {
   return s.length ? s[0].toUpperCase() + s.slice(1) : s;
 }
+
+/** Decimal units, as Ollama shows them: 3_295_612_832 → "3.3 GB", 41_200_000 → "41 MB". */
+export function formatBytes(n: number): string {
+  if (n >= 1e9) return `${(n / 1e9).toFixed(1)} GB`;
+  if (n >= 1e6) return `${Math.round(n / 1e6)} MB`;
+  if (n >= 1e3) return `${Math.round(n / 1e3)} KB`;
+  return `${Math.max(0, Math.round(n))} B`;
+}

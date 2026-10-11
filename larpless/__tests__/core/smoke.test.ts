@@ -24,6 +24,8 @@ const API_KEYS: (keyof NativeApis)[] = [
   'notifications',
   'sound',
   'appShell',
+  'nowPlaying',
+  'ollamaHost',
 ];
 
 function checkChunkInvariants(chunks: Chunk[]) {

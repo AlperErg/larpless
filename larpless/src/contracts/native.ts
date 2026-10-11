@@ -106,6 +106,34 @@ export interface AppShellApi {
   onMenuCommand(cb: (c: MenuCommand) => void): Unsubscribe;   // event 'FLMenuCommand'
 }
 
+/* ---------- FLOllama ---------- */
+/**
+ * llama.cpp's RAM prompt cache in the running Ollama server (env LLAMA_ARG_CACHE_RAM). 'default' means
+ * unset, i.e. up to 8 GiB of old prompts, one ~340 MB entry per screenshot that LarpLess never reuses.
+ */
+export type OllamaPromptCache = 'off' | 'default' | 'custom';
+export interface OllamaHostInfo {
+  /** Ollama.app is installed, so LarpLess can open and restart it. */
+  appInstalled: boolean;
+  /** The `ollama` command is installed (Homebrew, or the link the app creates). */
+  cliInstalled: boolean;
+  appRunning: boolean;
+  /** Who runs `ollama serve`: Ollama.app, something else (a terminal, Homebrew), or nothing. */
+  server: 'app' | 'other' | null;
+  /** That server's prompt cache; null when no server runs or its environment can't be read. */
+  promptCache: OllamaPromptCache | null;
+}
+export interface OllamaHostApi {
+  info(): Promise<OllamaHostInfo>;
+  /** Opens Ollama.app in the background with the prompt cache off; no-op when it's running. Rejects E_NOT_INSTALLED. */
+  launch(): Promise<void>;
+  /**
+   * Quits Ollama.app and opens it again with the prompt cache off, keeping its OLLAMA_/LLAMA_ variables.
+   * Rejects E_NOT_RUNNING, or E_TIMEOUT when Ollama doesn't quit.
+   */
+  restart(): Promise<void>;
+}
+
 export interface NativeApis {
   screen: ScreenCaptureApi;
   permissions: PermissionsApi;
@@ -115,4 +143,5 @@ export interface NativeApis {
   sound: SoundApi;
   appShell: AppShellApi;
   nowPlaying: NowPlayingApi;
+  ollamaHost: OllamaHostApi;
 }
