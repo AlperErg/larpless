@@ -324,7 +324,7 @@ private struct FLShellHubView: View {
 
       // Row 2: sound chips
       HStack(spacing: 4) {
-        ForEach(flShellSoundOptions()) { opt in }
+        ForEach(flShellSoundOptions()) { opt in
           FLShellChip(id: "sound:\(opt.id)", label: opt.label, tag: opt.tag, selected: state.soundId == opt.id) {
             model.perform(["type": "sound", "id": opt.id])
           }
