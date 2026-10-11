@@ -230,7 +230,7 @@ a:hover {
 .soon {
   appearance: none;
   position: relative;
-  overflow: hidden;
+  overflow: clip;
   isolation: isolate;
   border: 0;
   background: var(--paper);
@@ -242,6 +242,8 @@ a:hover {
   min-height: 36px;
   padding: 0 16px;
   border-radius: 999px;
+  /* Buttons ignore overflow + radius, so the sheen paints as a rectangle past the pill. */
+  clip-path: inset(0 round 999px);
   cursor: default;
 }
 
