@@ -744,7 +744,7 @@ section {
   background: var(--green);
 }
 
-.seg.sets {
+.seg.break {
   --share: 18;
   flex: 18;
   background: var(--blue-tag);
@@ -930,7 +930,7 @@ section {
   background: var(--green);
 }
 
-.swatch.sets {
+.swatch.break {
   background: var(--blue-tag);
 }
 
