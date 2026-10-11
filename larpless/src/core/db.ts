@@ -49,8 +49,8 @@ export function createMemoryKv(map: Map<string, string> = new Map()): KeyValue &
   };
 }
 
-/** Known settings only. A stuffed-in track title must not survive a load or a save. */
-function cleanSettings(raw: unknown): Settings {
+/** Known settings only. A stuffed-in track title must not survive a load, a save, or the in-memory store. */
+export function cleanSettings(raw: unknown): Settings {
   const src = raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
   const out: Settings = { ...DEFAULT_SETTINGS };
   for (const key of Object.keys(DEFAULT_SETTINGS) as (keyof Settings)[]) {

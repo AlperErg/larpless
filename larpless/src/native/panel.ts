@@ -31,7 +31,7 @@ export const panelDebug = {
     M.debugClick(buttonId),
   drag: (dx: number, dy: number): Promise<Record<string, unknown>> =>
     M.debugDrag(dx, dy),
-  /** Renders the live panel offscreen and OCRs it; returns text lines + a background colour sample. */
+  /** OCRs the study card only. The media strip is not included. */
   renderText: (): Promise<Record<string, unknown>> => M.debugRenderText(),
   /** Background colour of the live panel (right edge, mid height). */
   sampleBg: (): Promise<{

@@ -30,6 +30,11 @@ describe('appStore (AsyncStorage)', () => {
     expect(JSON.parse((await AsyncStorage.getItem('fl:modules'))!)).toEqual(fixtureModules);
     expect(JSON.parse((await AsyncStorage.getItem('fl:settings'))!)).toMatchObject({ onboarded: true, strictness: 5 });
 
+    await useAppStore.getState().updateSettings({ volume: 0.3, title: 'Secret Song', artist: 'Band' } as never);
+    expect(useAppStore.getState().settings).not.toHaveProperty('title');
+    expect(JSON.stringify(useAppStore.getState().settings)).not.toContain('Secret Song');
+    expect(await AsyncStorage.getItem('fl:settings')).not.toContain('Secret Song');
+
     useAppStore.setState({ modules: [], loaded: false });
     await useAppStore.getState().load();
     expect(useAppStore.getState().modules).toEqual(fixtureModules);

@@ -292,12 +292,21 @@ final class FLShellPanelController {
             "userMoved": userMoved]
   }
 
-  /// Background colour of the live view at the right edge, mid height (used to observe tint animation and pulse).
+  /// The study card, excluding the media strip. Hosting view origin is at the top when flipped.
+  private func studyCardRect(in host: NSView) -> NSRect {
+    let cardHeight = min(Self.size.height, host.bounds.height)
+    let cardY = host.isFlipped ? host.bounds.minY : host.bounds.maxY - cardHeight
+    return NSRect(x: host.bounds.minX, y: cardY, width: host.bounds.width, height: cardHeight)
+  }
+
+  /// Background colour of the study card at the right edge, mid height (used to observe tint animation and pulse).
   func debugSampleBg() -> [String: Any] {
-    guard let host = hostingView, let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) else {
+    guard let host = hostingView else { return ["ok": false] }
+    let card = studyCardRect(in: host)
+    guard let rep = host.bitmapImageRepForCachingDisplay(in: card) else {
       return ["ok": false]
     }
-    host.cacheDisplay(in: host.bounds, to: rep)
+    host.cacheDisplay(in: card, to: rep)
     guard let c = rep.colorAt(x: Int(Double(rep.pixelsWide) * 0.97), y: Int(Double(rep.pixelsHigh) * 0.5))?
       .usingColorSpace(.sRGB) else { return ["ok": false] }
     return ["ok": true, "t": Date().timeIntervalSince1970 * 1000,
@@ -308,10 +317,7 @@ final class FLShellPanelController {
   /// The bitmap is dropped; only recognized card text leaves this method.
   func debugRenderText() -> [String: Any] {
     guard let host = hostingView else { return ["ok": false, "error": "no panel"] }
-    let cardHeight = min(Self.size.height, host.bounds.height)
-    // NSHostingView is flipped (origin at the top). The strip sits under the card, so the card is minY.
-    let cardY = host.isFlipped ? host.bounds.minY : host.bounds.maxY - cardHeight
-    let card = NSRect(x: host.bounds.minX, y: cardY, width: host.bounds.width, height: cardHeight)
+    let card = studyCardRect(in: host)
     guard let rep = host.bitmapImageRepForCachingDisplay(in: card) else {
       return ["ok": false, "error": "no bitmap rep"]
     }

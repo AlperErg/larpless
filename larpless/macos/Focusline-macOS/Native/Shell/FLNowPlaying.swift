@@ -45,6 +45,8 @@ final class FLNowPlaying: NSObject, ObservableObject {
   private var backoffS: Double = 1
   private var restartWork: DispatchWorkItem?
   private var loggedMissingHelper = false
+  private var loggedMediaKey = false
+  private var clearWork: DispatchWorkItem?
 
   @objc static func requiresMainQueueSetup() -> Bool { false }
 
@@ -61,7 +63,7 @@ final class FLNowPlaying: NSObject, ObservableObject {
       startHelper()
     } else {
       stopHelper()
-      setLive(nil)
+      setLive(nil, immediate: true)
     }
   }
 
@@ -71,11 +73,15 @@ final class FLNowPlaying: NSObject, ObservableObject {
 
   /// Dev harness. A dict with `title` shows that track and ignores the helper until cleared.
   func debugSetTrack(_ dict: NSDictionary) {
-    if let title = dict["title"] as? String, !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+    let trimmed = (dict["title"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    if !trimmed.isEmpty {
       debugOverride = true
       overrideTrack = FLNowPlayingTrack(
-        title: title,
-        artist: (dict["artist"] as? String).flatMap { $0.isEmpty ? nil : $0 },
+        title: trimmed,
+        artist: (dict["artist"] as? String).flatMap {
+          let name = $0.trimmingCharacters(in: .whitespacesAndNewlines)
+          return name.isEmpty ? nil : name
+        },
         durationS: Self.seconds(dict["durationS"]),
         positionS: Self.finite(dict["positionS"]) ?? 0,
         positionAtMs: Self.finite(dict["positionAtMs"]) ?? Date().timeIntervalSince1970 * 1000,
@@ -112,7 +118,8 @@ final class FLNowPlaying: NSObject, ObservableObject {
     proc.arguments = [script, framework, "stream", "--no-diff", "--no-artwork", "--micros"]
     let output = Pipe()
     proc.standardOutput = output
-    proc.standardError = Pipe()
+    // Discard stderr. An unread pipe fills and stalls perl.
+    proc.standardError = FileHandle.nullDevice
     let handle = output.fileHandleForReading
     handle.readabilityHandler = { [weak self] file in
       let data = file.availableData
@@ -127,7 +134,7 @@ final class FLNowPlaying: NSObject, ObservableObject {
           guard let self, self.generationNow() == gen, self.process === proc else { return }
           self.detachStdout()
           self.process = nil
-          self.setLive(nil)
+          self.setLive(nil, immediate: true)
           flShellLog("[FLNowPlaying] helper exited")
           self.scheduleRestart()
         }
@@ -268,9 +275,13 @@ final class FLNowPlaying: NSObject, ObservableObject {
     guard !trimmed.isEmpty else { return nil }
     let playing = (payload["playing"] as? NSNumber)?.boolValue ?? true
     var rate = finite(payload["playbackRate"]) ?? (playing ? 1 : 0)
-    if !playing || !rate.isFinite || rate < 0 { rate = playing ? 1 : 0 }
+    // A playing session with a missing or zero rate is moving; paused is playing == false.
     if !playing { rate = 0 }
-    let artist = (payload["artist"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+    else if !(rate > 0) { rate = 1 }
+    let artist = (payload["artist"] as? String).flatMap {
+      let name = $0.trimmingCharacters(in: .whitespacesAndNewlines)
+      return name.isEmpty ? nil : name
+    }
     let positionAtMs = micros(payload["timestampEpochMicros"]).map { $0 * 1000 }
       ?? Date().timeIntervalSince1970 * 1000
     return FLNowPlayingTrack(
@@ -283,7 +294,23 @@ final class FLNowPlaying: NSObject, ObservableObject {
     )
   }
 
-  private func setLive(_ next: FLNowPlayingTrack?) {
+  /// Applies helper output. An empty payload is deferred briefly: the adapter emits one while a
+  /// track's mandatory fields are still arriving, and a real stop stays empty.
+  private func setLive(_ next: FLNowPlayingTrack?, immediate: Bool = false) {
+    if next == nil, !immediate {
+      clearWork?.cancel()
+      let work = DispatchWorkItem { [weak self] in
+        MainActor.assumeIsolated {
+          self?.live = nil
+          self?.publish()
+        }
+      }
+      clearWork = work
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: work)
+      return
+    }
+    clearWork?.cancel()
+    clearWork = nil
     live = next
     publish()
   }
@@ -314,7 +341,13 @@ final class FLNowPlaying: NSObject, ObservableObject {
         subtype: 8,
         data1: data1,
         data2: -1
-      )?.cgEvent else { return }
+      )?.cgEvent else {
+        if !loggedMediaKey {
+          loggedMediaKey = true
+          flShellLog("[FLNowPlaying] media key failed")
+        }
+        return
+      }
       event.post(tap: .cghidEventTap)
     }
     post(true)

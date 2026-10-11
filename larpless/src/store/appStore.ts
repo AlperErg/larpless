@@ -4,7 +4,7 @@ import { DEFAULT_SETTINGS } from '../config';
 import { native } from '../native';
 import type { SessionSummary } from '../contracts/domain';
 import type { AppDataState, AppStore } from '../contracts/store';
-import { createDb } from '../core/db';
+import { cleanSettings, createDb } from '../core/db';
 import type { KeyValue } from '../core/db';
 
 export const initialAppState: AppDataState = {
@@ -39,7 +39,7 @@ export const useAppStore = create<AppStore>()((set, get) => ({
   },
 
   updateSettings: async (patch) => {
-    const settings = { ...get().settings, ...patch };
+    const settings = cleanSettings({ ...get().settings, ...patch });
     set({ settings });
     native.nowPlaying.setEnabled(settings.nowPlayingEnabled);
     await appDb.saveSettings(settings);
