@@ -26,6 +26,7 @@ function setup(info: Partial<OllamaHostInfo>, opts: { health?: OllamaHealth[]; l
     restart: jest.fn(async () => {
       health = ['down', afterStart];
     }),
+    quit: jest.fn(async () => {}),
   };
   const slept: number[] = [];
   const onStart = jest.fn();

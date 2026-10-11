@@ -7,4 +7,5 @@ export const ollamaHost: OllamaHostApi = {
   info: () => M.info(),
   launch: () => M.launch(),
   restart: () => M.restart(),
+  quit: () => M.quit(),
 };

@@ -9,4 +9,7 @@ export const mockOllamaHost: OllamaHostApi = {
   restart: async () => {
     console.log('[mock ollamaHost] restart');
   },
+  quit: async () => {
+    console.log('[mock ollamaHost] quit');
+  },
 };

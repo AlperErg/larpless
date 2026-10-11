@@ -134,6 +134,11 @@ export interface OllamaHostApi {
    * Rejects E_NOT_RUNNING, or E_TIMEOUT when Ollama doesn't quit.
    */
   restart(): Promise<void>;
+  /**
+   * Quits the local Ollama app and the server it started. The loaded model goes with them.
+   * Resolves when nothing is left running. Rejects E_TIMEOUT if a process won't exit.
+   */
+  quit(): Promise<void>;
 }
 
 export interface NativeApis {

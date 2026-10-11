@@ -90,6 +90,49 @@ final class FLOllama: NSObject {
     }
   }
 
+  /// Quits Ollama.app and its server. Nothing is relaunched. No-op when Ollama isn't running.
+  @objc func quit(_ resolve: @escaping RCTPromiseResolveBlock,
+                  reject: @escaping RCTPromiseRejectBlock) {
+    DispatchQueue.global(qos: .userInitiated).async {
+      if Self.quitBlocking() {
+        resolve(nil)
+      } else {
+        reject("E_TIMEOUT", "Ollama didn't quit", nil)
+      }
+    }
+  }
+
+  /// SIGTERM only, for app quit, where waiting out Ollama's shutdown would hold the process open.
+  @objc static func quitNow() {
+    let app = runningApp()
+    let server = findServer(appPid: app?.processIdentifier)
+    if let app {
+      kill(app.processIdentifier, SIGTERM)
+    }
+    if let server, app == nil || !server.fromApp {
+      kill(server.pid, SIGTERM)
+    }
+  }
+
+  /// Same shutdown as restart, without opening Ollama again. Signals the exact pid, never a name.
+  private static func quitBlocking() -> Bool {
+    guard let app = runningApp() else {
+      guard let server = findServer(appPid: nil) else { return true }
+      kill(server.pid, SIGTERM)
+      return waitForExit(server.pid, timeout: 5)
+    }
+    let appPid = app.processIdentifier
+    let server = findServer(appPid: appPid)
+    flOllamaLog("[FLOllama] quit: signalling Ollama.app pid \(appPid)")
+    kill(appPid, SIGTERM)
+    guard waitForExit(appPid, timeout: 6) else { return false }
+    if let server, !waitForExit(server.pid, timeout: 5) {
+      kill(server.pid, SIGTERM)
+      return waitForExit(server.pid, timeout: 5)
+    }
+    return true
+  }
+
   // MARK: lookup
 
   private struct Server {

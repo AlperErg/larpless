@@ -66,9 +66,19 @@ final class FLAppShell: RCTEventEmitter {
   private static var activityBeganAt: Date?
   private var hasListeners = false
 
+  private static var quitHooked = false
+
   override init() {
     super.init()
     FLAppShell.current = self
+    if !Self.quitHooked {
+      Self.quitHooked = true
+      NotificationCenter.default.addObserver(
+        forName: NSApplication.willTerminateNotification, object: nil, queue: .main
+      ) { _ in
+        FLOllama.quitNow()
+      }
+    }
     DispatchQueue.main.async { MainActor.assumeIsolated { FLShellMenu.install() } }
   }
 
