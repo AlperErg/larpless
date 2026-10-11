@@ -87,7 +87,9 @@ Measured on the dev PC (Ryzen 5 7545U, Radeon 740M iGPU, 15 GB RAM), Ollama 0.40
 - Ollama runs **CPU only**: it drops the integrated GPU ("set `OLLAMA_IGPU_ENABLE=1`" in `%LOCALAPPDATA%\Ollama\server.log`) and ROCm has no kernels for gfx1103.
 - `qwen3-vl:2b` processes the prompt at ~36 tokens/s; a 640 px screenshot + prompt is ~1,100 tokens ⇒ **≥ 30 s per check**. `qwen3-vl:4b` at 640 px timed out at 30 s. With the default 8 s `CLASSIFY_TIMEOUT_MS` every chunk becomes `unknown`. (On Apple silicon the same check is ~3 s.)
 - Smaller screenshots + a longer limit alone don't fix it, so that change was **not** committed.
-- Options still to decide: enable the iGPU (`OLLAMA_IGPU_ENABLE=1` user env var, restart Ollama, re-measure); window-title-only classification on Windows; or slow checks (≈90 s limit, 448 px, 2B model).
+- **iGPU tried 2026-10-11, doesn't work yet**: `OLLAMA_IGPU_ENABLE=1` makes Ollama load `qwen3-vl:2b` 100% on the 740M through **Vulkan**, but every image request crashes `llama-server.exe` inside `amdvlk64.dll` (`0xc0000409`, AMD driver 32.0.11020.24001, July 2025; Ollama logs "AMD driver is too old") and text-only requests hang for minutes. Reverted. Worth retrying only after an AMD driver update.
+- The image always costs **~1,436 prompt tokens** whether the capture is 1280 or 640 px wide (Ollama resizes it), so shrinking `CAPTURE.maxWidth` doesn't speed up the check. CPU baseline: ~28–30 s per check at ~50 tok/s.
+- Options still to decide: window-title-only classification on Windows; or slow checks (≈90 s limit, 2B model).
 - The 4B model takes ~4.4 GB (`llama-server`); with other apps open, free RAM fell below 1 GB.
 
 ### Unresolved crash
