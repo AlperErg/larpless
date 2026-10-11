@@ -6,12 +6,13 @@ import type { Settings, SoundId } from '../../contracts/domain';
 import { useAppStore } from '../../store/appStore';
 import { useNavStore } from '../../store/navStore';
 import { useSessionStore } from '../../store/sessionStore';
+import { useSocialStore } from '../../store/socialStore';
 import { Button, MacPressable, MacTextInput, Segmented, Switch, Text } from '../components';
 import { Page } from '../layout/Page';
 import { isLive } from '../lib/actions';
 import { POMODORO_OPTIONS, POWER_OPTIONS, SOUNDS, SOUND_ICON, SOUND_LABEL, STRICTNESS_OPTIONS } from '../lib/labels';
 import { ollamaLine } from '../layout/Sidebar';
-import { colors, fonts, radius, space, tag } from '../theme';
+import { colors, fonts, layout, radius, space, tag } from '../theme';
 
 /** Local mirror of settings so controls respond instantly; every change also goes to updateSettings. */
 function useSettingsDraft(): [Settings, (patch: Partial<Settings>) => void] {
@@ -62,6 +63,7 @@ export function SettingsPage() {
 
   return (
     <Page testID="page-settings" header={{ icon: '⚙️', title: 'Settings' }}>
+      <AccountSection />
       <SectionTitle>Local AI</SectionTitle>
       <Row label="Model" hint="Ollama vision model used to read the screen.">
         <MacTextInput
@@ -147,6 +149,48 @@ export function SettingsPage() {
   );
 }
 
+function AccountSection() {
+  const status = useSocialStore((s) => s.status);
+  const profile = useSocialStore((s) => s.profile);
+  const signOut = useSocialStore((s) => s.signOut);
+  const [busy, setBusy] = useState(false);
+  if (status !== 'signedIn' && status !== 'signedOut') return null;
+
+  const openAuth = (auth: 'signIn' | 'signUp') => {
+    useNavStore.getState().go('feed', { auth });
+  };
+
+  return (
+    <>
+      <SectionTitle>Account</SectionTitle>
+      {status === 'signedIn' ? (
+        <Row label={profile ? `@${profile.username}` : 'Signed in'} hint="This is the name friends see on posts you share.">
+          <Button
+            testID="settings-signout"
+            title={busy ? 'Signing out…' : 'Sign out'}
+            variant="danger"
+            disabled={busy}
+            onPress={() => {
+              if (busy) return;
+              setBusy(true);
+              signOut()
+                .catch(() => {})
+                .finally(() => setBusy(false));
+            }}
+          />
+        </Row>
+      ) : (
+        <Row label="Friends" hint="Sign in to share sessions, or make an account.">
+          <View style={styles.inline}>
+            <Button testID="settings-signin" title="Sign in" variant="secondary" onPress={() => openAuth('signIn')} />
+            <Button testID="settings-signup" title="Create account" variant="primary" onPress={() => openAuth('signUp')} style={styles.gapLeft} />
+          </View>
+        </Row>
+      )}
+    </>
+  );
+}
+
 function SectionTitle({ children }: { children: ReactNode }) {
   return (
     <Text variant="h3" style={styles.section}>
@@ -207,12 +251,12 @@ const styles = StyleSheet.create({
   input: {
     alignSelf: 'stretch',
     maxWidth: 320,
-    height: 28,
+    height: layout.controlHeight,
     paddingHorizontal: space.sm,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius,
-    backgroundColor: colors.bg,
+    backgroundColor: colors.raised,
     fontFamily: fonts.regular,
     fontSize: 14,
     color: colors.text,

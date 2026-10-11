@@ -19,7 +19,7 @@ export interface ButtonProps {
   style?: StyleProp<ViewStyle>;
 }
 
-/** 28 px Notion button. Hover is tracked through Pressable's onHoverIn/onHoverOut (onMouseEnter/Leave on macOS). */
+/** Press scales slightly so the click registers. */
 export function Button({
   title,
   onPress,
@@ -65,7 +65,7 @@ export function Button({
 const VARIANTS: Record<ButtonVariant, { bg: string; hoverBg: string; text: string; border: string }> = {
   primary: { bg: colors.accent, hoverBg: colors.accentHover, text: colors.onAccent, border: colors.accent },
   ghost: { bg: 'transparent', hoverBg: colors.hover, text: colors.text, border: 'transparent' },
-  secondary: { bg: colors.bg, hoverBg: colors.hover, text: colors.text, border: colors.border },
+  secondary: { bg: colors.raised, hoverBg: colors.hover, text: colors.text, border: colors.border },
   danger: { bg: 'transparent', hoverBg: tag.red.bg, text: tag.red.text, border: 'transparent' },
 };
 
@@ -83,6 +83,6 @@ const styles = StyleSheet.create({
   lg: { height: 40, paddingHorizontal: 18 },
   label: { fontFamily: fonts.medium, fontSize: 14, lineHeight: 18 },
   labelLg: { fontFamily: fonts.semibold, fontSize: 15 },
-  pressed: { opacity: 0.85 },
+  pressed: { transform: [{ scale: 0.97 }] },
   disabled: { opacity: 0.4 },
 });

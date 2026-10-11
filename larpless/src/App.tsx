@@ -24,7 +24,7 @@ import { DevToolsPage, installUiIntrospection } from './ui/pages/DevToolsPage';
 import { FriendsPage } from './ui/pages/FriendsPage';
 import { HistoryPage } from './ui/pages/HistoryPage';
 import { HomePage } from './ui/pages/HomePage';
-import { LoginPage } from './ui/pages/LoginPage';
+import { AuthGate } from './ui/pages/LoginPage';
 import { ModulesPage } from './ui/pages/ModulesPage';
 import { OnboardingPage } from './ui/pages/OnboardingPage';
 import { SessionPage } from './ui/pages/SessionPage';
@@ -50,7 +50,7 @@ function renderPage(route: Route) {
     case 'profile':
       return <FriendsPage />;
     case 'login':
-      return <LoginPage />;
+      return <AuthGate />;
     default:
       // 'dev' is rendered by the persistent overlay below; 'onboarding' outside the layout.
       return null;

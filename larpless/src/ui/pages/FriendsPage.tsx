@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import type { Friendship } from '../../social/api';
+import { useNavStore } from '../../store/navStore';
 import { useSocialStore } from '../../store/socialStore';
 import { Button, Callout, Segmented, Tag, Text } from '../components';
 import { Avatar, PostCard } from '../components/PostCard';
@@ -10,7 +11,7 @@ import { TextField } from '../components/TextField';
 import { Page } from '../layout/Page';
 import { errorText } from '../lib/social';
 import { colors, space, tag } from '../theme';
-import { LoginPage } from './LoginPage';
+import { AuthGate } from './LoginPage';
 
 type Tab = 'feed' | 'friends';
 
@@ -27,6 +28,15 @@ export function FriendsPage() {
     if (status === 'signedIn') refresh().catch(() => {});
   }, [status, refresh]);
 
+  useEffect(() => {
+    if (status !== 'signedIn') return;
+    const nav = useNavStore.getState();
+    if (!nav.params.auth || (nav.route !== 'feed' && nav.route !== 'profile')) return;
+    const next = { ...nav.params };
+    delete next.auth;
+    nav.go(nav.route, next);
+  }, [status]);
+
   if (status === 'loading') {
     return (
       <Page testID="page-friends" header={{ icon: '👥', title: 'Friends' }}>
@@ -34,7 +44,7 @@ export function FriendsPage() {
       </Page>
     );
   }
-  if (status !== 'signedIn') return <LoginPage />;
+  if (status !== 'signedIn') return <AuthGate />;
 
   return (
     <Page
@@ -42,17 +52,9 @@ export function FriendsPage() {
       header={{
         icon: '👥',
         title: 'Friends',
-        subtitle: (
-          <View style={styles.row}>
-            <Text variant="small">{profile ? `Signed in as @${profile.username}` : 'Signed in'}</Text>
-            <Button
-              testID="friends-signout"
-              title="Sign out"
-              variant="ghost"
-              onPress={() => signOut().catch(() => {})}
-              style={styles.gapLeft}
-            />
-          </View>
+        subtitle: <Text variant="small">{profile ? `Signed in as @${profile.username}` : 'Signed in'}</Text>,
+        right: (
+          <Button testID="friends-signout" title="Sign out" variant="secondary" onPress={() => signOut().catch(() => {})} />
         ),
       }}>
       <Segmented<Tab>

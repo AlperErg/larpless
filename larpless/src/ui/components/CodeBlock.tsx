@@ -49,7 +49,7 @@ const styles = StyleSheet.create({
   box: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.sidebar,
+    backgroundColor: colors.wash,
     borderRadius: radius,
     paddingVertical: space.sm + 2,
     paddingHorizontal: space.md,

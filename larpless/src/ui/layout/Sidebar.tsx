@@ -180,7 +180,7 @@ const styles = StyleSheet.create({
     marginBottom: 1,
   },
   rowHover: { backgroundColor: colors.hover },
-  rowActive: { backgroundColor: colors.active },
+  rowActive: { backgroundColor: colors.accentSoft },
   rowIcon: { width: 22, fontSize: 14, lineHeight: 18 },
   rowLabel: { flex: 1, fontFamily: fonts.medium, fontSize: 14, lineHeight: 18, color: colors.muted },
   rowLabelActive: { fontFamily: fonts.semibold, color: colors.text },
