@@ -1,0 +1,11 @@
+<Project>
+  <!--
+    Imported by Microsoft.Cpp.props (via ForceImportBeforeCppProps, set in ../Directory.Build.props) for the
+    autolinked ReactNativeAsyncStorage project only. That project hard-codes PlatformToolset v143 (VS 2022),
+    which react-native-windows 0.81 + VS 2026 don't install; build it with the installed default (v145),
+    the same toolset as the LarpLess app.
+  -->
+  <PropertyGroup>
+    <PlatformToolset>$(DefaultPlatformToolset)</PlatformToolset>
+  </PropertyGroup>
+</Project>

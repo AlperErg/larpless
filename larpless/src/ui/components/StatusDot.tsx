@@ -3,6 +3,7 @@ import { Animated, Easing, StyleSheet, View } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { ChunkKind } from '../../contracts/domain';
 import { kindColor, tag } from '../theme';
+import { ANIMATE } from '../platform';
 
 export type DotKind = ChunkKind | 'break' | 'paused' | 'starting';
 
@@ -20,8 +21,9 @@ export function StatusDot({ kind, pulsing, size = 8, testID, style }: StatusDotP
   const fill = tag[kindColor[kind]].text;
   const t = useRef(new Animated.Value(0)).current;
 
+  const pulse = pulsing && ANIMATE;
   useEffect(() => {
-    if (!pulsing) {
+    if (!pulse) {
       t.stopAnimation();
       t.setValue(0);
       return undefined;
@@ -35,14 +37,14 @@ export function StatusDot({ kind, pulsing, size = 8, testID, style }: StatusDotP
     );
     loop.start();
     return () => loop.stop();
-  }, [pulsing, t]);
+  }, [pulse, t]);
 
   const scale = t.interpolate({ inputRange: [0, 1], outputRange: [1, 1.6] });
   const opacity = t.interpolate({ inputRange: [0, 1], outputRange: [0.55, 0] });
   const box = size * 2;
   return (
     <View testID={testID} style={[{ width: box, height: box }, styles.box, style]}>
-      {pulsing ? (
+      {pulse ? (
         <Animated.View
           style={[
             styles.abs,

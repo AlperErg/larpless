@@ -11,6 +11,7 @@ import { MacPressable } from '../components/mac';
 import { StatusDot } from '../components/StatusDot';
 import type { DotKind } from '../components/StatusDot';
 import { colors, fonts, layout, radius, space, tag, themed } from '../theme';
+import { MOD } from '../platform';
 import type { TagColor } from '../../contracts/domain';
 
 interface NavItem {
@@ -81,7 +82,7 @@ export function Sidebar() {
         <RNText style={styles.wsName}>LarpLess</RNText>
       </View>
 
-      <SidebarRow testID="nav-search" onPress={() => setPaletteOpen(true)} icon="🔍" label="Search" trailing={<RNText style={styles.kbd}>⌘K</RNText>} />
+      <SidebarRow testID="nav-search" onPress={() => setPaletteOpen(true)} icon="🔍" label="Search" trailing={<RNText style={styles.kbd}>{`${MOD}K`}</RNText>} />
       <View style={styles.gap} />
 
       {items.map((it) => (
