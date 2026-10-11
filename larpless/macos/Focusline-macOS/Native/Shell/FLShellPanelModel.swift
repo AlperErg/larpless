@@ -5,7 +5,9 @@ import SwiftUI
 @MainActor
 final class FLShellPanelModel: ObservableObject {
   @Published private(set) var state = FLShellPanelState()
-  @Published private(set) var hubVisible = false
+  @Published private(set) var hubVisible = false {
+    didSet { if hubVisible != oldValue { onCardHeightChange?() } }
+  }
   @Published private(set) var flashVisible = false
   /// "light" or "dark". The view's identity follows this so the panel repaints.
   @Published private(set) var colorScheme = "light"
@@ -21,6 +23,21 @@ final class FLShellPanelModel: ObservableObject {
   var buttonFrames: [String: CGRect] = [:]
   /// Set by the controller: screen-space drag point, or nil when the drag ends.
   var dragHandler: ((NSPoint?) -> Void)?
+  /// Set by the controller: the study card's height changed, so the window must follow.
+  var onCardHeightChange: (() -> Void)?
+
+  /// Natural heights of the compact view and the hover hub, measured by the view. The card fits the compact
+  /// view and grows while the hub is open. The hub's value is a guess until it has been shown once.
+  private(set) var compactHeight: CGFloat = 78
+  private(set) var hubHeight: CGFloat = 134
+  var cardHeight: CGFloat { hubVisible ? max(compactHeight, hubHeight) : compactHeight }
+
+  func setMeasuredHeight(compact: CGFloat? = nil, hub: CGFloat? = nil) {
+    let before = cardHeight
+    if let compact, compact > 0 { compactHeight = compact.rounded(.up) }
+    if let hub, hub > 0 { hubHeight = hub.rounded(.up) }
+    if abs(cardHeight - before) >= 0.5 { onCardHeightChange?() }
+  }
 
   // Debug bookkeeping (not published, never drives rendering).
   private(set) var updateCount = 0

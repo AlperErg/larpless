@@ -30,10 +30,12 @@ final class FLShellHoverTracker: NSResponder {
 @MainActor
 final class FLShellPanelController {
   static let shared = FLShellPanelController()
-  static let size = NSSize(width: 300, height: 170)
+  static let width: CGFloat = 300
   static let mediaStripHeight: CGFloat = 36
-  static func size(showingMedia: Bool) -> NSSize {
-    NSSize(width: size.width, height: size.height + (showingMedia ? mediaStripHeight : 0))
+  /// Window size: the study card (fitted to its content) plus the media strip when a track is showing.
+  var currentSize: NSSize {
+    NSSize(width: Self.width,
+           height: model.cardHeight + (FLNowPlaying.shared.track != nil ? Self.mediaStripHeight : 0))
   }
   static let inset: CGFloat = 16
 
@@ -52,7 +54,8 @@ final class FLShellPanelController {
 
   private init() {
     model.dragHandler = { [weak self] point in self?.handleDrag(point) }
-    FLNowPlaying.shared.onTrackChanged = { [weak self] in self?.syncMediaFrame() }
+    FLNowPlaying.shared.onTrackChanged = { [weak self] in self?.syncFrame() }
+    model.onCardHeightChange = { [weak self] in self?.syncFrame(animated: true) }
   }
 
   // MARK: Lifecycle
@@ -60,7 +63,7 @@ final class FLShellPanelController {
   @discardableResult
   func ensurePanel() -> FLShellPanelWindow {
     if let p = panel { return p }
-    let p = FLShellPanelWindow(contentRect: NSRect(origin: .zero, size: Self.size),
+    let p = FLShellPanelWindow(contentRect: NSRect(origin: .zero, size: currentSize),
                                styleMask: [.nonactivatingPanel, .borderless],
                                backing: .buffered, defer: false)
     p.level = .floating
@@ -78,7 +81,7 @@ final class FLShellPanelController {
     p.title = "LarpLess Timer"
 
     let host = FLShellPanelHostingView(rootView: FLShellPanelView(model: model))
-    host.frame = NSRect(origin: .zero, size: Self.size)
+    host.frame = NSRect(origin: .zero, size: currentSize)
     host.sizingOptions = []
     p.contentView = host
 
@@ -107,14 +110,14 @@ final class FLShellPanelController {
     hostingView = host
     hoverTracker = tracker
     trackingArea = area
-    syncMediaFrame()
+    syncFrame()
     flShellLog("[FLPanel] created level=\(p.level.rawValue) nonactivating=\(p.styleMask.contains(.nonactivatingPanel))")
     return p
   }
 
   func show() {
     let p = ensurePanel()
-    syncMediaFrame()
+    syncFrame()
     if !userMoved || !isOnSomeScreen(p.frame) { moveToDefaultPosition() }
     p.orderFrontRegardless()
     flShellLog("[FLPanel] show frame=\(NSStringFromRect(p.frame)) visible=\(p.isVisible)")
@@ -143,7 +146,7 @@ final class FLShellPanelController {
   private func moveToDefaultPosition() {
     guard let p = panel else { return }
     let vf = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
-    let size = Self.size(showingMedia: FLNowPlaying.shared.track != nil)
+    let size = currentSize
     let origin = NSPoint(x: vf.maxX - size.width - Self.inset, y: vf.maxY - size.height - Self.inset)
     programmaticMove = true
     p.setFrame(NSRect(origin: origin, size: size), display: true)
@@ -155,18 +158,31 @@ final class FLShellPanelController {
     NSScreen.screens.contains { $0.visibleFrame.intersects(frame) }
   }
 
-  /// Grows the window downward when a track is showing. The top edge stays put.
-  private func syncMediaFrame() {
+  /// Resizes the window to the card (and media strip). The top edge stays put, so it grows and shrinks downward.
+  private func syncFrame(animated: Bool = false) {
     guard let p = panel, let host = hostingView else { return }
-    let next = Self.size(showingMedia: FLNowPlaying.shared.track != nil)
+    let next = currentSize
     let current = p.frame
     if abs(current.width - next.width) < 0.5, abs(current.height - next.height) < 0.5,
        abs(host.frame.height - next.height) < 0.5 { return }
     let frame = NSRect(x: current.origin.x, y: current.maxY - next.height, width: next.width, height: next.height)
+    guard animated, p.isVisible else {
+      programmaticMove = true
+      p.setFrame(frame, display: true)
+      host.frame = NSRect(origin: .zero, size: next)
+      programmaticMove = false
+      return
+    }
+    // The content view autoresizes with the window, so SwiftUI relays out on every animation step.
+    // Move notifications arrive during the animation; they are ours, not the user's.
     programmaticMove = true
-    p.setFrame(frame, display: true)
-    host.frame = NSRect(origin: .zero, size: next)
-    programmaticMove = false
+    NSAnimationContext.runAnimationGroup({ ctx in
+      ctx.duration = 0.2
+      ctx.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+      p.animator().setFrame(frame, display: true)
+    }, completionHandler: { [weak self] in
+      MainActor.assumeIsolated { self?.programmaticMove = false }
+    })
   }
 
   /// Drag driven from SwiftUI (screen coordinates). nil ends the drag.
@@ -298,7 +314,7 @@ final class FLShellPanelController {
 
   /// The study card, excluding the media strip. Hosting view origin is at the top when flipped.
   private func studyCardRect(in host: NSView) -> NSRect {
-    let cardHeight = min(Self.size.height, host.bounds.height)
+    let cardHeight = min(model.cardHeight, host.bounds.height)
     let cardY = host.isFlipped ? host.bounds.minY : host.bounds.maxY - cardHeight
     return NSRect(x: host.bounds.minX, y: cardY, width: host.bounds.width, height: cardHeight)
   }

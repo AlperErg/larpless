@@ -1,7 +1,8 @@
 import AppKit
 import SwiftUI
 
-// Floating timer UI (WS-B brief: "Look of the panel"). 300×170 compact view + hover hub.
+// Floating timer UI (WS-B brief: "Look of the panel"). 300 pt wide compact view + hover hub. The card's height
+// fits the compact view and grows while the hub is open (the controller resizes the window to match).
 
 private enum FLShellFont {
   static func serif(_ size: CGFloat) -> Font { .custom(FLNotionFonts.serifRegular, fixedSize: size) }
@@ -24,6 +25,16 @@ private extension View {
       Color.clear.preference(key: FLShellButtonFramesKey.self, value: [id: g.frame(in: .named("flpanel"))])
     })
   }
+
+  /// Reports this view's natural height (call before any frame that stretches it).
+  func flMeasureHeight(_ report: @escaping (CGFloat) -> Void) -> some View {
+    fixedSize(horizontal: false, vertical: true)
+      .background(GeometryReader { g in
+        Color.clear
+          .onAppear { report(g.size.height) }
+          .onChange(of: g.size.height) { _, h in report(h) }
+      })
+  }
 }
 
 struct FLShellPanelView: View {
@@ -34,7 +45,7 @@ struct FLShellPanelView: View {
     let s = model.state
     let tag = FLNotionColors.tag(s.tint)
     let media = nowPlaying.track
-    let height = FLShellPanelController.size(showingMedia: media != nil).height
+    // The window sets the height: the card takes whatever the media strip leaves.
     VStack(spacing: 0) {
       ZStack {
         FLShellPanelBackground(tag: tag, pulse: s.pulse)
@@ -53,7 +64,9 @@ struct FLShellPanelView: View {
             .transition(.opacity)
         }
       }
-      .frame(width: FLShellPanelController.size.width, height: FLShellPanelController.size.height)
+      .frame(width: FLShellPanelController.width)
+      .frame(maxHeight: .infinity)
+      .clipped()
       .contentShape(Rectangle())
       // Drag the study card only. The strip's buttons sit outside this gesture.
       .gesture(
@@ -66,7 +79,8 @@ struct FLShellPanelView: View {
         FLShellNowPlayingStrip(track: media)
       }
     }
-    .frame(width: FLShellPanelController.size.width, height: height)
+    .frame(width: FLShellPanelController.width)
+    .frame(maxHeight: .infinity, alignment: .top)
     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     .overlay(
       RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -110,7 +124,7 @@ private struct FLShellNowPlayingStrip: View {
         }
       }
       .padding(.horizontal, 8)
-      .frame(width: FLShellPanelController.size.width, height: FLShellPanelController.mediaStripHeight)
+      .frame(width: FLShellPanelController.width, height: FLShellPanelController.mediaStripHeight)
       .background(FLNotionColors.bg)
       .overlay(alignment: .top) {
         Rectangle().fill(FLNotionColors.border).frame(height: 1)
@@ -161,39 +175,39 @@ private struct FLShellCompactView: View {
       let pill = state.pillText(at: ctx.date)
       let _ = model.noteRender(timer: timer, pill: pill)
       VStack(alignment: .leading, spacing: 0) {
-        HStack(alignment: .top) {
+        // The timer never shrinks (it widens past an hour); the pill takes what is left and truncates.
+        HStack(alignment: .center, spacing: 10) {
           Text(timer)
             .font(FLShellFont.serif(44))
             .monospacedDigit()
             .foregroundColor(FLNotionColors.text)
             .lineLimit(1)
-            .padding(.top, -4)
-          Spacer(minLength: 8)
+            .fixedSize()
+            .padding(.vertical, -10)   // trims the serif's line gap so the digits, not the line box, set the spacing
+            .layoutPriority(1)
+          FLShellStatusPill(text: pill, tag: tag)
+          Spacer(minLength: 0)
           if state.soundId != "off" {
             Image(systemName: "speaker.wave.2.fill")
               .font(.system(size: 10, weight: .medium))
               .foregroundColor(tag.text.opacity(0.7))
-              .padding(.top, 6)
-          }
-          if let remaining = model.pomodoroRemainingFraction(at: ctx.date) {
-            FLShellPomodoroRing(remaining: remaining, color: tag.text)
-              .padding(.top, 2)
+              .fixedSize()
           }
         }
-        FLShellStatusPill(text: pill, tag: tag)
-          .padding(.top, 4)
         if let secondary = state.secondaryText {
           Text(secondary)
             .font(FLShellFont.regular(12))
             .foregroundColor(FLNotionColors.muted)
             .lineLimit(1)
             .truncationMode(.tail)
-            .padding(.top, 6)
+            .padding(.top, 2)
             .padding(.leading, 2)
         }
-        Spacer(minLength: 0)
         if let dots = state.pomodoroDots {
           HStack(spacing: 8) {
+            if let remaining = model.pomodoroRemainingFraction(at: ctx.date) {
+              FLShellPomodoroRing(remaining: remaining, color: tag.text)
+            }
             FLShellPomodoroDots(completed: dots.completed, current: dots.current, total: dots.total, color: tag.text)
             if let footer = state.pomodoroFooterText(at: ctx.date) {
               Text(footer)
@@ -203,9 +217,11 @@ private struct FLShellCompactView: View {
                 .lineLimit(1)
             }
           }
+          .padding(.top, 8)
         }
       }
-      .padding(EdgeInsets(top: 14, leading: 16, bottom: 14, trailing: 16))
+      .padding(EdgeInsets(top: 17, leading: 16, bottom: 15, trailing: 16))
+      .flMeasureHeight { h in model.setMeasuredHeight(compact: h) }
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
   }
@@ -239,14 +255,14 @@ private struct FLShellPomodoroRing: View {
 
   var body: some View {
     ZStack {
-      Circle().stroke(color.opacity(0.18), lineWidth: 2.5)
+      Circle().stroke(color.opacity(0.18), lineWidth: 2)
       Circle()
         .trim(from: 0, to: remaining)
-        .stroke(color, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+        .stroke(color, style: StrokeStyle(lineWidth: 2, lineCap: .round))
         .rotationEffect(.degrees(-90))
         .animation(.linear(duration: 1), value: remaining)
     }
-    .frame(width: 20, height: 20)
+    .frame(width: 14, height: 14)
   }
 }
 
@@ -361,6 +377,7 @@ private struct FLShellHubView: View {
       }
     }
     .padding(EdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12))
+    .flMeasureHeight { h in model.setMeasuredHeight(hub: h) }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     .background(FLNotionColors.bg.opacity(0.96))
   }
