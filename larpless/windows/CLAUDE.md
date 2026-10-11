@@ -10,6 +10,7 @@ The Windows app is **react-native-windows 0.81.36** (cpp-app template: C++/WinRT
 - .NET SDK 10, Node 22+, Developer Mode on, long paths on.
 - `larpless/dotnet-tools.json` pins **PowerShell 7** as a local .NET tool: the RNW deploy step needs `pwsh.exe` (`dotnet tool restore`).
 - `larpless/Directory.Build.props` patches `ReactNativeAsyncStorage`: disables the WinAppSDK transitive-dependency check (false positive from its stale `packages.config`) and force-imports `windows/AsyncStorageToolset.props` so it builds with the installed toolset instead of the missing v143.
+- `larpless/NuGet.config` maps `Microsoft.ML.OnnxRuntime*` to nuget.org only: the `react-native` Azure feed answers **401** for packages it doesn't mirror, and one failing source fails the whole restore (NU1301). The `packages.lock.json` files must come from a nuget.org restore; a lock written from another source has different content hashes (NU1403). Regenerate with `MSBuild windows\LarpLess.sln -t:Restore -p:RestoreForceEvaluate=true -p:Platform=x64`.
 
 ## Commands
 
@@ -42,7 +43,8 @@ Each module is **one header** (`REACT_MODULE` / `REACT_METHOD` / `REACT_EVENT` /
 | FLPermissions | camera via `AppCapability("webcam")`; `openSettings` → `ms-settings:privacy-webcam`; `relaunch` → `AppInstance::Restart` | no screen permission on Windows |
 | FLSound | XAudio2 port of the Swift engine (xorshift white, Kellet pink, brown; equal-power ramps; chimes) | — |
 | FLWebcam | MediaCapture + MediaFrameReader (BGRA), YOLO11n via ONNX Runtime | — (same `person` / `cell phone` thresholds as Mac) |
-| FLFloatingPanel | layered `WS_EX_TOPMOST\|TOOLWINDOW\|NOACTIVATE` popup drawn with Direct2D (DC render target on a DIB + `UpdateLayeredWindow`) and DirectWrite with the bundled Inter + Instrument Serif | — (same size, states, hub and payloads) |
+| FLFloatingPanel | layered `WS_EX_TOPMOST\|TOOLWINDOW\|NOACTIVATE` popup drawn with Direct2D (DC render target on a DIB + `UpdateLayeredWindow`) and DirectWrite with the bundled Inter + Instrument Serif; `setColorScheme` swaps to a dark palette taken from `NotionColors.swift` | — (same size, states, hub and payloads); the light palette is still the older `FFFFFF`/`37352F`, not the Mac's current one |
+| FLOllama | install dir from `FOLDERID_UserProgramFiles\Ollama` (fallback: HKCU Uninstall); `server` = owner of the port-11434 listener (`GetExtendedTcpTable`), `'app'` when its parent is `ollama app.exe`; `promptCache` read from the server's environment through its PEB; `launch`/`restart` start `ollama app.exe` with `LLAMA_ARG_CACHE_RAM=0` via `cmd /c start` with the desktop-app **breakaway** policy, so Ollama has no package identity (verified with `GetPackageFullName`) and survives redeploys | restart terminates the tray app, its server and the runners (Mac sends SIGTERM); the tray icon can linger until hovered |
 
 Closing the main window quits the app (Windows convention) instead of keeping it in the background.
 
@@ -56,6 +58,8 @@ Closing the main window quits the app (Windows convention) instead of keeping it
 - **`JSValue::AsString()` turns null into `"null"`**: use `TryGetString()`. Wrap string literals in `std::string{}` inside `JSValueObject` initializers.
 - **`SetTimer` re-arms instead of queueing.** Re-arming a 16 ms animation timer on every `WM_MOUSEMOVE` means it never fires while the mouse moves (the panel hub used to appear only once the mouse stopped). Input paths call `Schedule(false)`, which leaves a running fast timer alone. Cache DirectWrite text formats and reuse one brush; creating them per frame is visibly slow.
 - `winrt::com_ptr` has no `reset()`: assign `nullptr`.
+- **Brace-init narrowing is an error** (C2397) with this toolset: `const float v{someByte}` needs `static_cast<float>`.
+- **Manifest capabilities live in specific schema namespaces**: `globalMediaControl` (FLNowPlaying) is `uap7:Capability`; under `uap3` the package fails validation (APPX0501). Check `Windows Kits\10\Include\<sdk>\winrt\AppxManifestTypes.xsd` for the right `ST_Capability_*` type.
 - Link system libs from the header with `#pragma comment(lib, "…")` (gdi32, dwmapi, version, windowscodecs, d2d1, dwrite, Shcore, xaudio2).
 
 ### Panel debugging
@@ -80,21 +84,36 @@ Re-export (Python + ultralytics) and replace the file:
 yolo export model=yolo11n.pt format=onnx nms=True imgsz=640 conf=0.2 iou=0.6
 ```
 
-## Ollama on Windows (open issue)
+## Ollama on Windows: title-first classification
 
 Measured on the dev PC (Ryzen 5 7545U, Radeon 740M iGPU, 15 GB RAM), Ollama 0.40.2:
 
 - Ollama runs **CPU only**: it drops the integrated GPU ("set `OLLAMA_IGPU_ENABLE=1`" in `%LOCALAPPDATA%\Ollama\server.log`) and ROCm has no kernels for gfx1103.
-- `qwen3-vl:2b` processes the prompt at ~36 tokens/s; a 640 px screenshot + prompt is ~1,100 tokens ⇒ **≥ 30 s per check**. `qwen3-vl:4b` at 640 px timed out at 30 s. With the default 8 s `CLASSIFY_TIMEOUT_MS` every chunk becomes `unknown`. (On Apple silicon the same check is ~3 s.)
-- Smaller screenshots + a longer limit alone don't fix it, so that change was **not** committed.
+- The image always costs **~1,436 prompt tokens** whether the capture is 1280 or 640 px wide (Ollama resizes it), so shrinking `CAPTURE.maxWidth` doesn't speed up the check. `qwen3-vl:2b` reads ~50 tok/s ⇒ **~28–30 s per check**. (On Apple silicon the same check is ~3 s.)
 - **iGPU tried 2026-10-11, doesn't work yet**: `OLLAMA_IGPU_ENABLE=1` makes Ollama load `qwen3-vl:2b` 100% on the 740M through **Vulkan**, but every image request crashes `llama-server.exe` inside `amdvlk64.dll` (`0xc0000409`, AMD driver 32.0.11020.24001, July 2025; Ollama logs "AMD driver is too old") and text-only requests hang for minutes. Reverted. Worth retrying only after an AMD driver update.
-- The image always costs **~1,436 prompt tokens** whether the capture is 1280 or 640 px wide (Ollama resizes it), so shrinking `CAPTURE.maxWidth` doesn't speed up the check. CPU baseline: ~28–30 s per check at ~50 tok/s.
-- Options still to decide: window-title-only classification on Windows; or slow checks (≈90 s limit, 2B model).
 - The 4B model takes ~4.4 GB (`llama-server`); with other apps open, free RAM fell below 1 GB.
+
+**Decision (2026-10-11): Windows answers from the window title first.** `sessionStore` builds the classifier with `TITLE_FIRST: Platform.OS === 'windows'`. After the distraction rules and the cache, `core/titleMatch.ts` looks for a module name or keyword in the window title as a **whole word** (≥ 3 word characters; 6+ letter keywords also match their stem, so "integral" matches "Integration"; your own modules beat library subjects; still ambiguous → no match). A hit labels the chunk at once with source `'title'`, no screenshot and an empty `activity` (titles are never stored); no hit goes to the VLM as before. Library subjects match as whole words too, so a song called "Rock …" can read as Earth Science: accepted **because this PC has no usable GPU**. **The goal is still the Mac's VLM-first logic**: turn `TITLE_FIRST` off once Windows inference is fast (e.g. a working iGPU after a driver update). The Mac never sets the flag; a test pins that.
+
+A/B on the dev PC, 4-minute real session, medium profile (main's power profiles; both stepped down to eco after the first timeout), foreground rotating every 40 s between a study title, a neutral title and a YouTube title:
+
+| | main's logic | title-first |
+| --- | --- | --- |
+| chunks | 9 | 10 |
+| labelled | 0 (0 %) | 4 (40 %): the study window and an RStudio window → Statistics |
+| unknown | 100 % | 60 % |
+| VLM checks that finished | 0 of 4 | 0 of 3 |
+
+Every VLM check took **~29.9 s and hit the 30 s ceiling** (`CLASSIFY_TIMEOUT_MS`, which includes the capture), so on this PC windows without a module keyword stay `unknown`. A longer Windows ceiling (≈ 60 s on eco) would probably let them finish; not done yet.
 
 ### Unresolved crash
 
-LarpLess crashed twice in `hermes.dll` with `0xc0000005` at offset `0x1c59d0`, both while screenshot checks were timing out with the 4B model loaded and < 1 GB RAM free. A repro of "abort a fetch, the response arrives later" (local server answering after 5 s) did **not** crash, so that alone isn't the cause; memory pressure is the main suspect. Re-check once the classifier is fast enough not to time out.
+LarpLess crashed in `hermes.dll` with `0xc0000005` at offset `0x1c59d0`:
+
+- twice while screenshot checks were timing out with the 4B model loaded and < 1 GB RAM free;
+- once (2026-10-11 23:14:47) one second after `prepareOllama` restarted Ollama through `FLOllama.restart()` on app launch.
+
+Not reproduced by: aborting a fetch whose response arrives later; a local server dropping the connection (FIN or RST) mid-request, with or without an `AbortController` abort before, during or after the drop, including 300 KB bodies; `FLOllama.restart()` while the app is idle. Something else must be in flight during the launch-time restart (look at what `ollamaStore`/`prepareOllama` and the health check are doing then).
 
 ### Benchmarking the classifier
 
