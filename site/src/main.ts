@@ -24,38 +24,63 @@ function selectPanel(tab: HTMLButtonElement) {
   note.textContent = tab.dataset.note ?? '';
 }
 
+const SCORE_WEEKS = [
+  '0000000',
+  '0000000',
+  '0000000',
+  '0000000',
+  '1002000',
+  '2102100',
+  '0010200',
+  '2312010',
+  '3231200',
+  '1023200',
+  '3324310',
+  '2343200',
+  '4332410',
+  '3423300',
+  '4434320',
+  '3443200',
+];
+
+/** 16 weeks, Monday to Sunday. The last `streak` days through `endDay` (0 = Mon) are the run. */
+function streakWeeks(streak: number, endDay: number): string[] {
+  const weeks = 16;
+  const cells = Array.from({ length: weeks * 7 }, () => 0);
+  const today = (weeks - 1) * 7 + endDay;
+  for (let i = 0; i < streak; i++) {
+    const idx = today - i;
+    if (idx < 0) break;
+    cells[idx] = 4 - (i % 3);
+  }
+  for (const back of [20, 24, 28, 33, 41, 46, 52, 60, 67, 74]) {
+    const idx = today - back;
+    if (idx < 0 || back <= streak) continue;
+    cells[idx] = 1 + (back % 3);
+  }
+  const out: string[] = [];
+  for (let w = 0; w < weeks; w++) out.push(cells.slice(w * 7, w * 7 + 7).join(''));
+  return out;
+}
+
 function paintHeat() {
-  const host = document.querySelector<HTMLElement>('#heat');
-  if (!host) return;
-  // 16 weeks, Monday to Sunday. Early weeks are empty. Later weeks are the streak.
-  const weeks = [
-    '0000000',
-    '0000000',
-    '0000000',
-    '0000000',
-    '1002000',
-    '2102100',
-    '0010200',
-    '2312010',
-    '3231200',
-    '1023200',
-    '3324310',
-    '2343200',
-    '4332410',
-    '3423300',
-    '4434320',
-    '3443200',
-  ];
-  const frag = document.createDocumentFragment();
-  weeks.forEach((week, weekIndex) => {
-    for (const level of week) {
-      const cell = document.createElement('i');
-      cell.dataset.l = level;
-      cell.style.animationDelay = `${weekIndex * 40}ms`;
-      frag.append(cell);
-    }
+  document.querySelectorAll<HTMLElement>('.heat').forEach((host) => {
+    if (host.childElementCount > 0) return;
+    const streak = Number(host.dataset.streak);
+    const end = Number(host.dataset.end);
+    const weeks =
+      Number.isFinite(streak) && streak > 0 ? streakWeeks(streak, Number.isFinite(end) ? end : 6) : SCORE_WEEKS;
+    const frag = document.createDocumentFragment();
+    weeks.forEach((week, weekIndex) => {
+      for (const level of week) {
+        const cell = document.createElement('i');
+        cell.dataset.l = level;
+        cell.style.animationDelay = `${weekIndex * 40}ms`;
+        frag.append(cell);
+      }
+    });
+    host.append(frag);
   });
-  host.append(frag);
 }
 
 function ipadScroll() {
@@ -63,24 +88,28 @@ function ipadScroll() {
   if (!card) return;
 
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+  // The tilt needs room around the frame. iPhone and iPad viewports don't have it.
+  const room = window.matchMedia('(min-width: 1100px) and (min-height: 900px)');
+
   const clear = () => {
     card.classList.remove('ipad-scroll');
-    card.style.transform = 'none';
-  };
-  if (reduce.matches) {
-    clear();
-    return;
-  }
-
-  if (CSS.supports('animation-timeline', 'scroll()')) {
-    card.classList.add('ipad-scroll');
     card.style.transform = '';
-    return;
-  }
+  };
 
   let frame = 0;
   const apply = () => {
     frame = 0;
+    if (reduce.matches || !room.matches) {
+      clear();
+      return;
+    }
+
+    if (CSS.supports('animation-timeline', 'scroll()')) {
+      card.classList.add('ipad-scroll');
+      card.style.transform = '';
+      return;
+    }
+
     const range = window.innerHeight * 0.85;
     const progress = Math.min(1, Math.max(0, window.scrollY / range));
     const scale = 1.05 + (1 - 1.05) * progress;
@@ -95,6 +124,8 @@ function ipadScroll() {
   apply();
   window.addEventListener('scroll', onScroll, { passive: true });
   window.addEventListener('resize', onScroll);
+  reduce.addEventListener('change', apply);
+  room.addEventListener('change', apply);
 }
 
 function revealOnScroll() {
@@ -130,6 +161,59 @@ document.querySelectorAll<HTMLButtonElement>('[data-panel]').forEach((tab, index
   });
 });
 
+function bindScoreBar() {
+  const summary = document.querySelector<HTMLElement>('#score .summary');
+  const zone = summary?.querySelector<HTMLElement>('.score-hit');
+  if (!summary || !zone) return;
+  const segs = Array.from(zone.querySelectorAll<HTMLElement>('.bar .seg'));
+  const rows = Array.from(zone.querySelectorAll<HTMLElement>('.legend li[data-seg]'));
+  const coarse = window.matchMedia('(pointer: coarse)').matches;
+
+  const paint = (index: number | null) => {
+    summary.classList.toggle('lit', index !== null);
+    segs.forEach((seg, i) => seg.classList.toggle('hot', i === index));
+    rows.forEach((row, i) => row.classList.toggle('hot', i === index));
+  };
+
+  const indexOf = (target: EventTarget | null) => {
+    if (!(target instanceof Element)) return -1;
+    const seg = target.closest('.bar .seg');
+    if (seg instanceof HTMLElement && zone.contains(seg)) return segs.indexOf(seg);
+    const row = target.closest('.legend li[data-seg]');
+    if (row instanceof HTMLElement && zone.contains(row)) return rows.indexOf(row);
+    return -1;
+  };
+
+  if (coarse) {
+    zone.addEventListener('click', (event) => {
+      const index = indexOf(event.target);
+      if (index < 0) return;
+      paint(segs[index]?.classList.contains('hot') ? null : index);
+    });
+    return;
+  }
+
+  zone.addEventListener('pointerover', (event) => {
+    const index = indexOf(event.target);
+    if (index >= 0) paint(index);
+  });
+  zone.addEventListener('pointerleave', () => {
+    const active = document.activeElement;
+    if (active instanceof Element && zone.contains(active) && indexOf(active) >= 0) return;
+    paint(null);
+  });
+  zone.addEventListener('focusin', (event) => {
+    const index = indexOf(event.target);
+    if (index >= 0) paint(index);
+  });
+  zone.addEventListener('focusout', (event) => {
+    const next = event.relatedTarget;
+    if (next instanceof Node && zone.contains(next)) return;
+    paint(null);
+  });
+}
+
 paintHeat();
 revealOnScroll();
 ipadScroll();
+bindScoreBar();
