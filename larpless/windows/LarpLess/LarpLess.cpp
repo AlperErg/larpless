@@ -90,7 +90,14 @@ _Use_decl_annotations_ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE, PSTR 
   appWindow.Title(L"LarpLess");
   const HWND hwnd{winrt::Microsoft::UI::GetWindowFromWindowId(appWindow.Id())};
   LarpLess::MainWindow() = hwnd;
-  const double scale{GetDpiForWindow(hwnd) / 96.0};
+  const UINT dpi{GetDpiForWindow(hwnd)};
+  // Title bar / Alt+Tab icon from the exe's icon resource (LarpLess.ico); AppWindow doesn't pick it up by itself.
+  const int iconSize{GetSystemMetricsForDpi(SM_CXICON, dpi)};
+  if (const auto icon{static_cast<HICON>(
+          LoadImageW(instance, MAKEINTRESOURCEW(IDI_ICON1), IMAGE_ICON, iconSize, iconSize, LR_SHARED))}) {
+    appWindow.SetIcon(winrt::Microsoft::UI::GetIconIdFromIcon(icon));
+  }
+  const double scale{dpi / 96.0};
   const auto px = [scale](int dip) { return static_cast<int32_t>(dip * scale); };
   appWindow.ResizeClient({px(1100), px(720)});
   if (auto presenter{appWindow.Presenter().try_as<winrt::Microsoft::UI::Windowing::OverlappedPresenter>()}) {
