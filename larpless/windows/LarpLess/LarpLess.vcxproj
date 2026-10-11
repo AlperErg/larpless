@@ -98,6 +98,15 @@
       <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
+  <!-- ONNX Runtime's native props key off PlatformTarget, which vcxproj does not set. -->
+  <PropertyGroup>
+    <PlatformTarget Condition="'$(Platform)'=='x64'">x64</PlatformTarget>
+    <PlatformTarget Condition="'$(Platform)'=='Win32'">x86</PlatformTarget>
+    <PlatformTarget Condition="'$(Platform)'=='ARM64'">ARM64</PlatformTarget>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.22.1" />
+  </ItemGroup>
   <PropertyGroup Label="UserMacros" />
   <ItemGroup>
     <ClInclude Include="LarpLess.h" />
@@ -126,6 +135,10 @@
     <None Include="Assets\Fonts\*.ttf">
       <DeploymentContent>true</DeploymentContent>
     </None>
+    <!-- Single file, so it lands next to the exe under Assets\Models. -->
+    <None Include="Assets\Models\yolo11n.onnx">
+      <DeploymentContent>true</DeploymentContent>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="LarpLess.cpp" />
@@ -152,6 +165,16 @@
   </ImportGroup>
   <ItemGroup>
   </ItemGroup>
+  <!-- The NuGet props copy onnxruntime.dll to OutDir but not into the MSIX layout. -->
+  <Target Name="PackageOnnxRuntimeDll" BeforeTargets="AssignTargetPaths">
+    <ItemGroup>
+      <None Include="$(OnnxRuntimeBinary)" Condition="'$(OnnxRuntimeBinary)' != '' and Exists('$(OnnxRuntimeBinary)')">
+        <Link>onnxruntime.dll</Link>
+        <DeploymentContent>true</DeploymentContent>
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </None>
+    </ItemGroup>
+  </Target>
   <Target Name="EnsureReactNativeWindowsTargets" BeforeTargets="PrepareForBuild">
     <PropertyGroup>
       <ErrorText>This project references targets in your node_modules\react-native-windows folder. The missing file is {0}.</ErrorText>

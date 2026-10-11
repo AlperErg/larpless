@@ -108,10 +108,10 @@ Starting a session warms the model up, which takes about 3 s while the first win
 - **State / storage:** zustand 5, AsyncStorage 2.2.0 (pinned), date-fns 4.
 - **Native (Swift 5, macOS 14+):** ScreenCaptureKit, AVFoundation, Vision, CoreML, UserNotifications, AppKit, SwiftUI.
 - **Now playing:** a vendored [mediaremote-adapter](https://github.com/ungive/mediaremote-adapter) (BSD-3-Clause) run through `/usr/bin/perl`. Since macOS 15.4, a Developer ID app can't read MediaRemote itself.
-- **Models:** Ollama `qwen3-vl:4b` and YOLO11n CoreML (`nms=True`, bundled; presence and phone).
+- **Models:** Ollama `qwen3-vl:4b` and YOLO11n (`nms=True`, bundled; presence and phone). CoreML on Mac, ONNX Runtime on Windows.
 - **Social:** `@supabase/supabase-js` + `react-native-url-polyfill`.
 - **Website:** Vite + TypeScript in `site/`.
-- **Windows:** react-native-windows 0.81 (C++ app, Fabric, WinAppSDK 1.8). Native modules in C++/WinRT: Direct2D + DirectWrite, XAudio2, MediaCapture, WIC, toast notifications.
+- **Windows:** react-native-windows 0.81 (C++ app, Fabric, WinAppSDK 1.8). Native modules in C++/WinRT: Direct2D + DirectWrite, XAudio2, MediaCapture, ONNX Runtime, WIC, toast notifications.
 
 ## Getting started
 
@@ -223,8 +223,7 @@ This starts Metro on port 8081 if it isn't already running (log in `.logs/metro-
 **Differences from the Mac app**
 
 - Shortcuts use **Ctrl** instead of ⌘ (Ctrl+K palette, Ctrl+Enter start, Ctrl+. end).
-- The webcam currently detects **presence** with the built-in Windows `FaceDetector`, which only finds a fairly frontal face: looking down, turning away or strong backlight reads as *away*. **Phone detection is not wired up yet**, so `phoneVisible` is always `false`.
-- **Planned:** the Windows webcam will switch to **YOLO11n through ONNX Runtime**, a model that detects whole **bodies** (the `person` class, score > 0.5) as well as phones (`cell phone`, score > 0.4), the same model and thresholds as the Mac's CoreML YOLO. This replaces `FaceDetector` for presence, so you count as present whenever your body is in frame, not only when your face is.
+- The webcam uses the same YOLO11n rules as Mac (`person` above 0.5, `cell phone` above 0.4), through ONNX Runtime instead of CoreML. Samples start once the model has loaded.
 - The main window uses Segoe UI, Georgia and Consolas, because react-native-windows can't load bundled fonts yet. The floating panel draws its own text and keeps Inter + Instrument Serif.
 - Page transitions and other `Animated` effects are off on Windows (`ANIMATE` in `src/ui/platform.ts`): react-native-windows drops the content of a re-rendered `Animated.View`. The floating panel's tint, pulse and flash animations are native and unaffected.
 - Closing the main window quits the app (the Windows convention) instead of keeping it in the background.

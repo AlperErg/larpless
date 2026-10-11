@@ -41,7 +41,7 @@ Each module is **one header** (`REACT_MODULE` / `REACT_METHOD` / `REACT_EVENT` /
 | FLScreenCapture | foreground window → pid → FileDescription; GDI StretchBlt of the primary screen → WIC JPEG in an `HGlobal` stream; own window hidden with `WDA_EXCLUDEFROMCAPTURE` during capture | `bundleId` is the exe name; Screen Recording is always `granted` |
 | FLPermissions | camera via `AppCapability("webcam")`; `openSettings` → `ms-settings:privacy-webcam`; `relaunch` → `AppInstance::Restart` | no screen permission on Windows |
 | FLSound | XAudio2 port of the Swift engine (xorshift white, Kellet pink, brown; equal-power ramps; chimes) | — |
-| FLWebcam | MediaCapture + MediaFrameReader (BGRA), `FaceDetector` on Gray8 for presence | **no phone detection** (`phoneVisible` always false); see below |
+| FLWebcam | MediaCapture + MediaFrameReader (BGRA), YOLO11n via ONNX Runtime | — (same `person` / `cell phone` thresholds as Mac) |
 | FLFloatingPanel | layered `WS_EX_TOPMOST\|TOOLWINDOW\|NOACTIVATE` popup drawn with Direct2D (DC render target on a DIB + `UpdateLayeredWindow`) and DirectWrite with the bundled Inter + Instrument Serif | — (same size, states, hub and payloads) |
 
 Closing the main window quits the app (Windows convention) instead of keeping it in the background.
@@ -70,9 +70,15 @@ The panel is excluded from screen capture. For screenshots call `__FL.NativeModu
 - Fonts: RNW Fabric can't load bundled fonts yet, so `theme.ts` uses Segoe UI / Segoe UI Semibold / Georgia / Consolas on Windows. The floating panel draws its own text and keeps Inter + Instrument Serif.
 - Jest runs as `ios`; `__tests__/ui/platform.test.ts` covers macos / ios / windows via `jest.replaceProperty(Platform, 'OS', …)`.
 
-## Webcam: planned body detection
+## Webcam model
 
-`FaceDetector` only finds fairly frontal faces, so a user at the desk who looks down or away reads as *away*. **Decision: Windows moves to YOLO11n through ONNX Runtime** (NuGet `Microsoft.ML.OnnxRuntime`), the same model and thresholds as the Mac's CoreML YOLO: conf 0.2, IoU 0.6, `person` > 0.5 ⇒ `personPresent`, best `cell phone` score ⇒ `phoneScore`, > 0.4 ⇒ `phoneVisible`. Export once (needs Python + ultralytics): `yolo export model=yolo11n.pt format=onnx nms=True imgsz=640`, ship it under `windows/LarpLess/Assets/Models/`.
+Presence and phone both come from bundled YOLO11n (`Assets/Models/yolo11n.onnx`, NuGet `Microsoft.ML.OnnxRuntime` 1.22.1, CPU, one intra-op thread). Thresholds match the Mac CoreML model: NMS confidence 0.2 and IoU 0.6 (baked in at export), `person` > 0.5 means `personPresent`, best `cell phone` score is `phoneScore`, and > 0.4 means `phoneVisible`. No samples are emitted until the model has loaded, or at all if it fails to load.
+
+Re-export (Python + ultralytics) and replace the file:
+
+```bash
+yolo export model=yolo11n.pt format=onnx nms=True imgsz=640 conf=0.2 iou=0.6
+```
 
 ## Ollama on Windows (open issue)
 
