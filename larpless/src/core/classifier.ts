@@ -45,7 +45,7 @@ export interface ClassifyResult {
   tookMs?: number;
   /** True when three or more windows arrived while this call was running. */
   fellBehind?: boolean;
-  /** One id per vision call, copied onto every waiter, so a slow call steps the profile down once. */
+  /** One id per vision call. Same-window sharers copy it; a follow-up shot gets its own. */
   gen?: number;
 }
 
@@ -74,6 +74,8 @@ interface CacheEntry {
   windowTitle: string;
   verdict: ScreenVerdict;
   at: number;
+  /** TTL captured when the verdict was written, so a later step-down cannot extend it. */
+  ttlMs: number;
 }
 
 const lc = (s: string) => s.toLowerCase();
@@ -124,9 +126,25 @@ export function createClassifier({ native, ollama, now, config, getPower }: Clas
   let cache: CacheEntry | null = null;
   let inFlight: Flight | null = null;
   let nextGen = 1;
+  /** Bumped on reset so a call that started earlier cannot arm a hold for the next session. */
+  let epoch = 0;
+  /** After a client-side timeout, don't send another request until this time. Ollama may still be finishing the aborted one. */
+  let holdUntil = 0;
 
   const power = () => getPower?.();
   const cacheTtl = () => power()?.cacheTtlMs ?? config.CACHE_TTL_MS;
+  const ceilingMs = () => power()?.classifyTimeoutMs ?? 30_000;
+
+  /** Bound a capture so a stuck screenshot can't hold the single-flight slot forever. */
+  function captureWithin(ms: number, opts: ClassifierConfig['CAPTURE']): Promise<ScreenSnapshot> {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const deadline = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(Object.assign(new Error('capture timeout'), { code: 'E_CAPTURE' })), ms);
+    });
+    return Promise.race([native.screen.capture(opts), deadline]).finally(() => {
+      if (timer !== null) clearTimeout(timer);
+    });
+  }
 
   const remember = (v: ScreenVerdict | null, app: string | null, key: string) => {
     if (v) {
@@ -139,11 +157,12 @@ export function createClassifier({ native, ollama, now, config, getPower }: Clas
 
   async function runVlm(modules: StudyModule[], ctx: ClassifyContext, appName: string | null, key: string): Promise<ClassifyResult> {
     const started = now();
+    const budget = ceilingMs();
     let snap: ScreenSnapshot | null = null;
     const spec = power();
     try {
       try {
-        snap = await native.screen.capture(spec?.capture ?? config.CAPTURE);
+        snap = await captureWithin(budget, spec?.capture ?? config.CAPTURE);
       } catch (e) {
         return {
           verdict: null,
@@ -158,13 +177,24 @@ export function createClassifier({ native, ollama, now, config, getPower }: Clas
       const snapApp = snap.appName ?? appName;
       const snapTitle = snap.windowTitle;
       const snapKey = windowKey(snapApp, snapTitle);
+      const left = budget - Math.max(0, now() - started);
+      if (!useMock && left <= 0) {
+        return {
+          verdict: null,
+          tookScreenshot: true,
+          appName: snapApp,
+          key: snapKey,
+          tookMs: Math.max(0, now() - started),
+          error: 'capture',
+        };
+      }
       const verdict = useMock
         ? mockVerdictFromTitle(snapApp, snapTitle, modules)
         : spec
-          ? await ollama.classify(snap, modules, { timeoutMs: spec.classifyTimeoutMs, keepAlive: spec.keepAlive })
-          : await ollama.classify(snap, modules);
+          ? await ollama.classify(snap, modules, { timeoutMs: left, keepAlive: spec.keepAlive })
+          : await ollama.classify(snap, modules, { timeoutMs: left });
       if (verdict && snapTitle !== null) {
-        cache = { appName: snapApp, windowTitle: snapTitle, verdict, at: now() };
+        cache = { appName: snapApp, windowTitle: snapTitle, verdict, at: now(), ttlMs: cacheTtl() };
       }
       return {
         verdict: remember(verdict, snapApp, snapKey),
@@ -179,12 +209,79 @@ export function createClassifier({ native, ollama, now, config, getPower }: Clas
     }
   }
 
+  type Decision =
+    | { kind: 'fast'; result: ClassifyResult }
+    | { kind: 'vlm'; appName: string | null; key: string };
+
+  /** Rules, cache and "this app" never take a screenshot, so they don't need the flight. */
+  async function decide(): Promise<Decision> {
+    const win = await native.screen.getActiveWindow();
+    const appName = win.appName ?? null;
+    if (win.isSelf) {
+      if (!previous) return { kind: 'fast', result: { verdict: null, tookScreenshot: false, appName: null, key: null } };
+      const source = previous.source === 'rule' ? 'rule' : 'cache';
+      return {
+        kind: 'fast',
+        result: { verdict: { ...previous, source }, tookScreenshot: false, appName: previousApp, key: previousKey },
+      };
+    }
+    const key = windowKey(appName, win.windowTitle);
+    const rule = matchDistraction(win.appName, win.windowTitle);
+    if (rule) {
+      const verdict: ScreenVerdict = { studying: false, moduleId: null, activity: rule.activity, confidence: 1, source: 'rule' };
+      return { kind: 'fast', result: { verdict: remember(verdict, appName, key), tookScreenshot: false, appName, key } };
+    }
+    const t = now();
+    if (
+      cache &&
+      win.windowTitle !== null &&
+      cache.appName === appName &&
+      cache.windowTitle === win.windowTitle &&
+      t - cache.at < cache.ttlMs
+    ) {
+      return {
+        kind: 'fast',
+        result: { verdict: remember({ ...cache.verdict, source: 'cache' }, appName, key), tookScreenshot: false, appName, key },
+      };
+    }
+    return { kind: 'vlm', appName, key };
+  }
+
+  async function joinFlight(running: Flight, modules: StudyModule[], ctx: ClassifyContext): Promise<ClassifyResult> {
+    const decided = await decide();
+    if (decided.kind === 'fast') return decided.result;
+    running.seen.add(decided.key);
+    const shared = await running.result;
+    const fellBehind = running.seen.size >= BEHIND_WINDOWS;
+    if (running.key === decided.key) {
+      return {
+        ...shared,
+        verdict: shared.verdict && { ...shared.verdict, source: 'cache' },
+        tookScreenshot: false,
+        fellBehind: shared.fellBehind || fellBehind,
+      };
+    }
+    // One follow-up, claimed synchronously inside classifyCurrent before its first await.
+    if (!running.followUp) {
+      running.followUp = classifier.classifyCurrent(modules, ctx);
+      return running.followUp;
+    }
+    const sharedFollow = await running.followUp;
+    return {
+      ...sharedFollow,
+      verdict: sharedFollow.verdict && { ...sharedFollow.verdict, source: 'cache' },
+      tookScreenshot: false,
+    };
+  }
+
   const classifier: Classifier = {
     reset() {
       previous = null;
       previousApp = null;
       previousKey = null;
       cache = null;
+      holdUntil = 0;
+      epoch += 1;
     },
 
     async warmUp(modules) {
@@ -200,89 +297,48 @@ export function createClassifier({ native, ollama, now, config, getPower }: Clas
     },
 
     async classifyCurrent(modules, ctx = {}) {
-      const win = await native.screen.getActiveWindow();
-      const appName = win.appName ?? null;
-
-      // 1. LarpLess itself is frontmost → reuse the previous screen verdict. No screenshot.
-      if (win.isSelf) {
-        if (!previous) return { verdict: null, tookScreenshot: false, appName: null, key: null };
-        const source = previous.source === 'rule' ? 'rule' : 'cache';
-        return { verdict: { ...previous, source }, tookScreenshot: false, appName: previousApp, key: previousKey };
-      }
-
-      const key = windowKey(appName, win.windowTitle);
-
-      // 2. Rules fast path. No screenshot.
-      const rule = matchDistraction(win.appName, win.windowTitle);
-      if (rule) {
-        const verdict: ScreenVerdict = { studying: false, moduleId: null, activity: rule.activity, confidence: 1, source: 'rule' };
-        return { verdict: remember(verdict, appName, key), tookScreenshot: false, appName, key };
-      }
-
-      // 3. Cache: same app + title as the last VLM verdict, within the TTL. No screenshot.
-      const t = now();
-      if (
-        cache &&
-        win.windowTitle !== null &&
-        cache.appName === appName &&
-        cache.windowTitle === win.windowTitle &&
-        t - cache.at < cacheTtl()
-      ) {
-        return { verdict: remember({ ...cache.verdict, source: 'cache' }, appName, key), tookScreenshot: false, appName, key };
-      }
-
-      // 4. VLM, one screenshot at a time. The slot is taken before the next await.
-      if (inFlight) {
-        const running = inFlight;
-        running.seen.add(key);
-        const shared = await running.result;
-        const fellBehind = running.seen.size >= BEHIND_WINDOWS;
-        if (running.key === key) {
-          return {
-            ...shared,
-            verdict: shared.verdict && { ...shared.verdict, source: 'cache' },
-            tookScreenshot: false,
-            fellBehind: shared.fellBehind || fellBehind,
-          };
-        }
-        // Drop every window that arrived during the call. One follow-up reads the frontmost window now.
-        if (!running.followUp) {
-          running.followUp = classifier.classifyCurrent(modules, ctx).then((next) =>
-            fellBehind ? { ...next, fellBehind: true, gen: running.gen } : next,
-          );
-          return running.followUp;
-        }
-        const sharedFollow = await running.followUp;
-        return {
-          ...sharedFollow,
-          verdict: sharedFollow.verdict && { ...sharedFollow.verdict, source: 'cache' },
-          tookScreenshot: false,
-        };
-      }
+      // Claim the slot before any await so a slow getActiveWindow can't miss an in-flight call.
+      if (inFlight) return joinFlight(inFlight, modules, ctx);
       const gen = nextGen++;
+      const flightEpoch = epoch;
       let resolveFlight: (r: ClassifyResult) => void = () => {};
       const result = new Promise<ClassifyResult>((resolve) => {
         resolveFlight = resolve;
       });
-      const flight: Flight = { key, gen, seen: new Set([key]), result };
+      const flight: Flight = { key: '', gen, seen: new Set(), result };
       inFlight = flight;
-      try {
-        const done = await runVlm(modules, ctx, appName, key);
-        const out: ClassifyResult = { ...done, gen, fellBehind: flight.seen.size >= BEHIND_WINDOWS };
+      const finish = (out: ClassifyResult) => {
         resolveFlight(out);
         return out;
+      };
+      try {
+        const decided = await decide();
+        if (decided.kind === 'fast') {
+          flight.key = decided.result.key ?? '';
+          if (flight.key) flight.seen.add(flight.key);
+          return finish(decided.result);
+        }
+        flight.key = decided.key;
+        flight.seen.add(decided.key);
+        if (now() < holdUntil) {
+          return finish({ verdict: null, tookScreenshot: false, appName: decided.appName, key: decided.key, error: 'vlm', gen });
+        }
+        const done = await runVlm(modules, ctx, decided.appName, decided.key);
+        const usedUp = (done.tookMs ?? 0) >= ceilingMs() - 250;
+        if (flightEpoch === epoch && usedUp && (done.error === 'vlm' || done.error === 'capture')) {
+          holdUntil = now() + (power()?.chunkS ?? 15) * 1000;
+        }
+        return finish({ ...done, gen, fellBehind: flight.seen.size >= BEHIND_WINDOWS });
       } catch {
-        const out: ClassifyResult = {
+        return finish({
           verdict: null,
           tookScreenshot: false,
-          appName,
-          key,
+          appName: null,
+          key: flight.key || null,
           gen,
           fellBehind: flight.seen.size >= BEHIND_WINDOWS,
           error: 'vlm',
-        };
-        resolveFlight(out);
-        return out;
+        });
       } finally {
         if (inFlight === flight) inFlight = null;
       }

@@ -3,9 +3,7 @@ import type { Settings } from './contracts/domain';
 export const config = {
   USE_MOCK_NATIVE: false,          // flip to false at the 4:00 checkpoint
   USE_MOCK_CLASSIFIER: false,      // true → classifier derives the verdict from windowTitle, no Ollama
-  CHUNK_S: 10,
-  DEMO_CHUNK_S: 10,
-  CAPTURE: { maxWidth: 1280, jpegQuality: 0.7 },
+  CAPTURE: { maxWidth: 1280, jpegQuality: 0.7 }, // fallback when a caller has no power profile; live sessions use the profile
   CLASSIFY_TIMEOUT_MS: 30_000, // ceiling so a slow machine can finish; profiles change cadence, not this
   CACHE_TTL_MS: 120_000,
   WEBCAM_FPS: 1,

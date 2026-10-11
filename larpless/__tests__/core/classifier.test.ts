@@ -16,6 +16,8 @@ const BIO_VERDICT: ScreenVerdict = { studying: true, moduleId: 'mod_biology', ac
 function setup(opts: { config?: Partial<ClassifierConfig>; verdict?: ScreenVerdict | null; getPower?: () => PowerSpec } = {}) {
   let win: ActiveWindow = { appName: 'Preview', bundleId: 'com.apple.Preview', windowTitle: 'BIO101 Lecture 4.pdf', isSelf: false };
   let t = 1_000_000;
+  let holdWindows = 0;
+  const windowReleasers: Array<(w: ActiveWindow) => void> = [];
   const capture = jest.fn(
     async (): Promise<ScreenSnapshot> => ({ ...win, jpegBase64: 'IMG', width: 1, height: 1, capturedAt: t }),
   );
@@ -23,7 +25,21 @@ function setup(opts: { config?: Partial<ClassifierConfig>; verdict?: ScreenVerdi
   const warmUp = jest.fn(async () => {});
   const unload = jest.fn(async () => {});
   const c = createClassifier({
-    native: { screen: { getActiveWindow: async () => ({ ...win }), capture } },
+    native: {
+      screen: {
+        getActiveWindow: () => {
+          const snapshot = { ...win };
+          if (holdWindows > 0) {
+            holdWindows -= 1;
+            return new Promise<ActiveWindow>((resolve) => {
+              windowReleasers.push(() => resolve(snapshot));
+            });
+          }
+          return Promise.resolve(snapshot);
+        },
+        capture,
+      },
+    },
     ollama: { classify, warmUp, unload },
     now: () => t,
     config: { ...CFG, ...opts.config },
@@ -40,6 +56,12 @@ function setup(opts: { config?: Partial<ClassifierConfig>; verdict?: ScreenVerdi
     },
     advance: (ms: number) => {
       t += ms;
+    },
+    holdWindow: () => {
+      holdWindows += 1;
+    },
+    releaseWindow: () => {
+      windowReleasers.shift()?.({ ...win });
     },
   };
 }
@@ -180,8 +202,9 @@ describe('classifier', () => {
     expect((await first).key).toBe(BIO_KEY);
     expect((await first).fellBehind).toBe(true);
     const finalKey = windowKey('Preview', 'FINAL notes.pdf');
-    expect(await second).toMatchObject({ tookScreenshot: true, key: finalKey, fellBehind: true });
-    expect(await third).toMatchObject({ tookScreenshot: false, key: finalKey, fellBehind: true });
+    // The follow-up keeps its own gen, so a later slow shot can step down again.
+    expect(await second).toMatchObject({ tookScreenshot: true, key: finalKey, fellBehind: false });
+    expect(await third).toMatchObject({ tookScreenshot: false, key: finalKey });
     expect(s.capture).toHaveBeenCalledTimes(2);
     expect(s.classify).toHaveBeenCalledTimes(2);
   });
@@ -244,6 +267,181 @@ describe('classifier', () => {
     const no = mockVerdictFromTitle('Safari', 'Some music video', fixtureModules);
     expect(no).toMatchObject({ studying: false, moduleId: null });
     expect(mockVerdictFromTitle('Finder', null, fixtureModules)).toMatchObject({ studying: false, activity: 'Finder' });
+  });
+
+  it('a window query that resolves after the in-flight call still shares that capture', async () => {
+    let release: (v: ScreenVerdict) => void = () => {};
+    const s = setup();
+    s.classify.mockImplementationOnce(() => new Promise<ScreenVerdict>((res) => (release = res)));
+    const first = s.c.classifyCurrent(fixtureModules);
+    await tick();
+    s.holdWindow();
+    const second = s.c.classifyCurrent(fixtureModules);
+    await tick();
+    release(BIO_VERDICT);
+    await first;
+    expect(s.capture).toHaveBeenCalledTimes(1);
+    s.releaseWindow();
+    await second;
+    expect(s.capture).toHaveBeenCalledTimes(1);
+    expect(s.classify).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the TTL from when the verdict was cached, so a longer profile cannot extend it', async () => {
+    let ttl = 1_000;
+    const spec = (): PowerSpec => ({
+      id: 'high',
+      chunkS: 10,
+      liveSettleMs: 1_000,
+      capture: CFG.CAPTURE,
+      cacheTtlMs: ttl,
+      keepAlive: '30m',
+      classifyTimeoutMs: 30_000,
+    });
+    const s = setup({ getPower: spec });
+    await s.c.classifyCurrent(fixtureModules);
+    ttl = 100_000;
+    s.advance(2_000);
+    expect((await s.c.classifyCurrent(fixtureModules)).tookScreenshot).toBe(true);
+    expect(s.capture).toHaveBeenCalledTimes(2);
+  });
+
+  it('after a timeout, the next vision call waits out a chunk instead of capturing again', async () => {
+    const s = setup({
+      getPower: () => ({
+        id: 'high',
+        chunkS: 10,
+        liveSettleMs: 1_000,
+        capture: CFG.CAPTURE,
+        cacheTtlMs: 120_000,
+        keepAlive: '30m',
+        classifyTimeoutMs: 30_000,
+      }),
+    });
+    s.classify.mockImplementationOnce(async () => {
+      s.advance(30_000);
+      return null;
+    });
+    expect((await s.c.classifyCurrent(fixtureModules)).error).toBe('vlm');
+    await s.c.classifyCurrent(fixtureModules);
+    expect(s.capture).toHaveBeenCalledTimes(1);
+    expect(s.classify).toHaveBeenCalledTimes(1);
+    s.advance(10_000);
+    expect((await s.c.classifyCurrent(fixtureModules)).tookScreenshot).toBe(true);
+    expect(s.capture).toHaveBeenCalledTimes(2);
+  });
+
+  it('reset clears a timeout hold so the next session can classify immediately', async () => {
+    const s = setup({
+      getPower: () => ({
+        id: 'high',
+        chunkS: 10,
+        liveSettleMs: 1_000,
+        capture: CFG.CAPTURE,
+        cacheTtlMs: 120_000,
+        keepAlive: '30m',
+        classifyTimeoutMs: 30_000,
+      }),
+    });
+    s.classify.mockImplementationOnce(async () => {
+      s.advance(30_000);
+      return null;
+    });
+    expect((await s.c.classifyCurrent(fixtureModules)).error).toBe('vlm');
+    s.c.reset();
+    expect((await s.c.classifyCurrent(fixtureModules)).tookScreenshot).toBe(true);
+    expect(s.capture).toHaveBeenCalledTimes(2);
+  });
+
+  it('a timeout that finishes after reset does not hold the next session', async () => {
+    let release: () => void = () => {};
+    const s = setup({
+      getPower: () => ({
+        id: 'high',
+        chunkS: 10,
+        liveSettleMs: 1_000,
+        capture: CFG.CAPTURE,
+        cacheTtlMs: 120_000,
+        keepAlive: '30m',
+        classifyTimeoutMs: 30_000,
+      }),
+    });
+    s.classify.mockImplementationOnce(
+      () =>
+        new Promise((res) => {
+          release = () => {
+            s.advance(30_000);
+            res(null);
+          };
+        }),
+    );
+    const first = s.c.classifyCurrent(fixtureModules);
+    await tick();
+    s.c.reset();
+    release();
+    await first;
+    expect((await s.c.classifyCurrent(fixtureModules)).tookScreenshot).toBe(true);
+    expect(s.capture).toHaveBeenCalledTimes(2);
+  });
+
+  it('a screenshot that uses the whole ceiling does not call the model', async () => {
+    const s = setup({
+      getPower: () => ({
+        id: 'high',
+        chunkS: 10,
+        liveSettleMs: 1_000,
+        capture: CFG.CAPTURE,
+        cacheTtlMs: 120_000,
+        keepAlive: '30m',
+        classifyTimeoutMs: 30_000,
+      }),
+    });
+    s.capture.mockImplementationOnce(async () => {
+      s.advance(30_000);
+      return {
+        appName: 'Preview',
+        bundleId: 'com.apple.Preview',
+        windowTitle: 'BIO101 Lecture 4.pdf',
+        isSelf: false,
+        jpegBase64: 'IMG',
+        width: 1,
+        height: 1,
+        capturedAt: 0,
+      };
+    });
+    expect((await s.c.classifyCurrent(fixtureModules)).error).toBe('capture');
+    expect(s.classify).not.toHaveBeenCalled();
+    await s.c.classifyCurrent(fixtureModules);
+    expect(s.capture).toHaveBeenCalledTimes(1);
+  });
+
+  it('a slow screenshot leaves the model only the time remaining in the ceiling', async () => {
+    const s = setup({
+      getPower: () => ({
+        id: 'high',
+        chunkS: 10,
+        liveSettleMs: 1_000,
+        capture: CFG.CAPTURE,
+        cacheTtlMs: 120_000,
+        keepAlive: '30m',
+        classifyTimeoutMs: 30_000,
+      }),
+    });
+    s.capture.mockImplementationOnce(async () => {
+      s.advance(20_000);
+      return {
+        appName: 'Preview',
+        bundleId: 'com.apple.Preview',
+        windowTitle: 'BIO101 Lecture 4.pdf',
+        isSelf: false,
+        jpegBase64: 'IMG',
+        width: 1,
+        height: 1,
+        capturedAt: 0,
+      };
+    });
+    await s.c.classifyCurrent(fixtureModules);
+    expect(s.classify).toHaveBeenCalledWith(expect.anything(), fixtureModules, { timeoutMs: 10_000, keepAlive: '30m' });
   });
 
   it('privacy: never logs the snapshot or image data on any path', async () => {

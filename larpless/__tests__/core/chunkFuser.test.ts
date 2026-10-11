@@ -56,7 +56,7 @@ describe('chunkFuser', () => {
     expect(fuseChunk(base({ verdict: null }))).toMatchObject({ kind: 'unknown', source: 'none', confidence: 0, moduleId: null, reason: null });
   });
 
-  it('away beats everything: absent in > 2/3 of the samples (10-sample demo chunk: 7 of 10)', () => {
+  it('away beats everything: absent in > 2/3 of the samples (7 of 10)', () => {
     expect(fuseChunk(base({ samples: samples(10, 7), verdict: INSTA }))).toMatchObject({ kind: 'away', source: 'webcam', appName: null, reason: null, moduleId: null });
     // 6 of 10 is not > 2/3 → screen verdict decides
     expect(fuseChunk(base({ samples: samples(10, 6) })).kind).toBe('subject');

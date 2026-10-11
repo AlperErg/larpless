@@ -20,7 +20,7 @@ export interface Chunk {
   sessionId: string;
   index: number;                      // 0-based within the session
   startedAt: number;                  // epoch ms
-  durationS: number;                  // 30 normally, 10 in demoFast
+  durationS: number;                  // set by the power profile: 10, 15 or 30
   kind: ChunkKind;
   moduleId: string | null;            // non-null only when kind === 'subject'
   reason: DistractionReason | null;   // non-null only when kind === 'distracted'

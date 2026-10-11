@@ -41,8 +41,6 @@ export const SAMPLE_BUFFER = 120;
 export const MIN_PARTIAL_CHUNK_S = 10;
 /** Pomodoro breaks duck the ambient sound to this factor. */
 export const BREAK_DUCK = 0.3;
-/** A new frontmost window is classified once it has stayed this long (quick ⌘-Tabs are ignored). */
-export const LIVE_SETTLE_MS = 1000;
 
 type LiveLabel = Pick<CurrentCheck, 'kind' | 'moduleId' | 'activity' | 'appName'>;
 
@@ -57,8 +55,6 @@ export interface StoreApi {
 }
 
 export interface ControllerConfig {
-  CHUNK_S: number;
-  DEMO_CHUNK_S: number;
   WEBCAM_FPS: number;
 }
 
@@ -146,6 +142,7 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
   const set = (p: Partial<SessionStoreState>) => store.setState(p);
 
   let sessionId: string | null = null;
+  let sessionStartedAt = 0;
   let demo = false;
   let ending: Promise<SessionSummary | null> | null = null;
   let tickTimer: ReturnType<typeof setInterval> | null = null;
@@ -178,7 +175,12 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
   const chunkSeconds = () => effectiveProfile(deps.getSettings().powerProfile).chunkS;
   const settleMs = () => effectiveProfile(deps.getSettings().powerProfile).liveSettleMs;
 
-  function considerStepDown(r: ClassifyResult) {
+  function considerStepDown(sid: string, r: ClassifyResult) {
+    // Only the session that started the call may step. A dispose, a new start, or an end
+    // that has already begun must not pick up a result from an older call.
+    if (ending || sid !== sessionId) return;
+    // A result inherited from a call that began before this session must not step it.
+    if (r.tookMs != null && now() - r.tookMs < sessionStartedAt) return;
     if (r.gen == null || r.gen === steppedGen) return;
     const spec = effectiveProfile(deps.getSettings().powerProfile);
     const slow = (r.tookMs ?? 0) > spec.chunkS * 1000;
@@ -291,7 +293,7 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
     native.screen
       .getActiveWindow()
       .then((win) => {
-        if (sid !== sessionId || win.isSelf) return;
+        if (ending || sid !== sessionId || win.isSelf) return;
         const t = now();
         const key = windowKey(win.appName ?? null, win.windowTitle);
         if (key !== seenKey) {
@@ -311,15 +313,21 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
 
   async function liveCheck(sid: string) {
     const r = await deps.classifier.classifyCurrent(deps.getModules());
-    considerStepDown(r);
+    considerStepDown(sid, r);
     if (sid !== sessionId || ending) return;
     if (r.tookScreenshot) {
       const p = get().privacy;
       set({ privacy: { ...p, framesAnalysed: p.framesAnalysed + 1 } });
     }
-    // Paused, away or a different window by now: drop it, the next ticks check again.
-    // A failed check keeps the last label; the chunk close reports failures.
-    if (get().status !== 'running' || camLive === 'away' || r.key !== seenKey || !r.verdict) return;
+    // Paused, away, a different window, or no verdict: drop it. Clear checkedKey so the
+    // same window can be tried again; a failure waits out a fresh settle instead of every tick.
+    const stale = r.key !== null && r.key !== seenKey;
+    const failed = !r.verdict;
+    if (get().status !== 'running' || camLive === 'away' || stale || failed) {
+      if (stale || failed || camLive === 'away') checkedKey = null;
+      if (failed && !stale) seenSince = now();
+      return;
+    }
     screenNow = screenLabel(r);
     showLive();
   }
@@ -385,7 +393,7 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
     // 1. Away (webcam) → no screenshot at all.
     if (!awayStats(samples).away) {
       const r = await deps.classifier.classifyCurrent(modules);
-      considerStepDown(r);
+      considerStepDown(sid, r);
       verdict = r.verdict;
       appName = r.appName;
       tookScreenshot = r.tookScreenshot;
@@ -519,6 +527,7 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
     async start(opts: StartOptions) {
       if (isActive() || ending) return;
       const t = now();
+      sessionStartedAt = t;
       const settings = deps.getSettings();
       demo = !!opts.demo;
       resetSessionProfile();
@@ -539,7 +548,7 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
       camLive = null;
       screenNow = null;
       resetWindowWatch();
-      // The preset the user picked is the length they get. demoFast only shortens checks and alerts.
+      // The preset the user picked is the length they get. demoFast only shortens alerts.
       const preset: PomodoroPreset | null = opts.pomodoro === 'off' ? null : opts.pomodoro;
 
       set({
@@ -619,6 +628,7 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
         clearTimers();
         if (!demo && get().status === 'running' && t - windowStart >= MIN_PARTIAL_CHUNK_S * 1000) closeWindow(t);
         await Promise.allSettled([...pending]);
+        resetSessionProfile();
         const tEnd = now();
         const st = get();
         const baseS = demo ? st.timer.baseS : elapsedS(tEnd);
@@ -781,6 +791,7 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
       clearTimers();
       teardownNative();
       sessionId = null;
+      resetSessionProfile();
     },
   };
 

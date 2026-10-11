@@ -3,6 +3,7 @@
  * Keys: CONTRACTS.md §8. Labels only: never images, never window titles.
  */
 import { DEFAULT_SETTINGS } from '../config';
+import { isPowerProfile } from './powerProfile';
 import type { Chunk, SessionSummary, Settings, StudyModule } from '../contracts/domain';
 
 export interface KeyValue {
@@ -97,9 +98,15 @@ export function createDb(kv: KeyValue): Db {
 
     async loadSettings() {
       const s = await readJson<unknown>(KEYS.settings, {});
-      return { ...DEFAULT_SETTINGS, ...(s && typeof s === 'object' && !Array.isArray(s) ? (s as Partial<Settings>) : {}) };
+      const merged = { ...DEFAULT_SETTINGS, ...(s && typeof s === 'object' && !Array.isArray(s) ? (s as Partial<Settings>) : {}) };
+      if (!isPowerProfile(merged.powerProfile)) merged.powerProfile = DEFAULT_SETTINGS.powerProfile;
+      return merged;
     },
-    saveSettings: (s) => serial(() => writeJson(KEYS.settings, s)),
+    saveSettings: (s) =>
+      serial(() => {
+        const powerProfile = isPowerProfile(s.powerProfile) ? s.powerProfile : DEFAULT_SETTINGS.powerProfile;
+        return writeJson(KEYS.settings, { ...s, powerProfile });
+      }),
 
     listSessions: () => readArray<SessionSummary>(KEYS.sessions),
     saveSession: (s) =>
