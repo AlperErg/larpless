@@ -81,7 +81,7 @@ struct FLShellPanelState: Equatable {
   func pillText(at date: Date) -> String {
     switch status {
     case "studying":
-      return title.isEmpty ? "Studying" : "Studying · \(title)"
+      return title.isEmpty ? "Studying" : title
     case "distracted":
       if let sub = subtitle, !sub.isEmpty { return "Distracted · \(sub)" }
       return title.isEmpty ? "Distracted" : title

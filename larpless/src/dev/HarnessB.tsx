@@ -379,7 +379,7 @@ async function runPanelChecks(): Promise<Record<string, unknown>> {
     }
     r.pills = pills;
     checks.pills =
-      /Studying/.test(pills.studying) &&
+      /Biology/.test(pills.studying) &&
       /Instagram/.test(pills.distracted) &&
       /Away/.test(pills.away) &&
       /Break/.test(pills.break) &&
