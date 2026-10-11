@@ -18,7 +18,10 @@
         "type": "Direct",
         "requested": "[1.22.1, )",
         "resolved": "1.22.1",
-        "contentHash": "eaxGeQl2ZmrCzAXuIpdVVAD3uLYYX7fbsndrDYb7CgiShTHdqSo56e/aIIFWiTfB/m9UlbxFu6lSngtHDJKYDg=="
+        "contentHash": "oKRyzajMIB18Z9gmC9CyDPgyo5Yu/ZYZ/w3mF6NwqC0YHOZisGytdAaK3fvUFLZ5XDRZTDzzr+Nqx/clRtdCcA==",
+        "dependencies": {
+          "Microsoft.ML.OnnxRuntime.Managed": "1.22.1"
+        }
       },
       "Microsoft.ReactNative": {
         "type": "Direct",
@@ -62,6 +65,14 @@
           "Microsoft.WindowsAppSDK.Runtime": "[1.8.260508005]",
           "Microsoft.WindowsAppSDK.Widgets": "[1.8.251231004]",
           "Microsoft.WindowsAppSDK.WinUI": "[1.8.260505002]"
+        }
+      },
+      "Microsoft.ML.OnnxRuntime.Managed": {
+        "type": "Transitive",
+        "resolved": "1.22.1",
+        "contentHash": "hYGYf0BaHiTfb623kD36pYpFN0rh2Znk3QS+ZWWxnTV6iDzl1KUJYaxf7/stz28r1w6HOqUqgWcT1nOYXuf8ew==",
+        "dependencies": {
+          "System.Memory": "4.5.5"
         }
       },
       "Microsoft.Web.WebView2": {
@@ -158,6 +169,19 @@
           "Microsoft.WindowsAppSDK.InteractiveExperiences": "1.8.260430001"
         }
       },
+      "System.Memory": {
+        "type": "Transitive",
+        "resolved": "4.5.5",
+        "contentHash": "XIWiDvKPXaTveaB7HVganDlOCRoj03l+jrwNvcge/t8vhGYKvqV+dMv6G4SAX2NoNmN0wZfVPTAlFwZcZvVOUw==",
+        "dependencies": {
+          "System.Runtime.CompilerServices.Unsafe": "4.5.3"
+        }
+      },
+      "System.Runtime.CompilerServices.Unsafe": {
+        "type": "Transitive",
+        "resolved": "4.5.3",
+        "contentHash": "3TIsJhD1EiiT0w2CcDMN/iSSwnNnsrnbzeVHSKkaEgV85txMprmuO+Yq2AdSbeVGcg28pdNDTPK87tJhX7VFHw=="
+      },
       "reactnativeasyncstorage": {
         "type": "Project",
         "dependencies": {
@@ -170,6 +194,15 @@
       }
     },
     "native,Version=v0.0/win": {
+      "Microsoft.ML.OnnxRuntime": {
+        "type": "Direct",
+        "requested": "[1.22.1, )",
+        "resolved": "1.22.1",
+        "contentHash": "oKRyzajMIB18Z9gmC9CyDPgyo5Yu/ZYZ/w3mF6NwqC0YHOZisGytdAaK3fvUFLZ5XDRZTDzzr+Nqx/clRtdCcA==",
+        "dependencies": {
+          "Microsoft.ML.OnnxRuntime.Managed": "1.22.1"
+        }
+      },
       "Microsoft.ReactNative": {
         "type": "Direct",
         "requested": "[0.81.36, )",
@@ -198,6 +231,15 @@
       }
     },
     "native,Version=v0.0/win-arm64": {
+      "Microsoft.ML.OnnxRuntime": {
+        "type": "Direct",
+        "requested": "[1.22.1, )",
+        "resolved": "1.22.1",
+        "contentHash": "oKRyzajMIB18Z9gmC9CyDPgyo5Yu/ZYZ/w3mF6NwqC0YHOZisGytdAaK3fvUFLZ5XDRZTDzzr+Nqx/clRtdCcA==",
+        "dependencies": {
+          "Microsoft.ML.OnnxRuntime.Managed": "1.22.1"
+        }
+      },
       "Microsoft.ReactNative": {
         "type": "Direct",
         "requested": "[0.81.36, )",
@@ -226,6 +268,15 @@
       }
     },
     "native,Version=v0.0/win-x64": {
+      "Microsoft.ML.OnnxRuntime": {
+        "type": "Direct",
+        "requested": "[1.22.1, )",
+        "resolved": "1.22.1",
+        "contentHash": "oKRyzajMIB18Z9gmC9CyDPgyo5Yu/ZYZ/w3mF6NwqC0YHOZisGytdAaK3fvUFLZ5XDRZTDzzr+Nqx/clRtdCcA==",
+        "dependencies": {
+          "Microsoft.ML.OnnxRuntime.Managed": "1.22.1"
+        }
+      },
       "Microsoft.ReactNative": {
         "type": "Direct",
         "requested": "[0.81.36, )",
@@ -254,6 +305,15 @@
       }
     },
     "native,Version=v0.0/win-x86": {
+      "Microsoft.ML.OnnxRuntime": {
+        "type": "Direct",
+        "requested": "[1.22.1, )",
+        "resolved": "1.22.1",
+        "contentHash": "oKRyzajMIB18Z9gmC9CyDPgyo5Yu/ZYZ/w3mF6NwqC0YHOZisGytdAaK3fvUFLZ5XDRZTDzzr+Nqx/clRtdCcA==",
+        "dependencies": {
+          "Microsoft.ML.OnnxRuntime.Managed": "1.22.1"
+        }
+      },
       "Microsoft.ReactNative": {
         "type": "Direct",
         "requested": "[0.81.36, )",

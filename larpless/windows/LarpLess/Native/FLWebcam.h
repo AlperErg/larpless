@@ -504,10 +504,10 @@ struct FLWebcam {
         for (int c{0}; c < 3; ++c) {
           // BGRA byte order, written out as RGB planes.
           const int byte{2 - c};
-          const float v00{bgra[y0 * stride + x0 * 4 + byte]};
-          const float v10{bgra[y0 * stride + x1 * 4 + byte]};
-          const float v01{bgra[y1 * stride + x0 * 4 + byte]};
-          const float v11{bgra[y1 * stride + x1 * 4 + byte]};
+          const float v00{static_cast<float>(bgra[y0 * stride + x0 * 4 + byte])};
+          const float v10{static_cast<float>(bgra[y0 * stride + x1 * 4 + byte])};
+          const float v01{static_cast<float>(bgra[y1 * stride + x0 * 4 + byte])};
+          const float v11{static_cast<float>(bgra[y1 * stride + x1 * 4 + byte])};
           const float value{v00 * (1 - fx) * (1 - fy) + v10 * fx * (1 - fy) + v01 * (1 - fx) * fy + v11 * fx * fy};
           m_input[c * n + dst] = value / 255.f;
         }
