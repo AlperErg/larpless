@@ -3,6 +3,7 @@ import type { ActiveWindow, ScreenSnapshot } from '../../src/contracts/native';
 import { createClassifier, mockVerdictFromTitle, windowKey } from '../../src/core/classifier';
 import type { ClassifierConfig } from '../../src/core/classifier';
 import { fixtureModules } from '../../src/fixtures/data';
+import { effectiveProfile, platformProfile } from '../../src/core/powerProfile';
 import type { PowerSpec } from '../../src/core/powerProfile';
 
 const CFG: ClassifierConfig = {
@@ -442,6 +443,19 @@ describe('classifier', () => {
     });
     await s.c.classifyCurrent(fixtureModules);
     expect(s.classify).toHaveBeenCalledWith(expect.anything(), fixtureModules, { timeoutMs: 10_000, keepAlive: '30m' });
+  });
+
+  it('Windows eco: a 40 s check fits the 45 s ceiling, keeps its verdict and does not hold the next call', async () => {
+    const s = setup({ getPower: () => platformProfile(effectiveProfile('eco'), 'windows') });
+    s.classify.mockImplementationOnce(async () => {
+      s.advance(40_000);
+      return BIO_VERDICT;
+    });
+    expect((await s.c.classifyCurrent(fixtureModules)).verdict).toEqual(BIO_VERDICT);
+    expect(s.classify).toHaveBeenCalledWith(expect.anything(), fixtureModules, { timeoutMs: 45_000, keepAlive: '5m' });
+    s.setWin({ windowTitle: 'Notes' });
+    expect((await s.c.classifyCurrent(fixtureModules)).tookScreenshot).toBe(true);
+    expect(s.capture).toHaveBeenCalledTimes(2);
   });
 
   it('privacy: never logs the snapshot or image data on any path', async () => {

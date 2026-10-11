@@ -4,7 +4,7 @@ export const config = {
   USE_MOCK_NATIVE: false,          // flip to false at the 4:00 checkpoint
   USE_MOCK_CLASSIFIER: false,      // true → classifier derives the verdict from windowTitle, no Ollama
   CAPTURE: { maxWidth: 1280, jpegQuality: 0.7 }, // fallback when a caller has no power profile; live sessions use the profile
-  CLASSIFY_TIMEOUT_MS: 30_000, // ceiling so a slow machine can finish; profiles change cadence, not this
+  CLASSIFY_TIMEOUT_MS: 30_000, // ceiling so a slow machine can finish; profiles change cadence, not this (except Windows eco: WINDOWS_ECO_TIMEOUT_MS)
   CACHE_TTL_MS: 120_000,
   WEBCAM_FPS: 1,
   SHOW_DEV_TOOLS: __DEV__,

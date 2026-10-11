@@ -51,6 +51,18 @@ export const POWER_PROFILES: Record<PowerProfile, PowerSpec> = {
   },
 };
 
+/**
+ * Windows only: CPU-only Ollama needs ~30 s per check, which never fits the shared 30 s
+ * ceiling, so eco gets a longer one there. Other profiles and other platforms keep theirs.
+ * See windows/CLAUDE.md.
+ */
+export const WINDOWS_ECO_TIMEOUT_MS = 45_000;
+
+/** `os` is `Platform.OS`, passed in so core stays free of React Native. */
+export function platformProfile(spec: PowerSpec, os: string): PowerSpec {
+  return os === 'windows' && spec.id === 'eco' ? { ...spec, classifyTimeoutMs: WINDOWS_ECO_TIMEOUT_MS } : spec;
+}
+
 /** More demanding first. Stepping down moves toward eco. */
 const LADDER: PowerProfile[] = ['high', 'medium', 'eco'];
 

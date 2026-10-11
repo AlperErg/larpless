@@ -104,7 +104,20 @@ A/B on the dev PC, 4-minute real session, medium profile (main's power profiles;
 | unknown | 100 % | 60 % |
 | VLM checks that finished | 0 of 4 | 0 of 3 |
 
-Every VLM check took **~29.9 s and hit the 30 s ceiling** (`CLASSIFY_TIMEOUT_MS`, which includes the capture), so on this PC windows without a module keyword stay `unknown`. A longer Windows ceiling (≈ 60 s on eco) would probably let them finish; not done yet.
+Every VLM check took **~29.9 s and hit the 30 s ceiling** (`CLASSIFY_TIMEOUT_MS`, which includes the capture), so on this PC windows without a module keyword stay `unknown`.
+
+### Eco ceiling: 45 s on Windows
+
+**Decision (2026-10-12):** on Windows, eco's ceiling is `WINDOWS_ECO_TIMEOUT_MS` = **45 s** (`core/powerProfile.ts` `platformProfile()`, applied in `sessionStore` with `Platform.OS`). Medium and high keep 30 s, and so does every profile on the Mac; a test pins both. Medium always steps down to eco after its first check on this PC (> 15 s is "slow"), so eco is the one that matters.
+
+Measured with `qwen3-vl:2b`, `LLAMA_ARG_CACHE_RAM=0`, ~1.9 GB RAM free, a 120 s ceiling so nothing was cut off (in-app `[ollama]` lines, matching the `[GIN]` lines in `server.log`):
+
+- loaded model: **25.7–28.1 s** over 9 checks (almost all ~25.8 s);
+- first check of a cold session (warm-up had failed at its own 30 s limit): **38.8 s**; warm-up with the model files still in the OS cache: ~11 s.
+
+45 s rather than 60 s: it covers the loaded case with ~60 % headroom and the one cold check observed. A cold check that still misses costs one chunk, because Ollama finishes loading anyway and the next check is warm. And a hung Ollama blocks the single vision slot for 1.5 eco chunks instead of 2 (plus the one-chunk hold after a timeout).
+
+A/B with the same protocol as above (4 min, medium start, 40 s rotation, webcam off), 30 s vs 45 s: **no difference that day**. Both arms finished 5 of 5 checks (25.7–26.9 s) and labelled the same 12 chunks, because the 2B checks happened to fit under 30 s with ~3 s to spare. The 30 s ceiling still failed in the first A/B (~29.9 s) and would have failed the cold first check (38.8 s); one warm check took 29.4 s, 0.6 s short of it. So 45 s is the margin for those cases, not a speed-up. An A/B under load (other apps open, the 4B model, low free RAM) would show the gap; not run.
 
 ### Unresolved crash
 

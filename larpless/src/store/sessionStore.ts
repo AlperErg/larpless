@@ -4,7 +4,7 @@ import { config, DEFAULT_SETTINGS } from '../config';
 import type { SessionStore, SessionStoreState } from '../contracts/store';
 import { createClassifier } from '../core/classifier';
 import { createOllama } from '../core/ollama';
-import { effectiveProfile } from '../core/powerProfile';
+import { effectiveProfile, platformProfile } from '../core/powerProfile';
 import { createSessionController } from '../core/sessionController';
 import type { SessionController } from '../core/sessionController';
 import { fixtureChunks } from '../fixtures/data';
@@ -48,7 +48,8 @@ export function getSessionController(): SessionController {
       // title answer first. The goal is the Mac's VLM-first logic; turn this off once Windows
       // inference is fast (see windows/CLAUDE.md).
       config: { ...config, TITLE_FIRST: Platform.OS === 'windows' },
-      getPower: () => effectiveProfile(settings().powerProfile),
+      // Windows: eco gets a longer ceiling so a CPU-only check can finish (see windows/CLAUDE.md).
+      getPower: () => platformProfile(effectiveProfile(settings().powerProfile), Platform.OS),
     });
     controller = createSessionController({
       native,
