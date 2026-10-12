@@ -26,6 +26,22 @@ final class FLOllama: NSObject {
     "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "no_proxy", "all_proxy",
   ]
 
+  /// Pid of the Ollama.app LarpLess opened, if it's still the one running. quit() only ever stops this one:
+  /// an Ollama the user started (Ollama.app, a terminal `ollama serve`, brew services) is left alone,
+  /// even after LarpLess restarted it to turn the prompt cache off.
+  private static let ownedLock = NSLock()
+  private static var ownedPid: pid_t?
+
+  private static func owns(_ pid: pid_t) -> Bool {
+    ownedLock.lock(); defer { ownedLock.unlock() }
+    return ownedPid == pid
+  }
+
+  private static func setOwned(_ pid: pid_t?) {
+    ownedLock.lock(); defer { ownedLock.unlock() }
+    ownedPid = pid
+  }
+
   // MARK: exported
 
   @objc func info(_ resolve: @escaping RCTPromiseResolveBlock,
@@ -46,7 +62,9 @@ final class FLOllama: NSObject {
         reject("E_NOT_INSTALLED", "Ollama.app isn't installed", nil)
         return
       }
-      Self.open(url, env: [Self.cacheVar: "0"], resolve: resolve, reject: reject)
+      Self.open(url, env: [Self.cacheVar: "0"], resolve: resolve, reject: reject) { pid in
+        Self.setOwned(pid)
+      }
     }
   }
 
@@ -63,6 +81,8 @@ final class FLOllama: NSObject {
         return
       }
       let server = Self.findServer(appPid: appPid)
+      // A restart keeps ownership as it was: the user's Ollama stays the user's.
+      let wasOwned = Self.owns(appPid)
       var env = (Self.processArgsEnv(appPid)?.env ?? [:]).filter { key, _ in
         Self.keptVars.contains(key) || Self.keptPrefixes.contains { key.hasPrefix($0) }
       }
@@ -85,12 +105,15 @@ final class FLOllama: NSObject {
         }
       }
       DispatchQueue.main.async {
-        Self.open(url, env: env, resolve: resolve, reject: reject)
+        Self.open(url, env: env, resolve: resolve, reject: reject) { pid in
+          Self.setOwned(wasOwned ? pid : nil)
+        }
       }
     }
   }
 
-  /// Quits Ollama.app and its server. Nothing is relaunched. No-op when Ollama isn't running.
+  /// Quits the Ollama.app LarpLess opened, and its server. Nothing is relaunched. No-op when Ollama isn't
+  /// running or LarpLess didn't open it.
   @objc func quit(_ resolve: @escaping RCTPromiseResolveBlock,
                   reject: @escaping RCTPromiseRejectBlock) {
     DispatchQueue.global(qos: .userInitiated).async {
@@ -103,34 +126,37 @@ final class FLOllama: NSObject {
   }
 
   /// SIGTERM only, for app quit, where waiting out Ollama's shutdown would hold the process open.
+  /// Only the Ollama.app LarpLess opened; the app stops its own server.
   @objc static func quitNow() {
-    let app = runningApp()
-    let server = findServer(appPid: app?.processIdentifier)
-    if let app {
-      kill(app.processIdentifier, SIGTERM)
-    }
-    if let server, app == nil || !server.fromApp {
-      kill(server.pid, SIGTERM)
-    }
+    guard let app = ownedApp() else { return }
+    setOwned(nil)
+    kill(app.processIdentifier, SIGTERM)
   }
 
   /// Same shutdown as restart, without opening Ollama again. Signals the exact pid, never a name.
   private static func quitBlocking() -> Bool {
-    guard let app = runningApp() else {
-      guard let server = findServer(appPid: nil) else { return true }
-      kill(server.pid, SIGTERM)
-      return waitForExit(server.pid, timeout: 5)
-    }
+    guard let app = ownedApp() else { return true }
     let appPid = app.processIdentifier
     let server = findServer(appPid: appPid)
     flOllamaLog("[FLOllama] quit: signalling Ollama.app pid \(appPid)")
     kill(appPid, SIGTERM)
     guard waitForExit(appPid, timeout: 6) else { return false }
-    if let server, !waitForExit(server.pid, timeout: 5) {
+    setOwned(nil)
+    if let server, server.fromApp, !waitForExit(server.pid, timeout: 5) {
       kill(server.pid, SIGTERM)
       return waitForExit(server.pid, timeout: 5)
     }
     return true
+  }
+
+  /// The running Ollama.app, only when LarpLess opened it.
+  private static func ownedApp() -> NSRunningApplication? {
+    guard let app = runningApp() else { return nil }
+    guard owns(app.processIdentifier) else {
+      flOllamaLog("[FLOllama] quit: Ollama wasn't opened by LarpLess, leaving it running")
+      return nil
+    }
+    return app
   }
 
   // MARK: lookup
@@ -250,19 +276,22 @@ final class FLOllama: NSObject {
 
   // MARK: launch
 
+  /// `opened` gets the new app's pid before the promise resolves.
   private static func open(_ url: URL, env: [String: String],
                            resolve: @escaping RCTPromiseResolveBlock,
-                           reject: @escaping RCTPromiseRejectBlock) {
+                           reject: @escaping RCTPromiseRejectBlock,
+                           opened: @escaping (pid_t?) -> Void) {
     let cfg = NSWorkspace.OpenConfiguration()
     cfg.activates = false
     cfg.addsToRecentItems = false
     cfg.environment = env
-    NSWorkspace.shared.openApplication(at: url, configuration: cfg) { _, error in
+    NSWorkspace.shared.openApplication(at: url, configuration: cfg) { app, error in
       if let error {
         flOllamaLog("[FLOllama] open failed: \(error.localizedDescription)")
         reject("E_LAUNCH", "Couldn't open Ollama: \(error.localizedDescription)", error)
       } else {
         flOllamaLog("[FLOllama] opened Ollama.app with \(cacheVar)=0")
+        opened(app?.processIdentifier)
         resolve(nil)
       }
     }

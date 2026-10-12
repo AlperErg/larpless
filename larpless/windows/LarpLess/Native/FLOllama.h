@@ -83,6 +83,9 @@ using Outcome = std::optional<Failure>; // nullopt = success
 
 // Set once LarpLess has opened Ollama in this process lifetime (that instance runs with the cache off).
 inline std::atomic<bool> g_launchedByUs{false};
+// True while the running Ollama is one LarpLess launched (LaunchApp). A restart keeps it as it was, so an Ollama the
+// user started stays theirs. Quitting only ever stops an owned one.
+inline std::atomic<bool> g_owned{false};
 // launch() / restart() never overlap; g_completed counts the ones that succeeded.
 inline std::mutex g_busy;
 inline std::atomic<uint64_t> g_completed{0};
@@ -542,7 +545,9 @@ inline Outcome LaunchApp() {
   if (std::any_of(procs.begin(), procs.end(), IsApp)) return std::nullopt; // already running: no-op, like macOS
   const std::wstring dir{InstallDir()};
   if (dir.empty() || !FileExists(Join(dir, kAppExe))) return Failure{"E_NOT_INSTALLED", "Ollama isn't installed"};
-  return Open(dir, {});
+  auto outcome{Open(dir, {})};
+  if (!outcome) g_owned = true;
+  return outcome;
 }
 
 // Terminates and waits up to 5 s. True when the process is gone.
@@ -561,6 +566,10 @@ inline winrt::handle OpenForStop(DWORD pid, bool &denied) {
 
 // Quits the tray app, the server it started, and that server's runners. Resolves when nothing is left.
 inline Outcome QuitApp() {
+  if (!g_owned.load()) {
+    Log("quit: Ollama wasn't opened by LarpLess, leaving it running");
+    return std::nullopt;
+  }
   const auto procs{Processes()};
   std::vector<Proc> apps;
   std::copy_if(procs.begin(), procs.end(), std::back_inserter(apps), IsApp);
@@ -791,12 +800,15 @@ struct FLOllama {
     }).detach();
   }
 
-  // Quits the local Ollama app and the server it started. The loaded model goes with them.
+  // Quits the Ollama app LarpLess launched and the server it started. The loaded model goes with them. No-op for an
+  // Ollama the user started.
   REACT_METHOD(Quit, L"quit")
   void Quit(ReactPromise<void> &&result) noexcept {
     std::thread([result = std::move(result)]() mutable noexcept {
       std::lock_guard lock{OllamaHost::g_busy};
-      Settle(result, OllamaHost::QuitApp());
+      const auto outcome{OllamaHost::QuitApp()};
+      if (!outcome) OllamaHost::g_owned = false;
+      Settle(result, outcome);
     }).detach();
   }
 

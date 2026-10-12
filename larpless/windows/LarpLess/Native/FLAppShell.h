@@ -12,15 +12,18 @@
 #include <mutex>
 #include <vector>
 
+#include "FLOllama.h"
 #include "FLWindow.h"
 
 #include <TlHelp32.h>
 
 namespace LarpLess {
 
-// Quits the local Ollama tray app and its server. The loaded model lives in that process, so this
-// is what frees the weights when the session ends or the app closes. No-op when Ollama isn't running.
+// Quits the Ollama tray app LarpLess launched, and its server. The loaded model lives in that process, so this
+// is what frees the weights when the session ends or the app closes. No-op when Ollama isn't running or the user
+// started it (OllamaHost::g_owned).
 inline void StopLocalOllama() noexcept {
+  if (!OllamaHost::g_owned.exchange(false)) return;
   const HANDLE snap{CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)};
   if (snap == INVALID_HANDLE_VALUE) return;
   std::vector<DWORD> apps, servers;

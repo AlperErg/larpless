@@ -659,12 +659,12 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
           log('[session] saveSession failed');
         }
         teardownNative();
-        // Drop the model, then quit Ollama so it doesn't keep the weights until keep_alive.
-        // Demo never loaded it. Closing the app quits Ollama from native code too, because
-        // this JS may already be gone by then.
+        // Drop the model, then quit Ollama if LarpLess opened it, so it doesn't keep the weights until
+        // keep_alive. Native code skips an Ollama the user started. Demo never loaded it. Closing the app
+        // quits it from native code too, because this JS may already be gone by then.
         if (!demo) {
           await deps.classifier.unload().catch(noop);
-          // Mac quits through FLOllama. Windows has no FLOllama module, so it quits through the app shell.
+          // FLOllama quits and waits; the app shell's stopOllama() is the fire-and-forget fallback.
           await native.ollamaHost.quit().catch(noop);
           native.appShell.stopOllama();
         }

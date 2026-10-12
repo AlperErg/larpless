@@ -107,7 +107,7 @@ export interface AppShellApi {
   beginSessionActivity(): void;   // prevents App Nap from throttling JS timers
   endSessionActivity(): void;
   bringToFront(): void;
-  stopOllama(): void;             // quit the local Ollama app and server; the loaded model goes with them
+  stopOllama(): void;             // quit the Ollama LarpLess opened (never the user's own); the loaded model goes with it
   onMenuCommand(cb: (c: MenuCommand) => void): Unsubscribe;   // event 'FLMenuCommand'
 }
 
@@ -138,8 +138,9 @@ export interface OllamaHostApi {
    */
   restart(): Promise<void>;
   /**
-   * Quits the local Ollama app and the server it started. The loaded model goes with them.
-   * Resolves when nothing is left running. Rejects E_TIMEOUT if a process won't exit.
+   * Quits the Ollama app LarpLess opened with launch(), and the server it started. The loaded model goes
+   * with them. An Ollama the user started (even one restart() relaunched) is left running: resolves at once.
+   * Rejects E_TIMEOUT if a process won't exit.
    */
   quit(): Promise<void>;
 }
