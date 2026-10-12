@@ -14,4 +14,5 @@ export const mockAppShell: AppShellApi = {
     console.log('[mock appShell] stopOllama');
   },
   onMenuCommand: () => () => {},
+  onSystemSleep: () => () => {},
 };

@@ -15,6 +15,7 @@ import { allSubjects } from '../core/subjectLibrary';
 
 export const initialSessionState: SessionStoreState = {
   status: 'idle',
+  pausedForSleep: false,
   session: null,
   timer: { baseS: 0, runningSinceMs: null },
   chunks: [],

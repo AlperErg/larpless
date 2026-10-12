@@ -109,6 +109,8 @@ export interface AppShellApi {
   bringToFront(): void;
   stopOllama(): void;             // quit the Ollama LarpLess opened (never the user's own); the loaded model goes with it
   onMenuCommand(cb: (c: MenuCommand) => void): Unsubscribe;   // event 'FLMenuCommand'
+  /** The system is about to sleep (macOS willSleep). The session pauses at that moment. */
+  onSystemSleep(cb: (e: { at: number }) => void): Unsubscribe;   // event 'FLSystemSleep'
 }
 
 /* ---------- FLOllama ---------- */

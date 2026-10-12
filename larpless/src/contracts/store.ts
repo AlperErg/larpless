@@ -18,6 +18,8 @@ export interface StartOptions { pomodoro: PomodoroPreset | 'off'; demo?: boolean
 
 export interface SessionStoreState {
   status: SessionStatus;
+  /** True while paused because the computer slept (set by the controller, cleared on resume). */
+  pausedForSleep: boolean;
   session: { id: string; startedAt: number; endedAt: number | null } | null;
   timer: { baseS: number; runningSinceMs: number | null };   // focus time only
   chunks: Chunk[];

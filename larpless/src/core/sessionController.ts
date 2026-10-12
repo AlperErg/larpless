@@ -35,6 +35,12 @@ import { startDemo } from './demoMode';
 import type { DemoHandle } from './demoMode';
 
 export const TICK_MS = 1000;
+/**
+ * A gap between ticks longer than this means the computer slept (timers don't fire while it does). The
+ * session is then treated as paused from the last tick, so sleep never counts as study time and the
+ * chunk windows that came due during it are not closed with whatever is frontmost on wake.
+ */
+export const SLEEP_GAP_MS = 30_000;
 /** Webcam samples kept for the open chunk window (ring buffer). */
 export const SAMPLE_BUFFER = 120;
 /** end(): the open window is turned into a chunk only if it's at least this long. */
@@ -91,7 +97,7 @@ export interface SessionController extends SessionStoreActions {
 /* ------------------------------------------------------------------ */
 
 export function toPanelState(
-  s: Pick<SessionStoreState, 'status' | 'timer' | 'current' | 'pomodoro' | 'sound' | 'alert'>,
+  s: Pick<SessionStoreState, 'status' | 'timer' | 'current' | 'pomodoro' | 'sound' | 'alert'> & { pausedForSleep?: boolean },
   modules: readonly Pick<StudyModule, 'id' | 'name'>[],
   flash: PanelState['flash'] = null,
 ): PanelState {
@@ -105,7 +111,7 @@ export function toPanelState(
     case 'ended':
       return { ...base, status: 'idle', title: 'LarpLess', subtitle: null, tint: 'gray', flash: null };
     case 'paused':
-      return { ...base, status: 'paused', title: 'Paused', subtitle: null, tint: 'gray' };
+      return { ...base, status: 'paused', title: 'Paused', subtitle: s.pausedForSleep ? 'During sleep' : null, tint: 'gray' };
     case 'break':
       return {
         ...base,
@@ -152,6 +158,8 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
   let demoHandle: DemoHandle | null = null;
   let unsubSample: Unsubscribe | null = null;
   let unsubAction: Unsubscribe | null = null;
+  let unsubSleep: Unsubscribe | null = null;
+  let lastTickAt = 0;
   let webcamRunning = false;
   let windowSamples: WebcamSample[] = [];
   let windowStart = 0;
@@ -493,9 +501,28 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
 
   /* ---------- tick ---------- */
 
+  /** Pauses as of `t`. `forSleep` marks a pause the computer's sleep caused, not the user. */
+  function pauseAt(t: number, forSleep: boolean) {
+    if (!sessionId || get().status !== 'running') return;
+    suspendedAt = t;
+    freezeTimer(t);
+    const p = get().pomodoro;
+    pomoRemaining = p?.enabled ? remainingMs(p, t) : null;
+    stopWebcam();
+    set({ status: 'paused', pausedForSleep: forSleep });
+    pushPanel();
+  }
+
   function onTick() {
     if (!sessionId || ending) return;
     const t = now();
+    const since = lastTickAt;
+    lastTickAt = t;
+    if (!demo && get().status === 'running' && t - since > SLEEP_GAP_MS) {
+      log(`[session] no tick for ${Math.round((t - since) / 1000)} s (asleep): paused from the last tick`);
+      pauseAt(since, true);
+      return;
+    }
     // Close due chunk windows first, so a focus phase ending on a boundary keeps its last chunk.
     if (!demo && get().status === 'running') {
       const chunkMs = chunkSeconds() * 1000;
@@ -522,6 +549,8 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
   function teardownNative() {
     unsubAction?.();
     unsubAction = null;
+    unsubSleep?.();
+    unsubSleep = null;
     stopWebcam();
     unsubSample?.();
     unsubSample = null;
@@ -547,6 +576,7 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
       lastPanel = null;
       windowSamples = [];
       windowStart = t;
+      lastTickAt = t;
       chunkIndex = 0;
       suspendedAt = null;
       pomoRemaining = null;
@@ -559,6 +589,7 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
 
       set({
         status: 'running',
+        pausedForSleep: false,
         session: { id: sid, startedAt: t, endedAt: null },
         timer: { baseS: 0, runningSinceMs: demo ? null : t },
         chunks: [],
@@ -581,6 +612,7 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
       }
       native.appShell.beginSessionActivity();
       unsubAction = native.panel.onAction((a) => controller.handlePanelAction(a));
+      if (!demo) unsubSleep = native.appShell.onSystemSleep(() => pauseAt(now(), true));
       // Show the timer immediately; do not block on webcam (camera open can hang or fail on Windows).
       native.panel.show().catch(noop);
       await startWebcam();
@@ -606,15 +638,7 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
     },
 
     pause() {
-      if (!sessionId || get().status !== 'running') return;
-      const t = now();
-      suspendedAt = t;
-      freezeTimer(t);
-      const p = get().pomodoro;
-      pomoRemaining = p?.enabled ? remainingMs(p, t) : null;
-      stopWebcam();
-      set({ status: 'paused' });
-      pushPanel();
+      pauseAt(now(), false);
     },
 
     resume() {
@@ -628,7 +652,8 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
       const p = get().pomodoro;
       if (p?.enabled && pomoRemaining !== null) set({ pomodoro: resumeWith(p, t, pomoRemaining) });
       pomoRemaining = null;
-      set({ status: 'running' });
+      lastTickAt = t;
+      set({ status: 'running', pausedForSleep: false });
       startWebcam();
       pushPanel();
     },
@@ -676,6 +701,7 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
         alertState = INITIAL_ALERT;
         set({
           status: 'ended',
+          pausedForSleep: false,
           session: st.session ? { ...st.session, endedAt: tEnd } : null,
           timer: { baseS: Math.round(baseS), runningSinceMs: null },
           alert: { level: 0, distractedSinceMs: null },

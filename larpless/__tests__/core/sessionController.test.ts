@@ -13,6 +13,7 @@ import { resetMockScreen } from '../../src/native/mock/screen';
 
 const INITIAL: SessionStoreState = {
   status: 'idle',
+  pausedForSleep: false,
   session: null,
   timer: { baseS: 0, runningSinceMs: null },
   chunks: [],
@@ -64,7 +65,7 @@ function setup(opts: { settings?: Partial<Settings>; native?: Partial<NativeApis
     },
     notifications: { requestPermission: jest.fn(async () => 'granted' as const), post: jest.fn(async () => {}) },
     sound: { play: jest.fn(async () => {}), setVolume: jest.fn(), duck: jest.fn(), chime: jest.fn() },
-    appShell: { beginSessionActivity: jest.fn(), endSessionActivity: jest.fn(), bringToFront: jest.fn(), stopOllama: jest.fn(), onMenuCommand: () => () => {} },
+    appShell: { beginSessionActivity: jest.fn(), endSessionActivity: jest.fn(), bringToFront: jest.fn(), stopOllama: jest.fn(), onMenuCommand: () => () => {}, onSystemSleep: () => () => {} },
     ollamaHost: { ...mockApis.ollamaHost, quit: jest.fn(async () => {}) },
     ...opts.native,
   };
@@ -227,6 +228,59 @@ describe('sessionController', () => {
     expect(h.state.chunks[1]).toMatchObject({ durationS: 30, startedAt: T0 + 150_000 });
     const s = await h.ctrl.end();
     expect(s!.totalS).toBe(60);
+  });
+
+  it('a sleep between ticks adds no study time and closes no chunks; the session waits paused', async () => {
+    const h = setup();
+    await h.ctrl.start({ pomodoro: 'off' });
+    await advance(45_000);
+    expect(h.state.chunks).toHaveLength(1);
+
+    // Timers don't fire while the computer sleeps: the clock jumps an hour between two ticks.
+    jest.setSystemTime(Date.now() + 3_600_000);
+    await advance(1_000);
+    expect(h.state.status).toBe('paused');
+    expect(h.state.pausedForSleep).toBe(true);
+    expect(h.state.chunks).toHaveLength(1);
+    expect(h.state.timer).toEqual({ baseS: 45, runningSinceMs: null });
+    expect(h.webcamStop).toHaveBeenCalledTimes(1);
+    expect(h.panelUpdates.at(-1)).toMatchObject({ status: 'paused', subtitle: 'During sleep' });
+
+    h.ctrl.resume();
+    expect(h.state.pausedForSleep).toBe(false);
+    await advance(15_000); // the 15 s left of the window that was open before sleep
+    expect(h.state.chunks).toHaveLength(2);
+    expect(h.state.chunks[1].durationS).toBe(30);
+    const s = await h.ctrl.end();
+    expect(s!.totalS).toBe(60);
+  });
+
+  it('pauses the moment the system says it will sleep', async () => {
+    let onSleep: ((e: { at: number }) => void) | null = null;
+    const unsub = jest.fn();
+    const h = setup({
+      native: {
+        appShell: {
+          ...mockApis.appShell,
+          beginSessionActivity: jest.fn(),
+          endSessionActivity: jest.fn(),
+          onSystemSleep: (cb) => {
+            onSleep = cb;
+            return unsub;
+          },
+        },
+      },
+    });
+    await h.ctrl.start({ pomodoro: 'off' });
+    await advance(20_000);
+    onSleep!({ at: Date.now() });
+    expect(h.state).toMatchObject({ status: 'paused', pausedForSleep: true, timer: { baseS: 20, runningSinceMs: null } });
+    // A user pause is not a sleep pause.
+    h.ctrl.resume();
+    h.ctrl.pause();
+    expect(h.state.pausedForSleep).toBe(false);
+    await h.ctrl.end();
+    expect(unsub).toHaveBeenCalled();
   });
 
   it('the pomodoro preset you pick is the length you get, even in demo fast mode', async () => {

@@ -78,6 +78,13 @@ final class FLAppShell: RCTEventEmitter {
       ) { _ in
         FLOllama.quitNow()
       }
+      // A session pauses when the Mac sleeps, so time asleep never counts as study time.
+      NSWorkspace.shared.notificationCenter.addObserver(
+        forName: NSWorkspace.willSleepNotification, object: nil, queue: .main
+      ) { _ in
+        flShellLog("[FLAppShell] system will sleep")
+        FLAppShell.emitSleep()
+      }
     }
     DispatchQueue.main.async { MainActor.assumeIsolated { FLShellMenu.install() } }
   }
@@ -85,9 +92,14 @@ final class FLAppShell: RCTEventEmitter {
 
   // Touches AppKit (main menu) at init.
   override static func requiresMainQueueSetup() -> Bool { true }
-  override func supportedEvents() -> [String]? { ["FLMenuCommand"] }
+  override func supportedEvents() -> [String]? { ["FLMenuCommand", "FLSystemSleep"] }
   override func startObserving() { hasListeners = true }
   override func stopObserving() { hasListeners = false }
+
+  static func emitSleep() {
+    guard let module = current, module.hasListeners else { return }
+    module.sendEvent(withName: "FLSystemSleep", body: ["at": Date().timeIntervalSince1970 * 1000])
+  }
 
   @discardableResult
   static func emitCommand(_ command: String) -> Bool {

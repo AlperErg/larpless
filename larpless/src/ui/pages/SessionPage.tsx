@@ -28,7 +28,7 @@ import { formatCountdown, formatDuration, formatTime, timeAgo } from '../lib/for
 import { useNow } from '../lib/hooks';
 import { POMODORO_OPTIONS, SOUND_ICON, SOUND_LABEL, nextSound } from '../lib/labels';
 import { space } from '../theme';
-import { MOD } from '../platform';
+import { DEVICE, MOD } from '../platform';
 import { useAllModules } from '../lib/useAllModules';
 
 export function SessionPage() {
@@ -54,6 +54,7 @@ function LiveSession({ status }: { status: SessionStatus }) {
   const sound = useSessionStore((s) => s.sound);
   const setSound = useSessionStore((s) => s.setSound);
   const skipPomodoroPhase = useSessionStore((s) => s.skipPomodoroPhase);
+  const pausedForSleep = useSessionStore((s) => s.pausedForSleep);
   const modules = useAllModules();
 
   const breakdown = useMemo(() => breakdownFromChunks(chunks, modules), [chunks, modules]);
@@ -87,7 +88,13 @@ function LiveSession({ status }: { status: SessionStatus }) {
         <Text style={styles.statusText}>{line.text}</Text>
       </View>
 
-      <LastCheck current={current} modules={modules} onBreak={onBreak} />
+      {status === 'paused' && pausedForSleep ? (
+        <Callout testID="slept-callout" icon="moon">
+          <Text>Paused while your {DEVICE} slept, so that time doesn’t count. Resume when you’re back.</Text>
+        </Callout>
+      ) : (
+        <LastCheck current={current} modules={modules} onBreak={onBreak} />
+      )}
 
       <View style={styles.block}>
         <Text variant="small" weight="medium" style={styles.label}>

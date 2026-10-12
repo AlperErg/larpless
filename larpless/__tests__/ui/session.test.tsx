@@ -80,6 +80,18 @@ describe('Session page', () => {
     act(() => r.unmount());
   });
 
+  it('paused by sleep: says why and offers Resume', () => {
+    act(() => applyFixture('running'));
+    act(() => useSessionStore.setState({ status: 'paused', pausedForSleep: true }));
+    const r = render(<SessionPage />);
+    const t = textOf(r);
+    expect(t).toContain('Paused while your Mac slept');
+    expect(t).toContain('Resume');
+    act(() => useSessionStore.setState({ pausedForSleep: false }));
+    expect(textOf(r)).not.toContain('slept');
+    act(() => r.unmount());
+  });
+
   it('idle and ended states', () => {
     act(() => applyFixture('idle'));
     let r = render(<SessionPage />);
