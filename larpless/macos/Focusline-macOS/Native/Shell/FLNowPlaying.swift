@@ -61,7 +61,7 @@ final class FLNowPlaying: NSObject, ObservableObject {
   private var backoffS: Double = 1
   private var restartWork: DispatchWorkItem?
   private var loggedMissingHelper = false
-  private var loggedMediaKey = false
+  private var loggedCommandFailure = false
   private var clearWork: DispatchWorkItem?
   private let artLock = NSLock()
   private var cachedArtKey: String?
@@ -87,9 +87,9 @@ final class FLNowPlaying: NSObject, ObservableObject {
     }
   }
 
-  func previous() { postMediaKey(18) } // NX_KEYTYPE_PREVIOUS
-  func toggle() { postMediaKey(16) }   // NX_KEYTYPE_PLAY
-  func next() { postMediaKey(17) }     // NX_KEYTYPE_NEXT
+  func previous() { sendCommand(5) } // kMRPreviousTrack
+  func toggle() { sendCommand(2) }   // kMRTogglePlayPause
+  func next() { sendCommand(4) }     // kMRNextTrack
 
   /// Dev harness. A dict with `title` shows that track and ignores the helper until cleared.
   func debugSetTrack(_ dict: NSDictionary) {
@@ -116,13 +116,19 @@ final class FLNowPlaying: NSObject, ObservableObject {
 
   // MARK: Helper
 
-  private func startHelper() {
-    guard enabled, process == nil else { return }
+  /// The bundled adapter script and framework, run through the system perl (which MediaRemote trusts).
+  private static func helperPaths() -> (script: String, framework: String)? {
     guard
       let script = Bundle.main.path(forResource: "mediaremote-adapter", ofType: "pl"),
       let framework = Bundle.main.path(forResource: "MediaRemoteAdapter", ofType: "framework"),
       FileManager.default.isExecutableFile(atPath: "/usr/bin/perl")
-    else {
+    else { return nil }
+    return (script, framework)
+  }
+
+  private func startHelper() {
+    guard enabled, process == nil else { return }
+    guard let (script, framework) = Self.helperPaths() else {
       if !loggedMissingHelper {
         loggedMissingHelper = true
         flShellLog("[FLNowPlaying] helper unavailable")
@@ -407,31 +413,35 @@ final class FLNowPlaying: NSObject, ObservableObject {
     onTrackChanged?()
   }
 
-  /// System media key (the same event the keyboard sends). Hits whichever player macOS considers now playing.
-  private func postMediaKey(_ keyCode: Int) {
-    func post(_ down: Bool) {
-      let flags = NSEvent.ModifierFlags(rawValue: UInt(down ? 0xA00 : 0xB00))
-      let data1 = (keyCode << 16) | ((down ? 0xA : 0xB) << 8)
-      guard let event = NSEvent.otherEvent(
-        with: .systemDefined,
-        location: .zero,
-        modifierFlags: flags,
-        timestamp: 0,
-        windowNumber: 0,
-        context: nil,
-        subtype: 8,
-        data1: data1,
-        data2: -1
-      )?.cgEvent else {
-        if !loggedMediaKey {
-          loggedMediaKey = true
-          flShellLog("[FLNowPlaying] media key failed")
-        }
-        return
-      }
-      event.post(tap: .cghidEventTap)
+  /// Sends a MediaRemote command (adapter `send <id>`) to whichever player macOS considers now playing.
+  /// Unlike a posted media-key event this needs no Accessibility permission. Output is discarded.
+  private func sendCommand(_ id: Int) {
+    guard let (script, framework) = Self.helperPaths() else {
+      logCommandFailure("helper unavailable")
+      return
     }
-    post(true)
-    post(false)
+    let proc = Process()
+    proc.executableURL = URL(fileURLWithPath: "/usr/bin/perl")
+    proc.arguments = [script, framework, "send", String(id)]
+    proc.standardOutput = FileHandle.nullDevice
+    proc.standardError = FileHandle.nullDevice
+    proc.terminationHandler = { [weak self] done in
+      guard done.terminationStatus != 0 else { return }
+      let status = done.terminationStatus
+      DispatchQueue.main.async {
+        MainActor.assumeIsolated { self?.logCommandFailure("exit \(status)") }
+      }
+    }
+    do {
+      try proc.run()
+    } catch {
+      logCommandFailure("failed to start")
+    }
+  }
+
+  private func logCommandFailure(_ why: String) {
+    guard !loggedCommandFailure else { return }
+    loggedCommandFailure = true
+    flShellLog("[FLNowPlaying] media command failed: \(why)")
   }
 }
