@@ -17,7 +17,7 @@ It was built in one hackathon day with **react-native-macos**: one orchestrator 
 | | |
 | --- | --- |
 | **Subjects out of the box** | A built-in library of subjects with keywords sets the labels automatically. Adding your own courses is optional. |
-| **Screen classification** | The frontmost app, the window title and (when needed) a screenshot go to a local vision model (`qwen3-vl:4b` via Ollama). It judges the *content*: a YouTube lecture counts as study, YouTube Shorts doesn't. |
+| **Screen classification** | The frontmost app, the window title and (when needed) a screenshot go to a local vision model (`qwen3-vl:2b` via Ollama). It judges the *content*: a YouTube lecture counts as study, YouTube Shorts doesn't. |
 | **Rules + cache fast path** | Known distractions (Instagram, TikTok, Reddit, Netflix, Discord, …) are flagged from the window title alone, and an unchanged window reuses the last verdict. Most checks need no screenshot. |
 | **Power profiles** | Eco, Medium or High sets how often the screen is checked and how big the screenshot is. A session that falls behind steps down on its own, so slower Macs still get answers. |
 | **Webcam presence & phone detection** | **YOLO11n** detects whether you are there and spots a phone, at 1 fps. CoreML on Mac, ONNX Runtime on Windows. |
@@ -110,7 +110,7 @@ Starting a session opens Ollama in the background if it isn't running, then warm
 - **State / storage:** zustand 5, AsyncStorage 2.2.0 (pinned), date-fns 4.
 - **Native (Swift 5, macOS 14+):** ScreenCaptureKit, AVFoundation, Vision, CoreML, UserNotifications, AppKit, SwiftUI.
 - **Now playing:** a vendored [mediaremote-adapter](https://github.com/ungive/mediaremote-adapter) (BSD-3-Clause) run through `/usr/bin/perl`. Since macOS 15.4, a Developer ID app can't read MediaRemote itself.
-- **Models:** Ollama `qwen3-vl:4b` and YOLO11n (`nms=True`, bundled; presence and phone). CoreML on Mac, ONNX Runtime on Windows.
+- **Models:** Ollama `qwen3-vl:2b` and YOLO11n (`nms=True`, bundled; presence and phone). CoreML on Mac, ONNX Runtime on Windows.
 - **Social:** `@supabase/supabase-js` + `react-native-url-polyfill`.
 - **Website:** Vite + TypeScript in `site/`.
 - **Windows:** react-native-windows 0.81 (C++ app, Fabric, WinAppSDK 1.8). Native modules in C++/WinRT: Direct2D + DirectWrite, XAudio2, MediaCapture, ONNX Runtime, WIC, toast notifications.
@@ -138,7 +138,7 @@ It is also worth considering that performance may degrade over time for MacBook 
 - **Node 22** or above.
 - **Cocoapods** (`brew install cocoapods`).
 - **CMake** (`brew install cmake`).
-- **[Ollama](https://ollama.com)** to run the vision model. Onboarding installs it and downloads the model for you (see [First launch](#first-launch)); from a terminal it's `ollama pull qwen3-vl:4b`.
+- **[Ollama](https://ollama.com)** to run the vision model. Onboarding installs it and downloads the model for you (see [First launch](#first-launch)); from a terminal it's `ollama pull qwen3-vl:2b`.
 
 ### Install
 
@@ -197,7 +197,7 @@ Onboarding takes four steps:
 3. **Ollama.** LarpLess checks whether Ollama is installed and running, and the page updates by itself.
    - Not installed: **Download Ollama** downloads `Ollama.dmg`. Open it and drag Ollama into Applications.
    - Installed but not running: **Open Ollama** starts it in the background, with the [memory saver](#the-model) on.
-4. **AI model.** **Download model** pulls `qwen3-vl:4b` (about 3.3 GB) through Ollama with a progress bar. Cancel stops it, and the next download picks up where it left off. The download keeps going if you finish onboarding, and the sidebar shows its progress.
+4. **AI model.** **Download model** pulls `qwen3-vl:2b` (about 1.9 GB) through Ollama with a progress bar. Cancel stops it, and the next download picks up where it left off. The download keeps going if you finish onboarding, and the sidebar shows its progress.
 
 You can finish without Ollama or the model and set them up later: **Settings → Local AI** has the same **Open Ollama** and **Download model** buttons, and demo mode works offline. In dev builds, Settings → **Run onboarding again** shows it again.
 
@@ -211,7 +211,7 @@ The Windows build uses the same TypeScript and the same JS ↔ native contract; 
 - **Visual Studio 2026** (Community is fine) with the *Desktop development with C++* and *WinUI application development* workloads, the *MSIX Packaging Tools* component and the **Windows 11 SDK 10.0.22621**.
 - **.NET SDK 10**, **Node 22** or above.
 - **Developer Mode** on and **long paths** enabled (Settings → System → For developers).
-- **[Ollama for Windows](https://ollama.com)** with `qwen3-vl:4b` pulled, as on the Mac.
+- **[Ollama for Windows](https://ollama.com)** with `qwen3-vl:2b` pulled, as on the Mac.
 
 **Install and run.** From `larpless/`, run `npm ci`, create `src/social/env.ts` as in [Supabase Setup](#supabase-setup), then:
 
@@ -284,7 +284,7 @@ Native logs use `os.Logger` under the subsystem `com.larpless.app`:
 log show --last 5m --style compact --predicate 'subsystem == "com.larpless.app"'
 ```
 
-**Classifier bench.** `node scripts/bench-classifier.ts --model qwen3-vl:4b` scores the prompt against `bench/<expected>__<desc>.png`. If that folder is empty it renders 10 synthetic mock-ups instead and never captures the real screen. Add `--clean` to delete the images afterwards.
+**Classifier bench.** `node scripts/bench-classifier.ts --model qwen3-vl:2b` scores the prompt against `bench/<expected>__<desc>.png`. If that folder is empty it renders 10 synthetic mock-ups instead and never captures the real screen. Add `--clean` to delete the images afterwards.
 
 **Adding native code.** `macos/Focusline-macOS/Native/` is an Xcode *synchronized folder*: drop files in and they join the target, with no `project.pbxproj` edits. Resources are flattened into the bundle, so prefix every type and file name (`FLCapture…`, `FLShell…`). The one exception is the **Bundle MediaRemote adapter** run-script phase in `project.pbxproj`: it calls `macos/scripts/build-mediaremote-adapter.sh`, which builds `macos/vendor/mediaremote-adapter` with CMake and copies the framework and the perl launcher into the app's Resources.
 

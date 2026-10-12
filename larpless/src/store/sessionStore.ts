@@ -1,5 +1,6 @@
+import { Platform } from 'react-native';
 import { create } from 'zustand';
-import { config, DEFAULT_SETTINGS } from '../config';
+import { config, DEFAULT_SETTINGS, titleCheckForOs } from '../config';
 import type { SessionStore, SessionStoreState } from '../contracts/store';
 import { createClassifier } from '../core/classifier';
 import { createOllama } from '../core/ollama';
@@ -43,7 +44,7 @@ export function getSessionController(): SessionController {
       native,
       ollama,
       now: Date.now,
-      config,
+      config: { ...config, TITLE_CHECK: titleCheckForOs(Platform.OS) },
       getPower: () => effectiveProfile(settings().powerProfile),
     });
     controller = createSessionController({

@@ -7,6 +7,9 @@
 #include <NativeModules.h>
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.Media.Control.h>
+#include <winrt/Windows.Storage.Streams.h>
+#include <wincodec.h>
+#include <wrl/client.h>
 
 #include <algorithm>
 #include <atomic>
@@ -19,8 +22,19 @@
 #include <optional>
 #include <string>
 #include <thread>
+#include <vector>
+
+#pragma comment(lib, "windowscodecs.lib")
+#pragma comment(lib, "ole32.lib")
 
 namespace LarpLess {
+
+// Album art stays in this process. 96x96 premultiplied BGRA, never logged or sent to JS.
+struct FLNowPlayingArt {
+  static constexpr int kSide = 96;
+  std::vector<uint8_t> bgra;
+  float r{0.45f}, g{0.45f}, b{0.42f};
+};
 
 struct FLNowPlayingTrack {
   bool active{false};
@@ -31,7 +45,76 @@ struct FLNowPlayingTrack {
   double positionS{0};
   double positionAtMs{0};
   double rate{0};
+  std::shared_ptr<FLNowPlayingArt const> art;
 };
+
+// Decode a GSMTC thumbnail to 96x96. Returns null when there is no usable image.
+inline std::shared_ptr<FLNowPlayingArt const> FLDecodeArtwork(std::vector<uint8_t> bytes) {
+  if (bytes.empty() || bytes.size() > 4 * 1024 * 1024) return nullptr;
+  using Microsoft::WRL::ComPtr;
+  ComPtr<IWICImagingFactory> factory;
+  if (FAILED(CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&factory)))) {
+    return nullptr;
+  }
+  ComPtr<IWICStream> stream;
+  if (FAILED(factory->CreateStream(&stream))) return nullptr;
+  if (FAILED(stream->InitializeFromMemory(bytes.data(), static_cast<DWORD>(bytes.size())))) return nullptr;
+  ComPtr<IWICBitmapDecoder> decoder;
+  if (FAILED(factory->CreateDecoderFromStream(stream.Get(), nullptr, WICDecodeMetadataCacheOnLoad, &decoder))) {
+    return nullptr;
+  }
+  ComPtr<IWICBitmapFrameDecode> frame;
+  if (FAILED(decoder->GetFrame(0, &frame))) return nullptr;
+  ComPtr<IWICBitmapScaler> scaler;
+  if (FAILED(factory->CreateBitmapScaler(&scaler))) return nullptr;
+  if (FAILED(scaler->Initialize(frame.Get(), FLNowPlayingArt::kSide, FLNowPlayingArt::kSide, WICBitmapInterpolationModeFant))) {
+    return nullptr;
+  }
+  ComPtr<IWICFormatConverter> conv;
+  if (FAILED(factory->CreateFormatConverter(&conv))) return nullptr;
+  if (FAILED(conv->Initialize(scaler.Get(), GUID_WICPixelFormat32bppBGRA, WICBitmapDitherTypeNone, nullptr, 0.0,
+                              WICBitmapPaletteTypeCustom))) {
+    return nullptr;
+  }
+  constexpr int side = FLNowPlayingArt::kSide;
+  std::vector<uint8_t> straight(static_cast<size_t>(side * side * 4));
+  if (FAILED(conv->CopyPixels(nullptr, side * 4, static_cast<UINT>(straight.size()), straight.data()))) return nullptr;
+
+  auto art = std::make_shared<FLNowPlayingArt>();
+  art->bgra.resize(straight.size());
+  double sr = 0, sg = 0, sb = 0, sat = 0;
+  double ar = 0, ag = 0, ab = 0, all = 0;
+  for (size_t i = 0; i + 3 < straight.size(); i += 4) {
+    const double b = straight[i] / 255.0;
+    const double g = straight[i + 1] / 255.0;
+    const double r = straight[i + 2] / 255.0;
+    const double a = straight[i + 3] / 255.0;
+    const uint8_t pa = straight[i + 3];
+    art->bgra[i] = static_cast<uint8_t>(straight[i] * pa / 255);
+    art->bgra[i + 1] = static_cast<uint8_t>(straight[i + 1] * pa / 255);
+    art->bgra[i + 2] = static_cast<uint8_t>(straight[i + 2] * pa / 255);
+    art->bgra[i + 3] = pa;
+    if (a < 0.5) continue;
+    ar += r;
+    ag += g;
+    ab += b;
+    all += 1;
+    const double mx = (std::max)(r, (std::max)(g, b));
+    const double mn = (std::min)(r, (std::min)(g, b));
+    if (mx - mn < 0.08) continue;
+    sr += r;
+    sg += g;
+    sb += b;
+    sat += 1;
+  }
+  const double n = sat > 0 ? sat : all;
+  if (n > 0) {
+    art->r = static_cast<float>((sat > 0 ? sr : ar) / n);
+    art->g = static_cast<float>((sat > 0 ? sg : ag) / n);
+    art->b = static_cast<float>((sat > 0 ? sb : ab) / n);
+  }
+  return art;
+}
 
 // elapsed = positionS + rate * (nowMs - positionAtMs) / 1000; remaining = max(0, duration - elapsed).
 // Returns a negative value when there is no duration to show.
@@ -161,12 +244,47 @@ class FLNowPlayingState {
   void SetLive(FLNowPlayingTrack next) {
     {
       std::lock_guard lock{m_mu};
-      const bool was{ShownLocked().active};
-      m_live = std::move(next);
-      const bool now{ShownLocked().active};
-      if (was != now) Log(now ? "[FLNowPlaying] session up\n" : "[FLNowPlaying] session cleared\n");
+      ++m_clearToken;
+      ApplyLiveLocked(std::move(next));
     }
     Notify();
+  }
+
+  void ApplyLiveLocked(FLNowPlayingTrack next) {
+    const bool was{ShownLocked().active};
+    m_live = std::move(next);
+    const bool now{ShownLocked().active};
+    if (was != now) Log(now ? "[FLNowPlaying] session up\n" : "[FLNowPlaying] session cleared\n");
+  }
+
+  // Position ticks come from GSMTC many times per second; the panel reads Snapshot() for the countdown.
+  static bool PanelLayoutChanged(FLNowPlayingTrack const &prev, FLNowPlayingTrack const &next) {
+    if (prev.active != next.active) return true;
+    if (prev.title != next.title || prev.artist != next.artist) return true;
+    if (prev.hasDuration != next.hasDuration) return true;
+    const bool prevPlaying{prev.rate > 0};
+    const bool nextPlaying{next.rate > 0};
+    if (prevPlaying != nextPlaying) return true;
+    return prev.art != next.art;
+  }
+
+  // GSMTC often emits a blank payload while metadata is still loading; defer clearing like macOS (0.35 s).
+  void ScheduleDeferredClear(int gen) {
+    const uint64_t token{++m_clearToken};
+    auto life{m_life};
+    std::thread([this, life, gen, token] {
+      std::this_thread::sleep_for(std::chrono::milliseconds(350));
+      if (life->dead.load(std::memory_order_acquire)) return;
+      std::function<void()> listener;
+      {
+        std::lock_guard lock{m_mu};
+        if (token != m_clearToken || !Current(gen)) return;
+        if (!ShownLocked().active) return;
+        ApplyLiveLocked({});
+        listener = m_listener;
+      }
+      if (listener) listener();
+    }).detach();
   }
 
   void Stop() {
@@ -271,24 +389,30 @@ class FLNowPlayingState {
   }
 
   void Publish(FLNowPlayingTrack next, int gen) {
+    bool notify{false};
     {
       std::lock_guard lock{m_mu};
       if (!Current(gen)) return;
-      const bool was{ShownLocked().active};
-      m_live = std::move(next);
-      const bool now{ShownLocked().active};
-      if (was != now) Log(now ? "[FLNowPlaying] session up\n" : "[FLNowPlaying] session cleared\n");
+      if (!next.active || next.title.empty()) {
+        if (!ShownLocked().active) return;
+        ScheduleDeferredClear(gen);
+        return;
+      }
+      ++m_clearToken;
+      const FLNowPlayingTrack prev{ShownLocked()};
+      notify = PanelLayoutChanged(prev, next);
+      ApplyLiveLocked(std::move(next));
     }
     {
       std::lock_guard lock{m_mu};
       if (!Current(gen)) {
+        ++m_clearToken;
         const bool was{ShownLocked().active};
-        m_live = {};
-        const bool now{ShownLocked().active};
-        if (was != now) Log("[FLNowPlaying] session cleared\n");
+        ApplyLiveLocked({});
+        if (was) notify = true;
       }
     }
-    Notify();
+    if (notify) Notify();
   }
 
   // WinRT may call this after revoke. `dead` is checked before `self` is used.
@@ -348,6 +472,34 @@ class FLNowPlayingState {
       track.positionAtMs = static_cast<double>(
           std::chrono::duration_cast<std::chrono::milliseconds>(updated.time_since_epoch()).count());
       track.rate = rate;
+      std::shared_ptr<FLNowPlayingArt const> reused;
+      {
+        std::lock_guard lock{m_mu};
+        if (m_live.title == title && m_live.artist == track.artist) reused = m_live.art;
+      }
+      if (reused) {
+        track.art = std::move(reused);
+      } else {
+        try {
+          auto thumb = props.Thumbnail();
+          if (thumb) {
+            auto stream = thumb.OpenReadAsync().get();
+            const uint64_t size = stream.Size();
+            if (size > 0 && size <= 4 * 1024 * 1024) {
+              winrt::Windows::Storage::Streams::Buffer buffer{static_cast<uint32_t>(size)};
+              auto read = stream.ReadAsync(buffer, static_cast<uint32_t>(size),
+                                            winrt::Windows::Storage::Streams::InputStreamOptions::None)
+                              .get();
+              std::vector<uint8_t> bytes(read.Length());
+              auto reader = winrt::Windows::Storage::Streams::DataReader::FromBuffer(read);
+              reader.ReadBytes(bytes);
+              track.art = FLDecodeArtwork(std::move(bytes));
+            }
+          }
+        } catch (...) {
+          track.art = nullptr;
+        }
+      }
       Publish(std::move(track), gen);
     } catch (...) {
       Publish({}, gen);
@@ -507,6 +659,7 @@ class FLNowPlayingState {
   bool m_haveMedia{false};
   bool m_havePlayback{false};
   bool m_haveTimeline{false};
+  uint64_t m_clearToken{0};
 };
 
 REACT_MODULE(FLNowPlaying)

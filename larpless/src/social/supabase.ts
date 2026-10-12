@@ -13,8 +13,17 @@ let useRuntime = false;
 let client: SupabaseClient | null = null;
 let clientId = '';
 
+/** Project root only — not `/rest/v1/` or `/auth/v1/` from the API docs. */
+export function normalizeSupabaseProjectUrl(raw: string): string {
+  let url = raw.trim();
+  if (!url) return '';
+  url = url.replace(/\/+$/, '');
+  url = url.replace(/\/rest\/v1$/i, '').replace(/\/auth\/v1$/i, '');
+  return url.replace(/\/+$/, '');
+}
+
 function pair(): { url: string; key: string } | null {
-  const url = (useRuntime ? runtimeUrl : SUPABASE_URL).trim();
+  const url = normalizeSupabaseProjectUrl(useRuntime ? runtimeUrl : SUPABASE_URL);
   const key = (useRuntime ? runtimeKey : SUPABASE_ANON_KEY).trim();
   if (!url || !key) return null;
   return { url, key };
@@ -31,7 +40,7 @@ export function isSupabaseConfigured(): boolean {
 
 /** True when the live client must be dropped because the project identity changed. */
 export function setSupabaseCredentials(url: string, key: string): boolean {
-  const nextUrl = url.trim();
+  const nextUrl = normalizeSupabaseProjectUrl(url);
   const nextKey = key.trim();
   const complete = !!nextUrl && !!nextKey;
   const cleared = !nextUrl && !nextKey;

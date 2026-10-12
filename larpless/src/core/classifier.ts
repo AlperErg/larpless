@@ -20,11 +20,19 @@ export interface ClassifierConfig {
   USE_MOCK_CLASSIFIER: boolean;
   CACHE_TTL_MS: number;
   CAPTURE: CaptureOptions;
+  /**
+   * After the rules and the cache, ask the model about the window title with no screenshot.
+   * A confident answer is used; a weak one still goes to the vision model. Windows only.
+   */
+  TITLE_CHECK?: boolean;
 }
+
+/** Use a title-only verdict at or above this. Below it, take a screenshot. */
+export const TITLE_CHECK_MIN_CONFIDENCE = 0.6;
 
 export interface ClassifierDeps {
   native: Pick<NativeApis, 'screen'>;
-  ollama: Pick<OllamaClient, 'classify' | 'warmUp' | 'unload'>;
+  ollama: Pick<OllamaClient, 'classify' | 'warmUp' | 'unload'> & Partial<Pick<OllamaClient, 'classifyTitle'>>;
   now: () => number;
   config: ClassifierConfig;
   /** Capture size, cache TTL, timeout and keep_alive. Falls back to `config` when omitted. */
@@ -213,8 +221,8 @@ export function createClassifier({ native, ollama, now, config, getPower }: Clas
     | { kind: 'fast'; result: ClassifyResult }
     | { kind: 'vlm'; appName: string | null; key: string };
 
-  /** Rules, cache and "this app" never take a screenshot, so they don't need the flight. */
-  async function decide(): Promise<Decision> {
+  /** Rules, cache, the title check and "this app" never take a screenshot, so they don't need the flight. */
+  async function decide(modules: StudyModule[], ctx: ClassifyContext): Promise<Decision> {
     const win = await native.screen.getActiveWindow();
     const appName = win.appName ?? null;
     if (win.isSelf) {
@@ -244,11 +252,26 @@ export function createClassifier({ native, ollama, now, config, getPower }: Clas
         result: { verdict: remember({ ...cache.verdict, source: 'cache' }, appName, key), tookScreenshot: false, appName, key },
       };
     }
+    const useMock = ctx.mockClassifier ?? config.USE_MOCK_CLASSIFIER;
+    if (config.TITLE_CHECK && !useMock && ollama.classifyTitle && win.windowTitle) {
+      const titleVerdict = await ollama.classifyTitle(appName, win.windowTitle, modules, {
+        timeoutMs: Math.min(8_000, ceilingMs()),
+        keepAlive: power()?.keepAlive,
+      });
+      if (titleVerdict && titleVerdict.confidence >= TITLE_CHECK_MIN_CONFIDENCE) {
+        const verdict: ScreenVerdict = { ...titleVerdict, source: 'title' };
+        cache = { appName, windowTitle: win.windowTitle, verdict, at: now(), ttlMs: cacheTtl() };
+        return {
+          kind: 'fast',
+          result: { verdict: remember(verdict, appName, key), tookScreenshot: false, appName, key },
+        };
+      }
+    }
     return { kind: 'vlm', appName, key };
   }
 
   async function joinFlight(running: Flight, modules: StudyModule[], ctx: ClassifyContext): Promise<ClassifyResult> {
-    const decided = await decide();
+    const decided = await decide(modules, ctx);
     if (decided.kind === 'fast') return decided.result;
     running.seen.add(decided.key);
     const shared = await running.result;
@@ -312,7 +335,7 @@ export function createClassifier({ native, ollama, now, config, getPower }: Clas
         return out;
       };
       try {
-        const decided = await decide();
+        const decided = await decide(modules, ctx);
         if (decided.kind === 'fast') {
           flight.key = decided.result.key ?? '';
           if (flight.key) flight.seen.add(flight.key);

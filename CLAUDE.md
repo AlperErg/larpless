@@ -21,7 +21,7 @@ xcodebuild -workspace macos/Focusline.xcworkspace -scheme Focusline-macOS -confi
 
 - `run-mac.sh` opens a **new** app instance each time; quit the old one first: `pkill -f "$PWD/macos/build/Build/Products/Debug/LarpLess.app"`. Metro logs go to `.logs/metro-<port>.log`. An optional gitignored `macos/signing.local` (`CODE_SIGN_IDENTITY`, `DEVELOPMENT_TEAM`) gives a stable signature so Screen Recording/Camera grants survive rebuilds; otherwise it signs ad-hoc. Release is set up for distribution: `Developer ID Application` (team `P74N9B6V54`), hardened runtime, and `Focusline-macOS/LarpLess.entitlements` (camera; the hardened runtime blocks the webcam without it). Versions come from `MARKETING_VERSION`/`CURRENT_PROJECT_VERSION`. ATS allows only local networking (Ollama); everything else must be HTTPS.
 - `src/social/env.ts` is gitignored but **imported unconditionally**, so it must exist for the build/typecheck to work (`export const SUPABASE_URL = ''; export const SUPABASE_ANON_KEY = '';` runs fully local). Schema: `supabase/schema.sql`.
-- Runtime needs Ollama on `127.0.0.1:11434` with `qwen3-vl:4b`. Tests never need it. Onboarding links the installer and pulls the model (`/api/pull`, streamed through XHR). Ollama ≥ 0.30's llama-server keeps up to 8 GB of prompt cache in RAM; only `LLAMA_ARG_CACHE_RAM=0` at launch turns it off, so LarpLess opens Ollama.app with it and, at app launch and session start, restarts an Ollama.app running without it when no other model is loaded (`core/ollamaHost.ts`). Ollama.app ignores the quit Apple Event; the restart uses SIGTERM on its pid.
+- Runtime needs Ollama on `127.0.0.1:11434` with `qwen3-vl:2b`. Tests never need it. Onboarding links the installer and pulls the model (`/api/pull`, streamed through XHR). Ollama ≥ 0.30's llama-server keeps up to 8 GB of prompt cache in RAM; only `LLAMA_ARG_CACHE_RAM=0` at launch turns it off, so LarpLess opens Ollama.app with it and, at app launch and session start, restarts an Ollama.app running without it when no other model is loaded (`core/ollamaHost.ts`). Ollama.app ignores the quit Apple Event; the restart uses SIGTERM on its pid.
 
 ### Driving the running app (dev builds)
 
@@ -29,7 +29,7 @@ xcodebuild -workspace macos/Focusline.xcworkspace -scheme Focusline-macOS -confi
 - `node scripts/js-eval.mjs 8081 --console 20` streams the JS console (RN 0.81 no longer prints it in Metro).
 - Native logs: `log show --last 5m --style compact --predicate 'subsystem == "com.larpless.app"'`.
 - Demo mode (no Ollama/camera): ⌥-click Start, or ⌘K → "Start demo session"; replays `fixtureChunks` through the real controller and panel.
-- `node scripts/bench-classifier.ts --model qwen3-vl:4b` scores the VLM prompt against `bench/<expected>__<desc>.png`.
+- `node scripts/bench-classifier.ts --model qwen3-vl:2b` scores the VLM prompt against `bench/<expected>__<desc>.png`.
 
 ## Architecture
 

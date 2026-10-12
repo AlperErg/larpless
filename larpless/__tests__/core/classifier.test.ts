@@ -1,6 +1,7 @@
 import type { ScreenVerdict } from '../../src/contracts/domain';
 import type { ActiveWindow, ScreenSnapshot } from '../../src/contracts/native';
-import { createClassifier, mockVerdictFromTitle, windowKey } from '../../src/core/classifier';
+import { createClassifier, mockVerdictFromTitle, TITLE_CHECK_MIN_CONFIDENCE, windowKey } from '../../src/core/classifier';
+import { titleCheckForOs } from '../../src/config';
 import type { ClassifierConfig } from '../../src/core/classifier';
 import { fixtureModules } from '../../src/fixtures/data';
 import type { PowerSpec } from '../../src/core/powerProfile';
@@ -13,7 +14,12 @@ const CFG: ClassifierConfig = {
 
 const BIO_VERDICT: ScreenVerdict = { studying: true, moduleId: 'mod_biology', activity: 'Reading slides', confidence: 0.9, source: 'vlm' };
 
-function setup(opts: { config?: Partial<ClassifierConfig>; verdict?: ScreenVerdict | null; getPower?: () => PowerSpec } = {}) {
+function setup(opts: {
+  config?: Partial<ClassifierConfig>;
+  verdict?: ScreenVerdict | null;
+  getPower?: () => PowerSpec;
+  classifyTitle?: (appName: string | null, windowTitle: string | null) => Promise<ScreenVerdict | null>;
+} = {}) {
   let win: ActiveWindow = { appName: 'Preview', bundleId: 'com.apple.Preview', windowTitle: 'BIO101 Lecture 4.pdf', isSelf: false };
   let t = 1_000_000;
   let holdWindows = 0;
@@ -22,6 +28,9 @@ function setup(opts: { config?: Partial<ClassifierConfig>; verdict?: ScreenVerdi
     async (): Promise<ScreenSnapshot> => ({ ...win, jpegBase64: 'IMG', width: 1, height: 1, capturedAt: t }),
   );
   const classify = jest.fn(async () => (opts.verdict === undefined ? BIO_VERDICT : opts.verdict));
+  const classifyTitle = jest.fn(async (appName: string | null, windowTitle: string | null) =>
+    opts.classifyTitle ? opts.classifyTitle(appName, windowTitle) : null,
+  );
   const warmUp = jest.fn(async () => {});
   const unload = jest.fn(async () => {});
   const c = createClassifier({
@@ -40,7 +49,7 @@ function setup(opts: { config?: Partial<ClassifierConfig>; verdict?: ScreenVerdi
         capture,
       },
     },
-    ollama: { classify, warmUp, unload },
+    ollama: { classify, classifyTitle, warmUp, unload },
     now: () => t,
     config: { ...CFG, ...opts.config },
     getPower: opts.getPower,
@@ -49,6 +58,7 @@ function setup(opts: { config?: Partial<ClassifierConfig>; verdict?: ScreenVerdi
     c,
     capture,
     classify,
+    classifyTitle,
     warmUp,
     unload,
     setWin: (w: Partial<ActiveWindow>) => {
@@ -70,6 +80,46 @@ const BIO_KEY = windowKey('Preview', 'BIO101 Lecture 4.pdf');
 const tick = () => new Promise<void>((r) => setImmediate(() => r()));
 
 describe('classifier', () => {
+  it('title check is on for Windows and off for Mac', () => {
+    expect(titleCheckForOs('windows')).toBe(true);
+    expect(titleCheckForOs('macos')).toBe(false);
+    expect(titleCheckForOs('ios')).toBe(false);
+    expect(TITLE_CHECK_MIN_CONFIDENCE).toBe(0.6);
+  });
+
+  it('a confident title check skips the screenshot', async () => {
+    const s = setup({
+      config: { TITLE_CHECK: true },
+      classifyTitle: async () => ({ studying: false, moduleId: null, activity: 'Checking email', confidence: 0.8, source: 'vlm' }),
+    });
+    s.setWin({ appName: 'Chrome', windowTitle: 'Inbox (2) - Gmail', bundleId: 'chrome' });
+    const r = await s.c.classifyCurrent(fixtureModules);
+    expect(r.tookScreenshot).toBe(false);
+    expect(r.verdict).toMatchObject({ studying: false, activity: 'Checking email', source: 'title', confidence: 0.8 });
+    expect(s.capture).not.toHaveBeenCalled();
+    expect(s.classify).not.toHaveBeenCalled();
+    expect(s.classifyTitle).toHaveBeenCalledTimes(1);
+  });
+
+  it('a weak title check falls through to the vision model', async () => {
+    const s = setup({
+      config: { TITLE_CHECK: true },
+      classifyTitle: async () => ({ studying: false, moduleId: null, activity: 'Browsing', confidence: 0.4, source: 'vlm' }),
+    });
+    const r = await s.c.classifyCurrent(fixtureModules);
+    expect(s.classifyTitle).toHaveBeenCalledTimes(1);
+    expect(s.capture).toHaveBeenCalledTimes(1);
+    expect(r.tookScreenshot).toBe(true);
+    expect(r.verdict?.source).toBe('vlm');
+  });
+
+  it('Mac (title check off) does not call classifyTitle', async () => {
+    const s = setup();
+    await s.c.classifyCurrent(fixtureModules);
+    expect(s.classifyTitle).not.toHaveBeenCalled();
+    expect(s.capture).toHaveBeenCalledTimes(1);
+  });
+
   it('VLM path: takes exactly one screenshot and returns the verdict', async () => {
     const s = setup();
     const r = await s.c.classifyCurrent(fixtureModules);

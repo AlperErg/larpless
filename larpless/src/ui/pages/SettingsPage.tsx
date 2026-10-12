@@ -9,6 +9,7 @@ import { useAppStore } from '../../store/appStore';
 import { useNavStore } from '../../store/navStore';
 import { useOllamaStore } from '../../store/ollamaStore';
 import { useSessionStore } from '../../store/sessionStore';
+import { normalizeSupabaseProjectUrl } from '../../social/supabase';
 import { useSocialStore } from '../../store/socialStore';
 import { Button, CodeBlock, MacPressable, MacTextInput, ModelDownload, Segmented, Switch, Text } from '../components';
 import { TextField } from '../components/TextField';
@@ -77,8 +78,9 @@ export function SettingsPage() {
     if (v && v !== s.ollamaUrl) update({ ollamaUrl: v });
   };
   const commitSupabase = () => {
-    const nextUrl = supabaseUrl.trim();
+    const nextUrl = normalizeSupabaseProjectUrl(supabaseUrl);
     const nextKey = supabaseKey.trim();
+    if (nextUrl !== supabaseUrl) setSupabaseUrl(nextUrl);
     if (nextUrl === s.supabaseUrl && nextKey === s.supabaseAnonKey) return;
     update({ supabaseUrl: nextUrl, supabaseAnonKey: nextKey });
   };
@@ -101,7 +103,7 @@ export function SettingsPage() {
         />
       </Row>
       <SectionTitle>Friends</SectionTitle>
-      <Row label="Project URL" hint="Supabase → Project Settings → API. Filled in, these replace the bundled keys.">
+      <Row label="Project URL" hint="Supabase → Project Settings → API → Project URL (not the /rest/v1/ path). Filled in, these replace the bundled keys.">
         <MacTextInput
           testID="settings-supabase-url"
           value={supabaseUrl}

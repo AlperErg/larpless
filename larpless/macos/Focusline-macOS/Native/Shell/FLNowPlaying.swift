@@ -13,6 +13,22 @@ struct FLNowPlayingTrack: Equatable {
   var positionAtMs: Double
   /// 0 while paused. Playback advances as positionS + rate * (now - positionAtMs).
   var rate: Double
+  /// In memory only. Never logged, stored, or sent to JS.
+  var artwork: NSImage?
+  var tint: NSColor?
+
+  static func == (lhs: FLNowPlayingTrack, rhs: FLNowPlayingTrack) -> Bool {
+    lhs.title == rhs.title && lhs.artist == rhs.artist && lhs.durationS == rhs.durationS
+      && lhs.positionS == rhs.positionS && lhs.positionAtMs == rhs.positionAtMs && lhs.rate == rhs.rate
+      && lhs.artwork === rhs.artwork
+  }
+
+  func progress(at date: Date) -> Double? {
+    guard let durationS, durationS > 0 else { return nil }
+    let nowMs = date.timeIntervalSince1970 * 1000
+    let elapsed = positionS + rate * (nowMs - positionAtMs) / 1000
+    return min(1, max(0, elapsed / durationS))
+  }
 
   func remainingS(at date: Date) -> Double? {
     guard let durationS else { return nil }
@@ -47,6 +63,10 @@ final class FLNowPlaying: NSObject, ObservableObject {
   private var loggedMissingHelper = false
   private var loggedMediaKey = false
   private var clearWork: DispatchWorkItem?
+  private let artLock = NSLock()
+  private var cachedArtKey: String?
+  private var cachedArt: NSImage?
+  private var cachedTint: NSColor?
 
   @objc static func requiresMainQueueSetup() -> Bool { false }
 
@@ -114,8 +134,8 @@ final class FLNowPlaying: NSObject, ObservableObject {
     let gen = generationNow()
     let proc = Process()
     proc.executableURL = URL(fileURLWithPath: "/usr/bin/perl")
-    // --no-artwork so a base64 image is never written to the pipe.
-    proc.arguments = [script, framework, "stream", "--no-diff", "--no-artwork", "--micros"]
+    // Artwork is decoded in memory and dropped with the line. It is never written to disk.
+    proc.arguments = [script, framework, "stream", "--no-diff", "--micros"]
     let output = Pipe()
     proc.standardOutput = output
     // Discard stderr. An unread pipe fills and stalls perl.
@@ -211,7 +231,8 @@ final class FLNowPlaying: NSObject, ObservableObject {
   private func consume(_ data: Data, from proc: Process, generation gen: Int) {
     bufferLock.lock()
     if !data.isEmpty { lineBuffer.append(data) }
-    if lineBuffer.count > 256_000 {
+    // One now-playing line can carry a base64 album image. It stays in this buffer only until parsed.
+    if lineBuffer.count > 2_000_000 {
       lineBuffer.removeAll()
       bufferLock.unlock()
       flShellLog("[FLNowPlaying] helper output dropped")
@@ -234,13 +255,14 @@ final class FLNowPlaying: NSObject, ObservableObject {
             !text.isEmpty,
             let obj = try? JSONSerialization.jsonObject(with: Data(text.utf8)) as? NSDictionary
       else { continue }
-      // Read fields off the dictionary. artworkData is never copied out, even if a line still has it.
-      let next = Self.track(from: obj["payload"] as? NSDictionary)
+      let payload = obj["payload"] as? NSDictionary
+      let parsed = Self.track(from: payload)
       DispatchQueue.main.async {
         MainActor.assumeIsolated { [weak self] in
           guard let self, self.generationNow() == gen, self.process === proc else { return }
           self.backoffS = 1
-          self.setLive(next)
+          // lockFocus for the album image has to run on the main thread. The base64 is dropped after this.
+          self.setLive(self.attachArtwork(parsed, payload: payload))
         }
       }
     }
@@ -292,6 +314,65 @@ final class FLNowPlaying: NSObject, ObservableObject {
       positionAtMs: positionAtMs,
       rate: rate
     )
+  }
+
+  /// Decodes album art once per title. Later lines for the same track reuse the image already in memory.
+  private func attachArtwork(_ track: FLNowPlayingTrack?, payload: NSDictionary?) -> FLNowPlayingTrack? {
+    guard var track else { return nil }
+    let key = track.title + "\n" + (track.artist ?? "")
+    artLock.lock()
+    defer { artLock.unlock() }
+    if cachedArtKey == key, let cachedArt {
+      track.artwork = cachedArt
+      track.tint = cachedTint
+      return track
+    }
+    guard let decoded = Self.decodeArtwork(payload) else { return track }
+    cachedArtKey = key
+    cachedArt = decoded.0
+    cachedTint = decoded.1
+    track.artwork = decoded.0
+    track.tint = decoded.1
+    return track
+  }
+
+  /// Base64 artwork from the helper, scaled to 96 px. The string is not kept.
+  private static func decodeArtwork(_ payload: NSDictionary?) -> (NSImage, NSColor)? {
+    guard let b64 = payload?["artworkData"] as? String, !b64.isEmpty,
+          let data = Data(base64Encoded: b64, options: .ignoreUnknownCharacters),
+          let src = NSImage(data: data), src.size.width > 0, src.size.height > 0
+    else { return nil }
+    let side: CGFloat = 96
+    let out = NSImage(size: NSSize(width: side, height: side))
+    out.lockFocus()
+    src.draw(in: NSRect(x: 0, y: 0, width: side, height: side), from: .zero, operation: .copy, fraction: 1)
+    out.unlockFocus()
+    return (out, dominantTint(out) ?? NSColor(calibratedWhite: 0.45, alpha: 1))
+  }
+
+  private static func dominantTint(_ image: NSImage) -> NSColor? {
+    guard let tiff = image.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff) else { return nil }
+    let w = rep.pixelsWide
+    let h = rep.pixelsHigh
+    guard w > 0, h > 0 else { return nil }
+    var sr = 0.0, sg = 0.0, sb = 0.0, sat = 0.0
+    var ar = 0.0, ag = 0.0, ab = 0.0, all = 0.0
+    let sx = max(1, w / 12)
+    let sy = max(1, h / 12)
+    for y in stride(from: 0, to: h, by: sy) {
+      for x in stride(from: 0, to: w, by: sx) {
+        guard let c = rep.colorAt(x: x, y: y)?.usingColorSpace(.sRGB) else { continue }
+        let r = Double(c.redComponent), g = Double(c.greenComponent), b = Double(c.blueComponent)
+        ar += r; ag += g; ab += b; all += 1
+        let mx = max(r, g, b), mn = min(r, g, b)
+        if mx - mn < 0.08 { continue }
+        sr += r; sg += g; sb += b; sat += 1
+      }
+    }
+    let n = sat > 0 ? sat : all
+    guard n > 0 else { return nil }
+    let useSat = sat > 0
+    return NSColor(srgbRed: (useSat ? sr : ar) / n, green: (useSat ? sg : ag) / n, blue: (useSat ? sb : ab) / n, alpha: 1)
   }
 
   /// Applies helper output. An empty payload is deferred briefly: the adapter emits one while a

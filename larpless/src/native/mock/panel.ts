@@ -4,6 +4,9 @@ export const mockPanel: FloatingPanelApi = {
   show: async () => {
     console.log('[mock panel] show');
   },
+  ensureVisible: async () => {
+    console.log('[mock panel] ensureVisible');
+  },
   hide: async () => {
     console.log('[mock panel] hide');
   },

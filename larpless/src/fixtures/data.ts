@@ -270,7 +270,7 @@ function focusPomodoro(sessionStart: number): PomodoroState {
   };
 }
 
-const OLLAMA_OK: SessionStoreState['ollama'] = { status: 'ok', model: 'qwen3-vl:4b' };
+const OLLAMA_OK: SessionStoreState['ollama'] = { status: 'ok', model: 'qwen3-vl:2b' };
 const WEBCAM_PRESENT: SessionStoreState['webcam'] = { enabled: true, personPresent: true, phoneVisible: false };
 const NO_ALERT: SessionStoreState['alert'] = { level: 0, distractedSinceMs: null };
 

@@ -48,6 +48,13 @@ final class FLFloatingPanel: RCTEventEmitter {
     }
   }
 
+  @objc func ensureVisible(_ resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+    DispatchQueue.main.async {
+      MainActor.assumeIsolated { FLShellPanelController.shared.ensureVisible() }
+      resolve(nil)
+    }
+  }
+
   @objc func update(_ state: NSDictionary) {
     let copy = state.copy() as? NSDictionary ?? state
     DispatchQueue.main.async {

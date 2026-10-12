@@ -122,7 +122,8 @@ export function toPanelState(
         return { ...base, status: 'studying', title: name, subtitle: sub(c.activity), tint: 'green' };
       }
       if (c?.kind === 'distracted') {
-        return { ...base, status: 'distracted', title: 'Distracted', subtitle: sub(c.activity), tint: 'red', pulse: s.alert.level === 3 };
+        // A short reason ("Checking email"), or the app name when the model didn't give one.
+        return { ...base, status: 'distracted', title: 'Distracted', subtitle: sub(c.activity) ?? sub(c.appName), tint: 'red', pulse: s.alert.level === 3 };
       }
       if (c?.kind === 'away') return { ...base, status: 'away', title: 'Away', subtitle: null, tint: 'gray' };
       if (c?.kind === 'unknown') return { ...base, status: 'studying', title: 'Focus', subtitle: 'Checking…', tint: 'gray' };
@@ -210,6 +211,7 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
     if (!force && key === lastPanel) return;
     lastPanel = key;
     native.panel.update(ps);
+    native.panel.ensureVisible().catch(noop);
   }
 
   /* ---------- webcam ---------- */
@@ -506,6 +508,8 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
       if (r.event) onPhaseChange(r.state, r.event, t);
     }
     pushPanel();
+    // Spotify quitting can drop the layered timer without a study-state change. Put it back on the work area.
+    native.panel.ensureVisible().catch(noop);
   }
 
   function clearTimers() {
@@ -577,9 +581,11 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
       }
       native.appShell.beginSessionActivity();
       unsubAction = native.panel.onAction((a) => controller.handlePanelAction(a));
+      // Show the timer immediately; do not block on webcam (camera open can hang or fail on Windows).
+      native.panel.show().catch(noop);
       await startWebcam();
       if (sessionId !== sid) return;
-      await native.panel.show().catch(noop);
+      await native.panel.ensureVisible().catch(noop);
       native.sound.setVolume(settings.volume);
       native.sound.play(settings.defaultSound).catch(noop);
       tickTimer = setInterval(onTick, TICK_MS);

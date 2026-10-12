@@ -14,7 +14,7 @@ describe('db', () => {
 
     expect(await db.loadSettings()).toEqual(DEFAULT_SETTINGS);
     await db.saveSettings({ ...DEFAULT_SETTINGS, strictness: 5, onboarded: true });
-    expect(await db.loadSettings()).toMatchObject({ strictness: 5, onboarded: true, model: 'qwen3-vl:4b' });
+    expect(await db.loadSettings()).toMatchObject({ strictness: 5, onboarded: true, model: 'qwen3-vl:2b' });
 
     // Saved out of order → listed newest first; same id replaces.
     const [a, b, c] = fixtureSessions;
@@ -65,6 +65,17 @@ describe('db', () => {
     const loaded = await db.loadSettings();
     expect(loaded.nowPlayingEnabled).toBe(true);
     expect(loaded).toEqual({ ...DEFAULT_SETTINGS, volume: 0.2 });
+  });
+
+  it('moves a saved qwen3-vl:4b default to the current model once', async () => {
+    const kv = createMemoryKv();
+    const db = createDb(kv);
+    await kv.setItem(KEYS.settings, JSON.stringify({ model: 'qwen3-vl:4b', volume: 0.3 }));
+    expect((await db.loadSettings()).model).toBe('qwen3-vl:2b');
+    await db.saveSettings({ ...(await db.loadSettings()), model: 'qwen3-vl:4b' });
+    expect((await db.loadSettings()).model).toBe('qwen3-vl:4b');
+    await kv.setItem(KEYS.settings, JSON.stringify({ model: 'gemma3:4b' }));
+    expect((await db.loadSettings()).model).toBe('gemma3:4b');
   });
 
   it('settings merge over DEFAULT_SETTINGS; corrupt values fall back', async () => {

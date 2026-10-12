@@ -94,52 +94,93 @@ struct FLShellPanelView: View {
   }
 }
 
-/// Title, artist, time left, and previous / play / next. Shown only while a session is active.
+/// Album art, title over artist, progress, and previous / play / next. Shown only while a session is active.
 private struct FLShellNowPlayingStrip: View {
   let track: FLNowPlayingTrack
 
   var body: some View {
     TimelineView(.periodic(from: Date(), by: 1)) { ctx in
-      HStack(spacing: 4) {
-        FLShellIconButton(id: "mediaPrevious", systemName: "backward.end.fill", active: false, tag: FLNotionColors.gray) {
-          FLNowPlaying.shared.previous()
+      HStack(spacing: 8) {
+        art
+        VStack(alignment: .leading, spacing: 1) {
+          Text(track.title)
+            .font(FLShellFont.medium(12))
+            .foregroundColor(FLNotionColors.text)
+            .lineLimit(1)
+            .truncationMode(.tail)
+          if let artist = track.artist, !artist.isEmpty {
+            Text(artist)
+              .font(FLShellFont.regular(11))
+              .foregroundColor(FLNotionColors.muted)
+              .lineLimit(1)
+              .truncationMode(.tail)
+          }
         }
-        FLShellIconButton(id: "mediaToggle", systemName: track.rate > 0 ? "pause.fill" : "play.fill",
-                          active: false, tag: FLNotionColors.gray) {
-          FLNowPlaying.shared.toggle()
-        }
-        FLShellIconButton(id: "mediaNext", systemName: "forward.end.fill", active: false, tag: FLNotionColors.gray) {
-          FLNowPlaying.shared.next()
-        }
-        Text(line)
-          .font(FLShellFont.medium(11))
-          .lineLimit(1)
-          .truncationMode(.tail)
         Spacer(minLength: 4)
-        if let remaining = track.remainingS(at: ctx.date) {
-          Text(FLShellPanelState.formatCountdown(remaining))
-            .font(FLShellFont.medium(11))
-            .monospacedDigit()
-            .foregroundColor(FLNotionColors.muted)
+        HStack(spacing: 2) {
+          FLShellIconButton(id: "mediaPrevious", systemName: "backward.end.fill", active: false, tag: FLNotionColors.gray) {
+            FLNowPlaying.shared.previous()
+          }
+          FLShellIconButton(id: "mediaToggle", systemName: track.rate > 0 ? "pause.fill" : "play.fill",
+                            active: false, tag: FLNotionColors.gray) {
+            FLNowPlaying.shared.toggle()
+          }
+          FLShellIconButton(id: "mediaNext", systemName: "forward.end.fill", active: false, tag: FLNotionColors.gray) {
+            FLNowPlaying.shared.next()
+          }
         }
       }
       .padding(.horizontal, 8)
+      .padding(.bottom, 6)
       .frame(width: FLShellPanelController.width, height: FLShellPanelController.mediaStripHeight)
+      .background(tintWash)
       .background(FLNotionColors.bg)
       .overlay(alignment: .top) {
         Rectangle().fill(FLNotionColors.border).frame(height: 1)
       }
+      .overlay(alignment: .bottom) {
+        progress(at: ctx.date)
+          .padding(.horizontal, 8)
+          .padding(.bottom, 4)
+      }
     }
   }
 
-  private var line: AttributedString {
-    var title = AttributedString(track.title)
-    title.foregroundColor = FLNotionColors.text
-    guard let artist = track.artist, !artist.isEmpty else { return title }
-    var rest = AttributedString(" · \(artist)")
-    rest.foregroundColor = FLNotionColors.muted
-    title.append(rest)
-    return title
+  @ViewBuilder private var art: some View {
+    if let artwork = track.artwork {
+      Image(nsImage: artwork)
+        .resizable()
+        .interpolation(.high)
+        .frame(width: 40, height: 40)
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+    } else {
+      RoundedRectangle(cornerRadius: 6, style: .continuous)
+        .fill(FLNotionColors.hover)
+        .frame(width: 40, height: 40)
+        .overlay {
+          Image(systemName: "music.note")
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundColor(FLNotionColors.muted)
+        }
+    }
+  }
+
+  private var tintWash: Color {
+    guard let tint = track.tint else { return .clear }
+    return Color(nsColor: tint).opacity(0.22)
+  }
+
+  private func progress(at date: Date) -> some View {
+    let amount = track.progress(at: date) ?? 0
+    return GeometryReader { geo in
+      ZStack(alignment: .leading) {
+        Capsule().fill(FLNotionColors.border).frame(height: 2)
+        Capsule()
+          .fill(track.tint.map { Color(nsColor: $0) } ?? FLNotionColors.text)
+          .frame(width: max(0, geo.size.width * amount), height: 2)
+      }
+    }
+    .frame(height: 2)
   }
 }
 

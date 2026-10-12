@@ -2,7 +2,7 @@
  * Persistence over an injected key-value store (AsyncStorage in the app, a Map in tests).
  * Keys: CONTRACTS.md §8. Labels only: never images, never window titles.
  */
-import { DEFAULT_SETTINGS } from '../config';
+import { DEFAULT_SETTINGS, MODEL_DEFAULT_REV } from '../config';
 import { isPowerProfile } from './powerProfile';
 import type { Chunk, SessionSummary, Settings, StudyModule } from '../contracts/domain';
 
@@ -57,6 +57,10 @@ export function cleanSettings(raw: unknown): Settings {
     if (src[key] !== undefined) (out as unknown as Record<string, unknown>)[key] = src[key];
   }
   if (!isPowerProfile(out.powerProfile)) out.powerProfile = DEFAULT_SETTINGS.powerProfile;
+  // Rev 1 shipped qwen3-vl:4b. Move a saved copy of that default forward once; a later explicit choice stays.
+  const savedRev = typeof src.modelDefaultRev === 'number' ? src.modelDefaultRev : 1;
+  if (savedRev < MODEL_DEFAULT_REV && out.model === 'qwen3-vl:4b') out.model = DEFAULT_SETTINGS.model;
+  out.modelDefaultRev = MODEL_DEFAULT_REV;
   if (out.appearance !== 'system' && out.appearance !== 'light' && out.appearance !== 'dark') {
     out.appearance = DEFAULT_SETTINGS.appearance;
   }

@@ -58,6 +58,23 @@ describe('ollama', () => {
     // Empty-think assistant prefill (Qwen3-VL ignores think:false).
     expect(body.messages).toHaveLength(3);
     expect(body.messages[2]).toEqual({ role: 'assistant', content: '<think>\n\n</think>\n\n' });
+    expect(body.messages[0].content).toBe(buildSystem(fixtureModules));
+  });
+
+  it('classifyTitle sends no image and keeps a short distraction reason', async () => {
+    const fetchImpl = jest.fn<ReturnType<FetchLike>, Parameters<FetchLike>>(() =>
+      chatRes(JSON.stringify({ studying: false, subject: 'Not study', activity: 'Checking email', confidence: 0.82 })),
+    );
+    const o = createOllama({ baseUrl: 'http://127.0.0.1:11434/', model: 'qwen3-vl:4b', fetchImpl, log });
+    const v = await o.classifyTitle('Chrome', 'Inbox - Gmail', fixtureModules);
+    expect(v).toEqual({ studying: false, moduleId: null, activity: 'Checking email', confidence: 0.82, source: 'vlm' });
+    const body = JSON.parse(fetchImpl.mock.calls[0][1]!.body!);
+    expect(body.messages[0].content).toBe(buildSystem(fixtureModules));
+    expect(body.messages[1].images).toBeUndefined();
+    expect(body.messages[1].content).toContain('No screenshot');
+    expect(body.messages[1].content).toContain('Inbox - Gmail');
+    expect(body.options.num_ctx).toBe(4096);
+    expect(logs.join('\n')).not.toContain('Inbox - Gmail');
   });
 
   it('uses the per-call keep_alive on classify and warmUp', async () => {
@@ -211,6 +228,7 @@ describe('ollama', () => {
       model = 'b';
       expect(await o.checkHealth()).toBe('ok');
       expect(fetchImpl.mock.calls[0][0]).toBe('http://h:1/api/tags');
+      expect(fetchImpl.mock.calls[0][1]).toMatchObject({ cache: 'no-store' });
     });
   });
 });

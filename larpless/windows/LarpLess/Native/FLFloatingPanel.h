@@ -1,7 +1,8 @@
 // FLFloatingPanel: the floating timer, the Windows twin of Native/Shell/FLFloatingPanel.swift + the SwiftUI
 // FLShellPanelView. A native always-on-top, non-activating window drawn with Direct2D/DirectWrite
-// (bundled Inter + Instrument Serif), hosted on the UI thread. 300x170, growing to 300x206 (top edge
-// anchored) while a system media session is active.
+// (bundled Inter + Instrument Serif), hosted on the UI thread. 300x170, growing to 300x226 (top edge
+// anchored) while a system media session is active. The 56 DIP strip matches a desktop now-playing
+// bar: rounded album art, title over artist, a thin progress line, transport on the right.
 // - show() / hide() / update(partial state) / FLPanelAction events: same contract as macOS.
 // - Compact view: serif timer, status pill, subtitle, Pomodoro ring + dots + footer, tint crossfade, pulse,
 //   "Back on track" flash. Hover shows the control hub (hidden 600 ms after the mouse leaves).
@@ -13,6 +14,7 @@
 #include <NativeModules.h>
 #include <d2d1_1.h>
 #include <dwrite_3.h>
+#include <dwmapi.h>
 #include <ShellScalingApi.h>
 #include <wrl/client.h>
 
@@ -34,6 +36,7 @@
 
 #pragma comment(lib, "d2d1.lib")
 #pragma comment(lib, "dwrite.lib")
+#pragma comment(lib, "dwmapi.lib")
 #pragma comment(lib, "Shcore.lib")
 
 namespace LarpLess {
@@ -44,7 +47,7 @@ using JSValue = winrt::Microsoft::ReactNative::JSValue;
 using JSValueObject = winrt::Microsoft::ReactNative::JSValueObject;
 using Microsoft::WRL::ComPtr;
 
-constexpr float kWidth{300}, kHeight{170}, kMediaStrip{36}, kMargin{14}, kRadius{10}, kPad{14};
+constexpr float kWidth{300}, kHeight{170}, kMediaStrip{56}, kMargin{14}, kRadius{10}, kPad{14};
 constexpr UINT kMediaMessage{WM_APP + 41};
 
 struct Rgb {
@@ -171,18 +174,36 @@ class Window {
     return m_hwnd;
   }
 
-  void Show() {
-    if (!Create()) return;
+  bool Show() {
+    m_wantsVisible = true;
+    if (!Create()) {
+      OutputDebugStringA("[FLPanel] Show: Create failed\n");
+      return false;
+    }
     m_mediaShown = FLNowPlayingState::Instance().Snapshot().active;
-    if (!m_userMoved || !OnSomeMonitor()) PlaceDefault();
+    if (!m_userMoved || NeedsReposition()) PlaceDefault();
     else FitMediaHeight();
-    ShowWindow(m_hwnd, SW_SHOWNOACTIVATE);
-    SetWindowPos(m_hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-    Render();
-    Schedule();
+    Present();
+    OutputDebugStringA(Visible() ? "[FLPanel] Show: visible\n" : "[FLPanel] Show: ShowWindow failed\n");
+    return Visible();
+  }
+
+  // Puts the timer back on the work area. A window Windows still calls "visible" can be 0-sized,
+  // parked off-screen, or cloaked after another app (Spotify) closes; IsWindowVisible is not enough.
+  void EnsureVisible() {
+    if (m_dragging || m_sliderDragging) return;
+    m_wantsVisible = true;
+    if (!Create()) return;
+    const bool broken{!IsWindowVisible(m_hwnd) || IsIconic(m_hwnd) || NeedsReposition()};
+    if (!broken) return;
+    if (IsIconic(m_hwnd)) ShowWindow(m_hwnd, SW_RESTORE);
+    if (!m_userMoved || NeedsReposition()) PlaceDefault();
+    else FitMediaHeight();
+    Present();
   }
 
   void Hide() {
+    m_wantsVisible = false;
     m_hover = false;
     m_hubTarget = 0;
     m_hubAlpha = 0;
@@ -287,6 +308,7 @@ class Window {
   static constexpr UINT_PTR kTickTimer{1}, kLeaveTimer{2};
 
   bool Create() {
+    if (m_hwnd && !IsWindow(m_hwnd)) m_hwnd = nullptr;
     if (m_hwnd) return true;
     if (!InitGraphics()) return false;
     WNDCLASSEXW wc{sizeof(wc)};
@@ -366,12 +388,25 @@ class Window {
     return format;
   }
 
-  // Top-right of the primary work area, panel inset 16 DIP.
+  HMONITOR MonitorForPlacement() const {
+    if (HWND main{MainWindow()}) {
+      if (HMONITOR mon{MonitorFromWindow(main, MONITOR_DEFAULTTONEAREST)}) return mon;
+    }
+    POINT cursor{};
+    if (GetCursorPos(&cursor)) {
+      if (HMONITOR mon{MonitorFromPoint(cursor, MONITOR_DEFAULTTONEAREST)}) return mon;
+    }
+    return MonitorFromPoint({0, 0}, MONITOR_DEFAULTTOPRIMARY);
+  }
+
+  // Top-right of the work area on the main/cursor monitor, panel inset 16 DIP.
   void PlaceDefault() {
+    HMONITOR const mon{MonitorForPlacement()};
     MONITORINFO mi{sizeof(mi)};
-    GetMonitorInfoW(MonitorFromPoint({0, 0}, MONITOR_DEFAULTTOPRIMARY), &mi);
+    GetMonitorInfoW(mon, &mi);
     UINT dpiX{96}, dpiY{96};
-    GetDpiForMonitor(MonitorFromPoint({0, 0}, MONITOR_DEFAULTTOPRIMARY), MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
+    GetDpiForMonitor(mon, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
+    if (dpiX < 96) dpiX = 96;
     m_scale = dpiX / 96.0f;
     const int w{Px(kWidth + 2 * kMargin)}, h{Px(PanelDipHeight() + 2 * kMargin)};
     const int x{mi.rcWork.right - Px(16) - Px(kWidth + kMargin)};
@@ -381,8 +416,66 @@ class Window {
 
   bool OnSomeMonitor() const {
     RECT r{};
-    GetWindowRect(m_hwnd, &r);
+    if (!m_hwnd || !GetWindowRect(m_hwnd, &r)) return false;
     return MonitorFromRect(&r, MONITOR_DEFAULTTONULL) != nullptr;
+  }
+
+  // True when the timer is minimized, tiny, or mostly outside the work area (so "show" must move it).
+  bool NeedsReposition() const {
+    if (!m_hwnd || !IsWindow(m_hwnd) || IsIconic(m_hwnd)) return true;
+    RECT r{};
+    if (!GetWindowRect(m_hwnd, &r)) return true;
+    const int w{r.right - r.left}, h{r.bottom - r.top};
+    if (w < 80 || h < 80) return true;
+    MONITORINFO mi{sizeof(mi)};
+    HMONITOR const mon{MonitorFromWindow(m_hwnd, MONITOR_DEFAULTTONEAREST)};
+    if (!mon || !GetMonitorInfoW(mon, &mi)) return true;
+    RECT hit{};
+    if (!IntersectRect(&hit, &r, &mi.rcWork)) return true;
+    const int visible{(hit.right - hit.left) * (hit.bottom - hit.top)};
+    return visible * 2 < w * h;
+  }
+
+  void Uncloak() {
+    if (!m_hwnd) return;
+    const BOOL off{FALSE};
+    DwmSetWindowAttribute(m_hwnd, DWMWA_CLOAK, &off, sizeof(off));
+  }
+
+  // Show, re-top, and paint. Layered windows stay blank until UpdateLayeredWindow runs.
+  void Present() {
+    if (!m_hwnd) return;
+    Uncloak();
+    ShowWindow(m_hwnd, SW_SHOWNOACTIVATE);
+    const DWORD affinity{static_cast<DWORD>(m_capturable ? WDA_NONE : WDA_EXCLUDEFROMCAPTURE)};
+    SetWindowDisplayAffinity(m_hwnd, WDA_NONE);
+    SetWindowDisplayAffinity(m_hwnd, affinity);
+    SetWindowPos(m_hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    Render();
+    Schedule();
+  }
+
+  // When the media strip changes height, keep the top edge and stay fully inside the monitor work area.
+  void EnsureOnWorkArea(int &left, int &top, int width, int height) const {
+    if (!m_hwnd) return;
+    MONITORINFO mi{sizeof(mi)};
+    HMONITOR const mon{MonitorFromWindow(m_hwnd, MONITOR_DEFAULTTONEAREST)};
+    if (!mon || !GetMonitorInfoW(mon, &mi)) return;
+    const RECT &w{mi.rcWork};
+    if (left + width > w.right) left = w.right - width;
+    if (top + height > w.bottom) top = w.bottom - height;
+    if (left < w.left) left = w.left;
+    if (top < w.top) top = w.top;
+  }
+
+  void ResizePanelKeepingTop(int pixelW, int pixelH) {
+    if (!m_hwnd || pixelW < 80 || pixelH < 80) return;
+    RECT r{};
+    if (!GetWindowRect(m_hwnd, &r)) return;
+    int left{r.left};
+    int top{r.top};
+    EnsureOnWorkArea(left, top, pixelW, pixelH);
+    SetWindowPos(m_hwnd, HWND_TOPMOST, left, top, pixelW, pixelH, SWP_NOACTIVATE);
   }
 
   int Px(float dip) const {
@@ -474,15 +567,14 @@ class Window {
 
   void Render() {
     if (!m_hwnd) return;
-    m_scale = GetDpiForWindow(m_hwnd) / 96.0f;
+    const UINT dpi{GetDpiForWindow(m_hwnd)};
+    if (dpi >= 96) m_scale = dpi / 96.0f;
+    if (m_scale < 1.0f) m_scale = 1.0f;
     // One snapshot for this paint: the window height and the strip both follow it.
     auto const snap{FLNowPlayingState::Instance().Snapshot()};
     if (snap.active != m_mediaShown) {
       m_mediaShown = snap.active;
-      RECT r{};
-      GetWindowRect(m_hwnd, &r);
-      SetWindowPos(m_hwnd, nullptr, r.left, r.top, Px(kWidth + 2 * kMargin), Px(PanelDipHeight() + 2 * kMargin),
-                   SWP_NOZORDER | SWP_NOACTIVATE);
+      ResizePanelKeepingTop(Px(kWidth + 2 * kMargin), Px(PanelDipHeight() + 2 * kMargin));
     }
     const float panelH{PanelDipHeight()};
     const int w{Px(kWidth + 2 * kMargin)}, h{Px(panelH + 2 * kMargin)};
@@ -531,8 +623,11 @@ class Window {
     SIZE size{w, h};
     BLENDFUNCTION blend{AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
     const HDC screen{GetDC(nullptr)};
-    UpdateLayeredWindow(m_hwnd, screen, &pos, &size, m_memDC, &src, 0, &blend, ULW_ALPHA);
+    if (!UpdateLayeredWindow(m_hwnd, screen, &pos, &size, m_memDC, &src, 0, &blend, ULW_ALPHA)) {
+      OutputDebugStringA("[FLPanel] UpdateLayeredWindow failed\n");
+    }
     ReleaseDC(nullptr, screen);
+    SetWindowPos(m_hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
   }
 
   bool EnsureSurface(int w, int h) {
@@ -556,6 +651,8 @@ class Window {
     m_rt = rt;
     m_surfaceW = w;
     m_surfaceH = h;
+    m_artBitmap.Reset();
+    m_artDrawn.reset();
     return true;
   }
 
@@ -799,9 +896,10 @@ class Window {
         Render();
         return 0;
       case kMediaMessage:
+        // Spotify starting or quitting changes the strip height. That must not leave the timer hidden.
+        if (!m_wantsVisible) return 0;
         FitMediaHeight();
-        Render();
-        Schedule();
+        Present();
         return 0;
       case WM_TIMER:
         if (wParam == kLeaveTimer) {
@@ -815,8 +913,8 @@ class Window {
       case WM_DPICHANGED: {
         auto const *suggested{reinterpret_cast<RECT const *>(lParam)};
         m_scale = HIWORD(wParam) / 96.0f;
-        SetWindowPos(m_hwnd, nullptr, suggested->left, suggested->top, suggested->right - suggested->left,
-                     suggested->bottom - suggested->top, SWP_NOZORDER | SWP_NOACTIVATE);
+        SetWindowPos(m_hwnd, HWND_TOPMOST, suggested->left, suggested->top, suggested->right - suggested->left,
+                     suggested->bottom - suggested->top, SWP_NOACTIVATE);
         m_rt.Reset();
         FitMediaHeight();
         Render();
@@ -859,7 +957,7 @@ class Window {
   std::string m_prevTint{"gray"};
   double m_tintChangeS{0}, m_flashStartS{0}, m_phaseLengthMs{25 * 60 * 1000}, m_lastStepS{0};
   float m_scale{1}, m_hubAlpha{0}, m_hubTarget{0}, m_sentVolume{0.5f};
-  bool m_hover{false}, m_dragging{false}, m_sliderDragging{false}, m_userMoved{false};
+  bool m_hover{false}, m_dragging{false}, m_sliderDragging{false}, m_userMoved{false}, m_wantsVisible{false};
   POINT m_dragOffset{};
   D2D1_POINT_2F m_mouse{};
   D2D1_RECT_F m_sliderTrack{};
@@ -890,30 +988,72 @@ class Window {
     const int wantH{Px((kHeight + (show ? kMediaStrip : 0)) + 2 * kMargin)};
     if (show == m_mediaShown && m_surfaceW != 0 && (r.bottom - r.top) == wantH) return;
     m_mediaShown = show;
-    SetWindowPos(m_hwnd, nullptr, r.left, r.top, Px(kWidth + 2 * kMargin), Px(PanelDipHeight() + 2 * kMargin),
-                 SWP_NOZORDER | SWP_NOACTIVATE);
+    ResizePanelKeepingTop(Px(kWidth + 2 * kMargin), Px(PanelDipHeight() + 2 * kMargin));
   }
+  void EnsureArtBitmap(std::shared_ptr<FLNowPlayingArt const> const &art) {
+    if (art == m_artDrawn && m_artBitmap) return;
+    m_artBitmap.Reset();
+    m_artDrawn = art;
+    if (!art || art->bgra.size() < static_cast<size_t>(FLNowPlayingArt::kSide * FLNowPlayingArt::kSide * 4) || !m_rt) return;
+    const D2D1_BITMAP_PROPERTIES props{D2D1::BitmapProperties(
+        D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), 96 * m_scale, 96 * m_scale)};
+    m_rt->CreateBitmap(D2D1::SizeU(FLNowPlayingArt::kSide, FLNowPlayingArt::kSide), art->bgra.data(),
+                       FLNowPlayingArt::kSide * 4, props, &m_artBitmap);
+  }
+
+  void DrawAlbumArt(D2D1_RECT_F dest, std::shared_ptr<FLNowPlayingArt const> const &art) {
+    EnsureArtBitmap(art);
+    if (!m_artBitmap) {
+      RoundRect(dest, 6, Colors().hover);
+      Text(L"\uE8D6", Format(false, DWRITE_FONT_WEIGHT_NORMAL, 16, DWRITE_TEXT_ALIGNMENT_CENTER, L"Segoe MDL2 Assets").Get(),
+           dest, Colors().muted);
+      return;
+    }
+    ComPtr<ID2D1BitmapBrush> brush;
+    const D2D1_BITMAP_BRUSH_PROPERTIES bp{D2D1::BitmapBrushProperties(
+        D2D1_EXTEND_MODE_CLAMP, D2D1_EXTEND_MODE_CLAMP, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR)};
+    if (FAILED(m_rt->CreateBitmapBrush(m_artBitmap.Get(), &bp, nullptr, &brush))) return;
+    const D2D1_SIZE_F size{m_artBitmap->GetSize()};
+    if (size.width <= 0 || size.height <= 0) return;
+    const float dw{dest.right - dest.left}, dh{dest.bottom - dest.top};
+    brush->SetTransform(D2D1::Matrix3x2F::Scale(dw / size.width, dh / size.height) *
+                         D2D1::Matrix3x2F::Translation(dest.left, dest.top));
+    m_rt->FillRoundedRectangle(D2D1::RoundedRect(dest, 6, 6), brush.Get());
+  }
+
   void DrawMediaStrip(FLNowPlayingTrack const &snap) {
     if (!snap.active) return;
     const float y{kHeight};
+    if (snap.art) RoundRect({0, y, kWidth, y + kMediaStrip}, 0, {snap.art->r, snap.art->g, snap.art->b}, 0.16f);
     RoundRect({kPad, y, kWidth - kPad, y + 1}, 0, Colors().border);
+    const D2D1_RECT_F art{8, y + 8, 48, y + 48};
+    DrawAlbumArt(art, snap.art);
     auto const icon{Format(false, DWRITE_FONT_WEIGHT_NORMAL, 12, DWRITE_TEXT_ALIGNMENT_CENTER, L"Segoe MDL2 Assets")};
     auto add = [&](float x, wchar_t const *glyph, int command) {
-      const D2D1_RECT_F r{x, y + 6, x + 26, y + 32};
+      const D2D1_RECT_F r{x, y + 14, x + 22, y + 36};
       if (m_hover && InRect(r, m_mouse)) RoundRect(r, 4, Colors().hover);
       Text(glyph, icon.Get(), r, Colors().text);
       m_mediaHits.push_back({r, command});
     };
-    add(8, L"\uE892", 0);
-    add(34, snap.rate > 0 ? L"\uE769" : L"\uE768", 1);
-    add(60, L"\uE893", 2);
-    std::wstring line{snap.title};
-    if (!snap.artist.empty()) line += L" \u00B7 " + snap.artist;
-    Text(line, Format(false, DWRITE_FONT_WEIGHT_MEDIUM, 11).Get(), {92, y + 4, kWidth - 58, y + 32}, Colors().text);
-    if (snap.hasDuration) {
-      Text(Countdown(FLNowPlayingRemainingS(snap, NowMs())),
-           Format(false, DWRITE_FONT_WEIGHT_MEDIUM, 11, DWRITE_TEXT_ALIGNMENT_TRAILING).Get(),
-           {kWidth - 56, y + 4, kWidth - 8, y + 32}, Colors().muted);
+    const float controls{kWidth - 8 - 70};
+    add(controls, L"\uE892", 0);
+    add(controls + 24, snap.rate > 0 ? L"\uE769" : L"\uE768", 1);
+    add(controls + 48, L"\uE893", 2);
+    const D2D1_RECT_F title{56, y + 8, controls - 6, y + 26};
+    const D2D1_RECT_F artist{56, y + 24, controls - 6, y + 42};
+    Text(snap.title, Format(false, DWRITE_FONT_WEIGHT_SEMI_BOLD, 12).Get(), title, Colors().text);
+    if (!snap.artist.empty()) {
+      Text(snap.artist, Format(false, DWRITE_FONT_WEIGHT_NORMAL, 11).Get(), artist, Colors().muted);
+    }
+    if (snap.hasDuration && snap.durationS > 0) {
+      const double remaining{FLNowPlayingRemainingS(snap, NowMs())};
+      const float t{static_cast<float>((std::clamp)((snap.durationS - remaining) / snap.durationS, 0.0, 1.0))};
+      const float x0{8}, x1{kWidth - 8}, yb{y + kMediaStrip - 5};
+      RoundRect({x0, yb, x1, yb + 2}, 1, Colors().border);
+      if (t > 0) {
+        const Rgb ink{snap.art ? Rgb{snap.art->r, snap.art->g, snap.art->b} : Colors().text};
+        RoundRect({x0, yb, x0 + (x1 - x0) * t, yb + 2}, 1, ink);
+      }
     }
   }
 
@@ -924,6 +1064,8 @@ class Window {
   HDC m_memDC{nullptr};
   HBITMAP m_dib{nullptr};
   int m_surfaceW{0}, m_surfaceH{0};
+  std::shared_ptr<FLNowPlayingArt const> m_artDrawn;
+  ComPtr<ID2D1Bitmap> m_artBitmap;
 };
 
 } // namespace Panel
@@ -935,11 +1077,12 @@ struct FLFloatingPanel {
   using JSValueObject = winrt::Microsoft::ReactNative::JSValueObject;
   template <typename T>
   using ReactPromise = winrt::Microsoft::ReactNative::ReactPromise<T>;
+  using ReactError = winrt::Microsoft::ReactNative::ReactError;
 
   ~FLFloatingPanel() noexcept {
     s_current = nullptr;
-    // Hidden when the bridge reloads, like macOS.
-    if (m_context) m_context.UIDispatcher().Post([] { Panel::Window::Instance().Hide(); });
+    // The panel HWND outlives this module (singleton). Session end calls hide(); do not hide here or a
+    // Metro reload during a session leaves the timer gone with no way to restore it from JS.
   }
 
   REACT_INIT(Initialize)
@@ -957,7 +1100,15 @@ struct FLFloatingPanel {
   REACT_METHOD(Show, L"show")
   void Show(ReactPromise<void> &&result) noexcept {
     m_context.UIDispatcher().Post([result = std::make_shared<ReactPromise<void>>(std::move(result))] {
-      Panel::Window::Instance().Show();
+      if (Panel::Window::Instance().Show()) result->Resolve();
+      else result->Reject(ReactError{"E_PANEL", "floating panel could not be created", {}});
+    });
+  }
+
+  REACT_METHOD(EnsureVisible, L"ensureVisible")
+  void EnsureVisible(ReactPromise<void> &&result) noexcept {
+    m_context.UIDispatcher().Post([result = std::make_shared<ReactPromise<void>>(std::move(result))] {
+      Panel::Window::Instance().EnsureVisible();
       result->Resolve();
     });
   }

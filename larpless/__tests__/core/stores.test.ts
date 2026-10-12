@@ -19,7 +19,7 @@ describe('appStore (AsyncStorage)', () => {
     await AsyncStorage.setItem('fl:settings', JSON.stringify({ onboarded: true, volume: 0.8 }));
     await useAppStore.getState().load();
     expect(useAppStore.getState()).toMatchObject({ loaded: true, modules: [], sessions: [] });
-    expect(useAppStore.getState().settings).toMatchObject({ onboarded: true, volume: 0.8, model: 'qwen3-vl:4b' });
+    expect(useAppStore.getState().settings).toMatchObject({ onboarded: true, volume: 0.8, model: 'qwen3-vl:2b' });
     expect(useAppStore.getState().settings.nowPlayingEnabled).toBe(true);
     expect(mockNowPlaying.enabled).toBe(true);
     expect(mockNowPlaying).not.toHaveProperty('title');

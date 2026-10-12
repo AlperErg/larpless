@@ -1,4 +1,4 @@
-import { buildMessages, buildSchema, buildSystem, NOT_STUDY, parseVerdict, SYSTEM } from '../../src/core/prompt';
+import { buildMessages, buildSchema, buildSystem, buildTitleUserText, NOT_STUDY, parseVerdict, SYSTEM } from '../../src/core/prompt';
 import { fixtureModules } from '../../src/fixtures/data';
 
 describe('prompt', () => {
@@ -6,7 +6,8 @@ describe('prompt', () => {
     const s = buildSchema(['Biology', 'Maths']);
     expect(s.properties.subject.enum).toEqual(['Biology', 'Maths', NOT_STUDY]);
     expect(s.required.sort()).toEqual(['confidence', 'studying', 'subject']);
-    expect(SYSTEM).not.toContain('"activity"');
+    expect(s.properties.activity.type).toBe('string');
+    expect(SYSTEM).toContain('Checking email');
     expect(s.properties.studying.type).toBe('boolean');
     expect(s.properties.confidence.type).toBe('number');
   });
@@ -50,9 +51,27 @@ describe('prompt', () => {
       expect(v?.moduleId).toBe('mod_maths');
     });
 
-    it('"Not study" → studying false, no module', () => {
-      const v = parseVerdict({ studying: true, subject: 'Not study', activity: 'Instagram feed', confidence: 0.95 }, fixtureModules);
-      expect(v).toEqual({ studying: false, moduleId: null, activity: '', confidence: 0.95, source: 'vlm' });
+    it('"Not study" → studying false, no module, short reason kept', () => {
+      const v = parseVerdict({ studying: true, subject: 'Not study', activity: 'Checking email', confidence: 0.95 }, fixtureModules);
+      expect(v).toEqual({ studying: false, moduleId: null, activity: 'Checking email', confidence: 0.95, source: 'vlm' });
+    });
+
+    it('drops a reason that copies the window title and caps a long one', () => {
+      const title = 'Inbox (2) - user@gmail.com - Gmail';
+      expect(parseVerdict({ studying: false, subject: 'Not study', activity: title, confidence: 0.9 }, fixtureModules, title)?.activity).toBe('');
+      expect(
+        parseVerdict(
+          { studying: false, subject: 'Not study', activity: 'word '.repeat(20), confidence: 0.9 },
+          fixtureModules,
+        )?.activity.length,
+      ).toBeLessThanOrEqual(32);
+    });
+
+    it('buildTitleUserText has no image and still names the window', () => {
+      const text = buildTitleUserText('Chrome', 'Inbox - Gmail');
+      expect(text).toContain('No screenshot');
+      expect(text).toContain('Frontmost app: Chrome');
+      expect(text).toContain('Window title: Inbox - Gmail');
     });
 
     it('module subject with studying:false → not studying', () => {

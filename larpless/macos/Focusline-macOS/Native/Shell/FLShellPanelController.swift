@@ -31,7 +31,7 @@ final class FLShellHoverTracker: NSResponder {
 final class FLShellPanelController {
   static let shared = FLShellPanelController()
   static let width: CGFloat = 300
-  static let mediaStripHeight: CGFloat = 36
+  static let mediaStripHeight: CGFloat = 56
   /// Window size: the study card (fitted to its content) plus the media strip when a track is showing.
   var currentSize: NSSize {
     NSSize(width: Self.width,
@@ -121,6 +121,20 @@ final class FLShellPanelController {
     if !userMoved || !isOnSomeScreen(p.frame) { moveToDefaultPosition() }
     p.orderFrontRegardless()
     flShellLog("[FLPanel] show frame=\(NSStringFromRect(p.frame)) visible=\(p.isVisible)")
+  }
+
+  /// Show if hidden; otherwise re-front without moving a user-placed panel.
+  func ensureVisible() {
+    guard let p = panel else {
+      show()
+      return
+    }
+    if !p.isVisible {
+      show()
+      return
+    }
+    if !isOnSomeScreen(p.frame) { moveToDefaultPosition() }
+    p.orderFrontRegardless()
   }
 
   func hide() {

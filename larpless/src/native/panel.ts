@@ -6,6 +6,7 @@ const emitter = M ? new NativeEventEmitter(M) : null;
 
 export const panel: FloatingPanelApi = {
   show: () => M.show(),
+  ensureVisible: () => (typeof M?.ensureVisible === 'function' ? M.ensureVisible() : M.show()),
   hide: () => M.hide(),
   update: state => M.update(state),
   setColorScheme: (scheme) => {

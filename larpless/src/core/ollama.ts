@@ -6,14 +6,15 @@
 import type { ScreenVerdict, StudyModule } from '../contracts/domain';
 import type { ScreenSnapshot } from '../contracts/native';
 import type { OllamaStatus } from '../contracts/store';
-import { buildMessages, buildSchema, buildSystem, extractJson, NUM_CTX, parseVerdict } from './prompt';
+import { buildMessages, buildSchema, buildSystem, buildTitleUserText, extractJson, NO_THINK_PREFILL, NUM_CTX, parseVerdict } from './prompt';
+import type { ChatMessage } from './prompt';
 
 export type OllamaHealth = Exclude<OllamaStatus, 'unknown'>;
 
 /** Minimal fetch shape we rely on (the global RN / Node fetch satisfies it). */
 export type FetchLike = (
   url: string,
-  init?: { method?: string; headers?: Record<string, string>; body?: string; signal?: AbortSignal },
+  init?: { method?: string; headers?: Record<string, string>; body?: string; signal?: AbortSignal; cache?: 'no-store' },
 ) => Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>;
 
 /** POST whose response body arrives in pieces through `onText` (Ollama's NDJSON progress). */
@@ -56,6 +57,16 @@ export interface OllamaCallOptions {
 export interface OllamaClient {
   checkHealth(): Promise<OllamaHealth>;
   classify(snapshot: ScreenSnapshot, modules: StudyModule[], call?: OllamaCallOptions): Promise<ScreenVerdict | null>;
+  /**
+   * Same model and system prompt as classify(), with no image. Windows uses this before a screenshot.
+   * The window title is passed only in the request body and is not logged.
+   */
+  classifyTitle(
+    appName: string | null,
+    windowTitle: string | null,
+    modules: StudyModule[],
+    call?: OllamaCallOptions,
+  ): Promise<ScreenVerdict | null>;
   /**
    * Load the model and process the system prompt (with `modules`) without an image, so the first
    * classify() of a session skips both. Never rejects.
@@ -151,12 +162,72 @@ export function createOllama(opts: OllamaOptions): OllamaClient {
   const warmUpTimeoutMs = opts.warmUpTimeoutMs ?? 30_000;
   const log = opts.log ?? ((line: string) => console.log(line));
 
+  // Shared chat. `tag` is "" for a screenshot and " title" for the text-only check. Titles are not logged.
+  async function ask(
+    modules: StudyModule[],
+    messages: ChatMessage[],
+    windowTitle: string | null,
+    call: OllamaCallOptions | undefined,
+    tag: string,
+    limitMs: number,
+  ): Promise<ScreenVerdict | null> {
+    const model = read(opts.model);
+    const t0 = Date.now();
+    let body: string | null = JSON.stringify({
+      model,
+      stream: false,
+      think: false,
+      keep_alive: call?.keepAlive ?? '30m',
+      options: { temperature: 0, num_ctx: NUM_CTX },
+      format: buildSchema(modules.map((m) => m.name)),
+      messages,
+    });
+    try {
+      const data = await withTimeout(limitMs, async (signal) => {
+        const res = await fetchImpl(`${trimSlash(read(opts.baseUrl))}/api/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: body!,
+          signal,
+        });
+        body = null;
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      });
+      const content = (data as { message?: { content?: unknown } } | null)?.message?.content;
+      if (typeof content !== 'string') throw new Error('no content');
+      // With the prefill Ollama no longer enforces `format`, so tolerate fences / stray text.
+      const parsed = extractJson(content);
+      if (parsed === null) throw new Error('bad json');
+      const verdict = parseVerdict(parsed, modules, windowTitle);
+      const ms = Date.now() - t0;
+      if (verdict) {
+        const label = verdict.studying
+          ? modules.find((m) => m.id === verdict.moduleId)?.name ?? '?'
+          : 'Not study';
+        log(`[ollama] ${model} ${ms} ms${tag} → ${label} (${verdict.confidence.toFixed(2)})`);
+      } else {
+        log(`[ollama] ${model} ${ms} ms${tag} → unparseable verdict`);
+      }
+      return verdict;
+    } catch (e) {
+      const ms = Date.now() - t0;
+      const why = (e as { name?: string })?.name === 'AbortError' ? 'timeout' : 'error';
+      log(`[ollama] ${model} ${ms} ms${tag} → ${why}`);
+      return null;
+    } finally {
+      body = null;
+    }
+  }
+
   return {
     async checkHealth() {
       const model = read(opts.model);
       try {
         const data = await withTimeout(healthTimeoutMs, async (signal) => {
-          const res = await fetchImpl(`${trimSlash(read(opts.baseUrl))}/api/tags`, { method: 'GET', signal });
+          // no-store: Windows caches this GET. An empty list from before the model finished
+          // downloading then sticks, and the app keeps saying the model is missing.
+          const res = await fetchImpl(`${trimSlash(read(opts.baseUrl))}/api/tags`, { method: 'GET', cache: 'no-store', signal });
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           return res.json();
         });
@@ -172,18 +243,9 @@ export function createOllama(opts: OllamaOptions): OllamaClient {
     },
 
     async classify(snapshot, modules, call) {
-      const model = read(opts.model);
-      const t0 = Date.now();
-      const keepAlive = call?.keepAlive ?? '30m';
-      // Built once; dropped in finally so the base64 copy doesn't linger.
-      let body: string | null = JSON.stringify({
-        model,
-        stream: false,
-        think: false,
-        keep_alive: keepAlive,
-        options: { temperature: 0, num_ctx: NUM_CTX },
-        format: buildSchema(modules.map((m) => m.name)),
-        messages: buildMessages({
+      return ask(
+        modules,
+        buildMessages({
           appName: snapshot.appName,
           windowTitle: snapshot.windowTitle,
           modules,
@@ -191,43 +253,26 @@ export function createOllama(opts: OllamaOptions): OllamaClient {
           // Qwen3-VL ignores think:false; the empty-think prefill skips reasoning (bench: p50 3.2 s).
           prefillNoThink: true,
         }),
-      });
-      try {
-        const data = await withTimeout(call?.timeoutMs ?? timeoutMs, async (signal) => {
-          const res = await fetchImpl(`${trimSlash(read(opts.baseUrl))}/api/chat`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: body!,
-            signal,
-          });
-          body = null;
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          return res.json();
-        });
-        const content = (data as { message?: { content?: unknown } } | null)?.message?.content;
-        if (typeof content !== 'string') throw new Error('no content');
-        // With the prefill Ollama no longer enforces `format`, so tolerate fences / stray text.
-        const parsed = extractJson(content);
-        if (parsed === null) throw new Error('bad json');
-        const verdict = parseVerdict(parsed, modules);
-        const ms = Date.now() - t0;
-        if (verdict) {
-          const label = verdict.studying
-            ? modules.find((m) => m.id === verdict.moduleId)?.name ?? '?'
-            : 'Not study';
-          log(`[ollama] ${model} ${ms} ms → ${label} (${verdict.confidence.toFixed(2)})`);
-        } else {
-          log(`[ollama] ${model} ${ms} ms → unparseable verdict`);
-        }
-        return verdict;
-      } catch (e) {
-        const ms = Date.now() - t0;
-        const why = (e as { name?: string })?.name === 'AbortError' ? 'timeout' : 'error';
-        log(`[ollama] ${model} ${ms} ms → ${why}`);
-        return null;
-      } finally {
-        body = null;
-      }
+        snapshot.windowTitle,
+        call,
+        '',
+        call?.timeoutMs ?? timeoutMs,
+      );
+    },
+
+    async classifyTitle(appName, windowTitle, modules, call) {
+      return ask(
+        modules,
+        [
+          { role: 'system', content: buildSystem(modules) },
+          { role: 'user', content: buildTitleUserText(appName, windowTitle) },
+          { role: 'assistant', content: NO_THINK_PREFILL },
+        ],
+        windowTitle,
+        call,
+        ' title',
+        call?.timeoutMs ?? 8_000,
+      );
     },
 
     async warmUp(modules, call) {
@@ -283,7 +328,7 @@ export function createOllama(opts: OllamaOptions): OllamaClient {
     async loadedModels() {
       try {
         const data = await withTimeout(healthTimeoutMs, async (signal) => {
-          const res = await fetchImpl(`${trimSlash(read(opts.baseUrl))}/api/ps`, { method: 'GET', signal });
+          const res = await fetchImpl(`${trimSlash(read(opts.baseUrl))}/api/ps`, { method: 'GET', cache: 'no-store', signal });
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           return res.json();
         });

@@ -172,6 +172,7 @@ const SOURCE_LABEL: Record<Chunk['source'], string> = {
   webcam: 'camera',
   none: '',
   user: 'edited',
+  title: 'title',
 };
 
 function ChunkHeader({ c, modules }: { c: Chunk; modules: StudyModule[] }) {

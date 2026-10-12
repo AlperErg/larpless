@@ -1,7 +1,7 @@
 /**
  * Classifier bench (WS-C). Run from larpless/:
  *
- *   node scripts/bench-classifier.ts --model qwen3-vl:4b
+ *   node scripts/bench-classifier.ts --model qwen3-vl:2b
  *   node scripts/bench-classifier.ts --model qwen3-vl:8b --no-title
  *   node scripts/bench-classifier.ts --no-prefill      # let Qwen3-VL reason first (slow)
  *   node scripts/bench-classifier.ts --clean          # delete bench/ images afterwards
@@ -33,7 +33,7 @@ const arg = (name: string, def: string): string => {
 };
 const flag = (name: string): boolean => argv.includes(`--${name}`);
 
-const MODEL = arg('model', 'qwen3-vl:4b');
+const MODEL = arg('model', 'qwen3-vl:2b');
 const OLLAMA = arg('url', 'http://127.0.0.1:11434').replace(/\/+$/, '');
 const NO_TITLE = flag('no-title');
 const NO_THINK = !flag('omit-think'); // send think:false unless --omit-think

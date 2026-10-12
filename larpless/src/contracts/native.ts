@@ -72,6 +72,8 @@ export type PanelAction =
   | { type: 'openMain' };
 export interface FloatingPanelApi {
   show(): Promise<void>;
+  /** During a live session: show if hidden, re-front if already visible (no placement reset). */
+  ensureVisible(): Promise<void>;
   hide(): Promise<void>;
   update(state: PanelState): void;                       // fire-and-forget
   /** Light or dark. `system` is resolved in JS before this is called. */

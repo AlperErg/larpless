@@ -44,7 +44,7 @@ beforeAll(() => {
 describe('Phase 0 smoke', () => {
   it('config defaults', () => {
     expect(config.USE_MOCK_NATIVE).toBe(true);
-    expect(DEFAULT_SETTINGS.model).toBe('qwen3-vl:4b');
+    expect(DEFAULT_SETTINGS.model).toBe('qwen3-vl:2b');
   });
 
   it('initial store state keeps the privacy invariant', () => {
@@ -52,7 +52,7 @@ describe('Phase 0 smoke', () => {
     expect(s.status).toBe('idle');
     expect(s.privacy.framesStored).toBe(0);
     expect(s.sound).toEqual({ id: 'off', volume: 0.5 });
-    expect(s.ollama).toEqual({ status: 'unknown', model: 'qwen3-vl:4b' });
+    expect(s.ollama).toEqual({ status: 'unknown', model: 'qwen3-vl:2b' });
     expect(useAppStore.getState().loaded).toBe(false);
   });
 

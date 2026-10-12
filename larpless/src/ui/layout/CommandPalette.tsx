@@ -18,6 +18,7 @@ import { Icon } from '../components/Icon';
 import type { IconName } from '../components/Icon';
 import { MacPressable, MacTextInput, MacView, handledKeys } from '../components/mac';
 import type { MacKeyEvent } from '../components/mac';
+import { native } from '../../native';
 import { endSession, isLive, startSession, togglePause } from '../lib/actions';
 import { colors, fonts, radius, space, themed } from '../theme';
 
@@ -69,7 +70,19 @@ export function buildCommands(ctx: {
   if (ctx.status === 'break') {
     out.push({ id: 'skip', group: 'Session', icon: 'skip', title: 'Skip break', run: () => useSessionStore.getState().skipPomodoroPhase() });
   }
-  if (live) out.push({ id: 'end', group: 'Session', icon: 'stop', title: 'End session', run: () => endSession() });
+  if (live) {
+    out.push({
+      id: 'show-timer',
+      group: 'Session',
+      icon: 'timer',
+      title: 'Show floating timer',
+      run: () => {
+        // show() always repaints. ensureVisible() is the quiet repair used by the session tick.
+        native.panel.show().catch(() => undefined);
+      },
+    });
+    out.push({ id: 'end', group: 'Session', icon: 'stop', title: 'End session', run: () => endSession() });
+  }
 
   NAV.forEach((n) => out.push({ id: `go-${n.route}`, group: 'Navigate', icon: n.icon, title: n.title, run: () => nav.go(n.route) }));
   if (ctx.hasSummary) out.push({ id: 'go-summary', group: 'Navigate', icon: 'flag', title: 'Go to last summary', run: () => nav.go('summary') });

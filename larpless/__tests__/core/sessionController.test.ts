@@ -22,7 +22,7 @@ const INITIAL: SessionStoreState = {
   pomodoro: null,
   alert: { level: 0, distractedSinceMs: null },
   sound: { id: 'off', volume: 0.5 },
-  ollama: { status: 'unknown', model: 'qwen3-vl:4b' },
+  ollama: { status: 'unknown', model: 'qwen3-vl:2b' },
   lastSummary: null,
 };
 
@@ -49,6 +49,7 @@ function setup(opts: { settings?: Partial<Settings>; native?: Partial<NativeApis
     webcam: { ...mockApis.webcam, start: webcamStart, stop: webcamStop },
     panel: {
       show: jest.fn(async () => {}),
+      ensureVisible: jest.fn(async () => {}),
       hide: jest.fn(async () => {}),
       update: jest.fn((s: PanelState) => {
         panelUpdates.push(s);
@@ -141,6 +142,7 @@ describe('toPanelState', () => {
     const base = { ...running };
     const cur = (kind: SessionStoreState['current'] extends infer C ? (C extends { kind: infer K } ? K : never) : never, activity = '') => ({ kind, moduleId: null, activity, appName: null, at: 0 });
     expect(toPanelState({ ...base, current: cur('distracted', 'Instagram'), alert: { level: 3, distractedSinceMs: 0 } }, mods)).toMatchObject({ status: 'distracted', title: 'Distracted', subtitle: 'Instagram', tint: 'red', pulse: true });
+    expect(toPanelState({ ...base, current: { kind: 'distracted', moduleId: null, activity: '', appName: 'Outlook', at: 0 } }, mods)).toMatchObject({ status: 'distracted', subtitle: 'Outlook' });
     expect(toPanelState({ ...base, current: cur('away') }, mods)).toMatchObject({ status: 'away', title: 'Away', tint: 'gray' });
     expect(toPanelState({ ...base, current: cur('unknown') }, mods)).toMatchObject({ status: 'studying', tint: 'gray' });
     expect(toPanelState({ ...base, current: cur('starting') }, mods)).toMatchObject({ status: 'studying', subtitle: 'Starting…' });
@@ -402,7 +404,7 @@ describe('sessionController', () => {
   it('refreshOllama stores the health status and model', async () => {
     const h = setup();
     await h.ctrl.refreshOllama();
-    expect(h.state.ollama).toEqual({ status: 'ok', model: 'qwen3-vl:4b' });
+    expect(h.state.ollama).toEqual({ status: 'ok', model: 'qwen3-vl:2b' });
   });
 
   it('ignores a second start while running', async () => {

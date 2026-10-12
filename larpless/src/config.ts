@@ -6,15 +6,29 @@ export const config = {
   CAPTURE: { maxWidth: 1280, jpegQuality: 0.7 }, // fallback when a caller has no power profile; live sessions use the profile
   CLASSIFY_TIMEOUT_MS: 30_000, // ceiling so a slow machine can finish; profiles change cadence, not this
   CACHE_TTL_MS: 120_000,
+  /** Set per platform in sessionStore. Off everywhere except Windows. */
+  TITLE_CHECK: false,
   WEBCAM_FPS: 1,
   SHOW_DEV_TOOLS: __DEV__,
   OLLAMA_DOWNLOAD_URL: 'https://ollama.com/download/Ollama.dmg',
   /** Shown before a model download starts; Ollama reports the real size once it begins. */
-  MODEL_SIZES: { 'qwen3-vl:4b': '3.3 GB' } as Record<string, string>,
+  MODEL_SIZES: { 'qwen3-vl:2b': '1.9 GB', 'qwen3-vl:4b': '3.3 GB' } as Record<string, string>,
 };
 
+/**
+ * Bump when the default vision model changes. A saved copy of the previous default is updated once
+ * (`cleanSettings`); a model chosen after that is left alone.
+ */
+export const MODEL_DEFAULT_REV = 2;
+
+/** Windows classifies from the window title before a screenshot. The Mac stays on the vision model. */
+export function titleCheckForOs(os: string): boolean {
+  return os === 'windows';
+}
+
 export const DEFAULT_SETTINGS: Settings = {
-  model: 'qwen3-vl:4b',
+  model: 'qwen3-vl:2b',
+  modelDefaultRev: MODEL_DEFAULT_REV,
   ollamaUrl: 'http://127.0.0.1:11434',
   strictness: 2,
   powerProfile: 'medium',

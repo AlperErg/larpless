@@ -8,12 +8,14 @@ import type { ScreenVerdict, StudyModule } from '../contracts/domain';
 
 export const NOT_STUDY = 'Not study';
 export const MAX_ACTIVITY_CHARS = 60;
+/** Short "why distracted" line on the panel. Longer model text is cut on a word. */
+export const MAX_REASON_CHARS = 32;
 
 /**
  * Context window requested from Ollama (`options.num_ctx`). The runner reserves KV memory for the
- * whole window up front (~0.14 MiB/token for qwen3-vl:4b), so the server default (often 32K = 4.6 GB)
- * wastes RAM. A request is ~2,400 tokens with the full subject library (~1,070 of them the image),
- * so 4096 leaves room for ~75 more custom courses.
+ * whole window up front (~0.14 MiB/token on qwen3-vl:4b; the 2B default is less), so the server
+ * default (often 32K, about 4.6 GB on the 4B) wastes RAM. A request is ~2,400 tokens with the full
+ * subject library (~1,070 of them the image), so 4096 leaves room for ~75 more custom courses.
  */
 export const NUM_CTX = 4096;
 
@@ -25,8 +27,9 @@ export const SYSTEM = [
   '- The window title is a strong hint; if it conflicts with the screenshot, trust the screenshot.',
   '- "confidence": 0 to 1, how certain you are that the subject you chose is correct. It is NOT the probability of studying: a clear social feed is "Not study" with confidence 0.9 or more; use low values only when you are unsure which label fits.',
   '- Do not describe the screen. The subject is the whole answer.',
+  '- When the subject is "Not study", also set "activity" to a generic 2 to 4 word reason such as "Checking email", "Watching YouTube" or "Online shopping". Never copy names, message text, subjects or the window title. When the subject is a module, leave "activity" empty.',
   '',
-  'Reply with JSON only, matching the schema: {"studying": true or false, "subject": one of the module names or "Not study", "confidence": 0.0 to 1.0}',
+  'Reply with JSON only, matching the schema: {"studying": true or false, "subject": one of the module names or "Not study", "confidence": 0.0 to 1.0, "activity": "" or a short reason}',
 ].join('\n');
 
 /**
@@ -42,6 +45,8 @@ export interface VerdictSchema {
     studying: { type: 'boolean' };
     subject: { type: 'string'; enum: string[] };
     confidence: { type: 'number' };
+    /** Optional. Only kept for "Not study"; studying verdicts drop it. */
+    activity: { type: 'string' };
   };
   required: string[];
 }
@@ -53,9 +58,38 @@ export function buildSchema(moduleNames: string[]): VerdictSchema {
       studying: { type: 'boolean' },
       subject: { type: 'string', enum: [...moduleNames, NOT_STUDY] },
       confidence: { type: 'number' },
+      activity: { type: 'string' },
     },
     required: ['studying', 'subject', 'confidence'],
   };
+}
+
+/** A distraction reason for the panel. Empty when missing, too specific, or a copy of the window title. */
+export function sanitizeReason(raw: unknown, windowTitle?: string | null): string {
+  if (typeof raw !== 'string') return '';
+  let text = raw.replace(/\s+/g, ' ').trim();
+  if (!text) return '';
+  if (text.length > MAX_REASON_CHARS) {
+    const cut = text.slice(0, MAX_REASON_CHARS);
+    const space = cut.lastIndexOf(' ');
+    text = (space >= 12 ? cut.slice(0, space) : cut).trim();
+  }
+  if (looksLikeTitle(text, windowTitle)) return '';
+  return text;
+}
+
+function looksLikeTitle(reason: string, windowTitle?: string | null): boolean {
+  const title = (windowTitle ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+  const low = reason.toLowerCase();
+  if (!title || !low) return false;
+  if (low === title) return true;
+  if (low.length >= 8 && title.includes(low)) return true;
+  if (title.length >= 12 && low.includes(title)) return true;
+  if (title.length >= 12) {
+    const slice = title.slice(0, 12);
+    if (low.includes(slice)) return true;
+  }
+  return false;
 }
 
 export interface ChatMessage {
@@ -97,6 +131,11 @@ export function buildSystem(modules: Pick<StudyModule, 'name' | 'keywords'>[]): 
 
 export function buildUserText(appName: string | null, windowTitle: string | null): string {
   return [`Frontmost app: ${appName ?? 'unknown'}`, `Window title: ${windowTitle ?? 'unknown'}`].join('\n');
+}
+
+/** Same window line as the vision prompt, without an image, so Windows can answer before a screenshot. */
+export function buildTitleUserText(appName: string | null, windowTitle: string | null): string {
+  return ['No screenshot this time. Judge from the app and window title only.', buildUserText(appName, windowTitle)].join('\n');
 }
 
 export function buildMessages({ appName, windowTitle, modules, imageBase64, prefillNoThink }: PromptInput): ChatMessage[] {
@@ -158,6 +197,7 @@ function clamp01(x: unknown): number {
 export function parseVerdict(
   raw: unknown,
   modules: Pick<StudyModule, 'id' | 'name'>[],
+  windowTitle?: string | null,
 ): ScreenVerdict | null {
   let obj: unknown = raw;
   if (typeof obj === 'string') {
@@ -171,13 +211,12 @@ export function parseVerdict(
   const r = obj as Record<string, unknown>;
   if (typeof r.subject !== 'string') return null;
 
-  // The model only picks a subject. A description costs output tokens and the UI already shows the subject.
-  const activity = '';
   const confidence = clamp01(r.confidence);
   const candidates = subjectCandidates(r.subject.trim());
 
   if (candidates.some((s) => s.toLowerCase() === NOT_STUDY.toLowerCase())) {
-    return { studying: false, moduleId: null, activity, confidence, source: 'vlm' };
+    // Studying keeps the subject name. A distraction gets a short category, never the window title.
+    return { studying: false, moduleId: null, activity: sanitizeReason(r.activity, windowTitle), confidence, source: 'vlm' };
   }
   const mod = candidates.map((s) => findModule(s, modules)).find((m) => m !== null) ?? null;
   if (!mod) return null;
@@ -186,7 +225,7 @@ export function parseVerdict(
   return {
     studying,
     moduleId: studying ? mod.id : null,
-    activity,
+    activity: studying ? '' : sanitizeReason(r.activity, windowTitle),
     confidence,
     source: 'vlm',
   };
