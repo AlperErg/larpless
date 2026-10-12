@@ -6,6 +6,7 @@ import { useGutter } from '../lib/hooks';
 import { colors, layout, motion, radius, space, tag } from '../theme';
 import { Icon } from './Icon';
 import type { IconName } from './Icon';
+import { ANIMATE, MotionView } from '../platform';
 import { Text } from './Text';
 
 export interface PageHeaderProps {
@@ -28,6 +29,10 @@ export function PageHeader({ icon, title, cover, subtitle, right, testID }: Page
 
   useEffect(() => {
     if (target === layers.over) return;
+    if (!ANIMATE) {
+      setLayers({ under: target, over: target });
+      return;
+    }
     // Cross-fade the cover to the new subject colour.
     setLayers((l) => ({ under: l.over, over: target }));
     fade.setValue(0);
@@ -43,7 +48,7 @@ export function PageHeader({ icon, title, cover, subtitle, right, testID }: Page
   return (
     <View testID={testID}>
       <View style={[styles.cover, { backgroundColor: layers.under }]}>
-        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: layers.over, opacity: fade }]} />
+        <MotionView style={[StyleSheet.absoluteFill, { backgroundColor: layers.over, opacity: ANIMATE ? fade : 1 }]} />
       </View>
       <View style={[styles.column, { paddingHorizontal: gutter }]}>
         <View style={[styles.iconTile, { backgroundColor: colors.raised, borderColor: colors.border }]}>

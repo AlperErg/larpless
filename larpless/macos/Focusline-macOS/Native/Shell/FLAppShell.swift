@@ -82,6 +82,7 @@ final class FLAppShell: RCTEventEmitter {
     DispatchQueue.main.async { MainActor.assumeIsolated { FLShellMenu.install() } }
   }
 
+
   // Touches AppKit (main menu) at init.
   override static func requiresMainQueueSetup() -> Bool { true }
   override func supportedEvents() -> [String]? { ["FLMenuCommand"] }
@@ -113,6 +114,10 @@ final class FLAppShell: RCTEventEmitter {
     Self.activity = nil
     Self.activityBeganAt = nil
     flShellLog("[FLAppShell] session activity ended")
+  }
+
+  @objc func stopOllama() {
+    FLOllama.quitNow()
   }
 
   @objc func bringToFront() {

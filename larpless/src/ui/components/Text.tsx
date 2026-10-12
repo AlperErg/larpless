@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { StyleSheet, Text as RNText } from 'react-native';
+import { Platform, StyleSheet, Text as RNText } from 'react-native';
 import type { StyleProp, TextStyle } from 'react-native';
 import { colors, fonts, themed } from '../theme';
 
@@ -59,6 +59,7 @@ export function Text({
       style={[
         base,
         family ? { fontFamily: family } : null,
+        serif && italic && Platform.OS === 'windows' ? styles.italic : null,
         muted ? styles.muted : null,
         color ? { color } : null,
         center ? styles.center : null,
@@ -88,4 +89,6 @@ const styles = themed(() => StyleSheet.create({
   small: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 17, color: colors.muted },
   muted: { color: colors.muted },
   center: { textAlign: 'center' },
+  /** Windows only: the italic face isn't a separate family there (theme.ts). */
+  italic: { fontStyle: 'italic' },
 }));

@@ -8,6 +8,7 @@ import { TextField } from '../components/TextField';
 import { Page } from '../layout/Page';
 import { errorText } from '../lib/social';
 import { colors, motion, space, tag, themed } from '../theme';
+import { DEVICE } from '../platform';
 
 type AuthScreen = 'signIn' | 'signUp';
 
@@ -69,7 +70,7 @@ export function LoginPage({ onCreateAccount }: { onCreateAccount: () => void }) 
 
   return (
     <Page testID="page-login" header={{ icon: 'key', title: 'Sign in' }}>
-      <Text muted>Share finished sessions with friends and see how they're studying. Only the stats you post leave this Mac.</Text>
+      <Text muted>{`Share finished sessions with friends and see how they're studying. Only the stats you post leave this ${DEVICE}.`}</Text>
       <View style={styles.card}>
         <Field label="Username or email" testID="login-username" value={username} onChangeText={setUsername} placeholder="e.g. ada_l" onSubmit={submit} />
         <Field label="Password" testID="login-password" value={password} onChangeText={setPassword} secure onSubmit={submit} />
@@ -115,7 +116,7 @@ export function SignupPage({ onSignIn }: { onSignIn: () => void }) {
 
   return (
     <Page testID="page-signup" header={{ icon: 'sparkles', title: 'Create account' }}>
-      <Text muted>Pick a username friends can add. Only the stats you post leave this Mac.</Text>
+      <Text muted>{`Pick a username friends can add. Only the stats you post leave this ${DEVICE}.`}</Text>
       <View style={styles.card}>
         <NameMark username={username} />
         <Field label="Username" testID="signup-username" value={username} onChangeText={setUsername} placeholder="e.g. ada_l" onSubmit={submit} />

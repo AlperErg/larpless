@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { StyleSheet, Animated, Easing, Text as RNText, View } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 import { colors, motion, radius, space, themed } from '../theme';
+import { ANIMATE, MotionView } from '../platform';
 import { MacPressable } from './mac';
 
 export interface ToggleItem {
@@ -45,6 +46,7 @@ export function ToggleRow({ item, open, onToggle }: { item: ToggleItem; open: bo
   const fade = useRef(new Animated.Value(open ? 1 : 0)).current;
 
   useEffect(() => {
+    if (!ANIMATE) return undefined;
     Animated.timing(rot, {
       toValue: open ? 1 : 0,
       duration: motion.fast,
@@ -66,8 +68,9 @@ export function ToggleRow({ item, open, onToggle }: { item: ToggleItem; open: bo
     };
   }, [open, rot, fade]);
 
-  const rotate = rot.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '90deg'] });
-  const translateY = fade.interpolate({ inputRange: [0, 1], outputRange: [-4, 0] });
+  const rotate = ANIMATE ? rot.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '90deg'] }) : open ? '90deg' : '0deg';
+  const translateY = ANIMATE ? fade.interpolate({ inputRange: [0, 1], outputRange: [-4, 0] }) : 0;
+  const bodyOpacity = ANIMATE ? fade : 1;
   const body = typeof item.body === 'function' ? (item.body as () => ReactNode)() : item.body;
 
   return (
@@ -81,13 +84,13 @@ export function ToggleRow({ item, open, onToggle }: { item: ToggleItem; open: bo
         onHoverIn={() => setHover(true)}
         onHoverOut={() => setHover(false)}
         style={[styles.row, hover ? styles.rowHover : null]}>
-        <Animated.View style={[styles.chevronBox, { transform: [{ rotate }] }]}>
+        <MotionView style={[styles.chevronBox, { transform: [{ rotate }] }]}>
           <RNText style={styles.chevron}>▸</RNText>
-        </Animated.View>
+        </MotionView>
         <View style={styles.header}>{item.header}</View>
       </MacPressable>
       {open && body != null ? (
-        <Animated.View style={[styles.body, { opacity: fade, transform: [{ translateY }] }]}>{body}</Animated.View>
+        <MotionView style={[styles.body, { opacity: bodyOpacity, transform: [{ translateY }] }]}>{body}</MotionView>
       ) : null}
     </View>
   );

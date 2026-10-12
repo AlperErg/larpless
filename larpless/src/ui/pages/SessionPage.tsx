@@ -28,6 +28,7 @@ import { formatCountdown, formatDuration, formatTime, timeAgo } from '../lib/for
 import { useNow } from '../lib/hooks';
 import { POMODORO_OPTIONS, SOUND_ICON, SOUND_LABEL, nextSound } from '../lib/labels';
 import { space } from '../theme';
+import { MOD } from '../platform';
 import { useAllModules } from '../lib/useAllModules';
 
 export function SessionPage() {
@@ -282,7 +283,7 @@ function SessionIdle() {
     <Page testID="page-session" header={{ icon: 'target', title: 'Focus session' }}>
       <Callout testID="session-empty" icon="sprout">
         <Text>
-          No session running. Start one here, from Home, or with <Strong>⌘K</Strong>.
+          No session running. Start one here, from Home, or with <Strong>{`${MOD}K`}</Strong>.
         </Text>
       </Callout>
       <View style={[styles.block, styles.buttons]}>

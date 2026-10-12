@@ -20,6 +20,7 @@ import { PageBody } from '../layout/Page';
 import { courseNameProblem, draftsFromModules, modulesFromDrafts } from '../lib/modules';
 import type { ModuleDraft } from '../lib/modules';
 import { colors, motion, radius, space, tag, themed } from '../theme';
+import { ANIMATE, DEVICE, IS_WINDOWS, MotionView } from '../platform';
 import { LIBRARY_MODULES } from '../../core/subjectLibrary';
 
 const STEPS = ['Your modules', 'Permissions', 'Ollama', 'AI model'] as const;
@@ -28,6 +29,7 @@ export function OnboardingPage() {
   const [step, setStep] = useState(0);
   const fade = useRef(new Animated.Value(1)).current;
   useEffect(() => {
+    if (!ANIMATE) return undefined;
     fade.setValue(0);
     Animated.timing(fade, { toValue: 1, duration: motion.base, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
     return () => fade.stopAnimation();
@@ -44,15 +46,15 @@ export function OnboardingPage() {
 
   return (
     <ScrollView testID="page-onboarding" style={styles.scroll} contentContainerStyle={styles.scrollContent}>
-      <PageHeader icon="hand" title="Welcome to LarpLess" subtitle={<Text muted>Strava for studying. Everything is analysed on this Mac.</Text>} />
+      <PageHeader icon="hand" title="Welcome to LarpLess" subtitle={<Text muted>{`Strava for studying. Everything is analysed on this ${DEVICE}.`}</Text>} />
       <PageBody>
         <Progress step={step} />
-        <Animated.View style={{ opacity: fade, transform: [{ translateY }] }}>
+        <MotionView style={ANIMATE ? { opacity: fade, transform: [{ translateY }] } : undefined}>
           {step === 0 ? <ModulesStep onNext={() => setStep(1)} /> : null}
           {step === 1 ? <PermissionsStep onBack={() => setStep(0)} onNext={() => setStep(2)} /> : null}
           {step === 2 ? <OllamaStep onBack={() => setStep(1)} onNext={() => setStep(3)} /> : null}
           {step === 3 ? <ModelStep onBack={() => setStep(2)} onFinish={finish} /> : null}
-        </Animated.View>
+        </MotionView>
         {config.SHOW_DEV_TOOLS ? (
           <View style={styles.devRow}>
             <Button testID="onboarding-skip" title="Skip onboarding (dev)" variant="ghost" onPress={finish} />
@@ -176,6 +178,7 @@ function PermissionsStep({ onBack, onNext }: { onBack: () => void; onNext: () =>
         Frames stay in memory and are never saved. During breaks and while you're away, nothing is captured.
       </Text>
 
+      {IS_WINDOWS ? null : (
       <PermRow
         id="screen"
         icon="monitor"
@@ -195,6 +198,7 @@ function PermissionsStep({ onBack, onNext }: { onBack: () => void; onNext: () =>
           ) : null
         }
       />
+      )}
       <PermRow
         id="camera"
         icon="camera"
@@ -310,7 +314,7 @@ function OllamaStep({ onBack, onNext }: { onBack: () => void; onNext: () => void
   let body: string;
   if (running) {
     t = { label: 'Running', color: 'green' };
-    body = local ? 'Running on this Mac.' : `Running at ${url}.`;
+    body = local ? `Running on this ${DEVICE}.` : `Running at ${url}.`;
   } else if (starting) {
     t = { label: 'Starting…', color: 'blue' };
     body = 'Opening Ollama in the background.';
@@ -325,7 +329,9 @@ function OllamaStep({ onBack, onNext }: { onBack: () => void; onNext: () => void
     body = host?.appInstalled ? 'Installed. LarpLess opens it in the background.' : 'Installed. Start it in Terminal:';
   } else {
     t = { label: 'Not installed', color: 'gray' };
-    body = 'Free, and needs no account. Open the downloaded Ollama.dmg and drag Ollama into Applications; this page notices when it’s there.';
+    body = IS_WINDOWS
+      ? 'Free, and needs no account. Install Ollama, then come back; this page notices when it’s there.'
+      : 'Free, and needs no account. Open the downloaded Ollama.dmg and drag Ollama into Applications; this page notices when it’s there.';
   }
 
   return (
@@ -334,8 +340,7 @@ function OllamaStep({ onBack, onNext }: { onBack: () => void; onNext: () => void
         Install Ollama
       </Text>
       <Text muted style={styles.lead}>
-        LarpLess reads your screen with a vision model that runs in Ollama, a free app for local AI. Nothing leaves
-        your Mac.
+        {`LarpLess reads your screen with a vision model that runs in Ollama, a free app for local AI. Nothing leaves your ${DEVICE}.`}
       </Text>
 
       <View testID="ollama-host" style={styles.permRow}>
@@ -449,12 +454,12 @@ function ModelStep({ onBack, onFinish }: { onBack: () => void; onFinish: () => v
       <Text muted style={styles.lead}>
         {`${name} looks at your screen to tell study from distraction. It’s a one-time download${
           size ? ` of about ${size}` : ''
-        }, and it runs entirely on this Mac.`}
+        }, and it runs entirely on this ${DEVICE}.`}
       </Text>
       {ok ? (
         <Callout testID="ollama-ready" icon="check" tone="green">
           <Text>
-            <Strong>{name}</Strong> is ready. Everything stays on this Mac.
+            <Strong>{name}</Strong> is ready. Everything stays on this {DEVICE}.
           </Text>
         </Callout>
       ) : ollama.status === 'modelMissing' || pulling ? (

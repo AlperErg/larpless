@@ -6,7 +6,7 @@
 
 **Strava for studying, as a native Mac app.** LarpLess watches your screen and webcam *on-device*, works out which subject you are studying or if you are distracted every 10 to 30 seconds, nudges you when you drift to Instagram on your screen or if you pick up your phone, and gives you a study session breakdown when you finish *(like Strava)*. If you want, you can then share the session stats with friends.
 
-It was built in one hackathon day with **react-native-macos**: one orchestrator ran four parallel Claude Code agents (plus a fifth for the social features), each in its own git worktree.
+It was built in one hackathon day with **react-native-macos**: one orchestrator ran four parallel Claude Code agents (plus a fifth for the social features), each in its own git worktree. It also runs on **Windows 10/11** through react-native-windows, with C++ versions of the same native modules (see [Windows](#windows)).
 
 > **Privacy first.** Frames are analysed in memory and dropped right away. Nothing is written to disk, and the only network call involving a frame goes to Ollama on `127.0.0.1`. Only labels such as "Biology, 10 s" are stored. The in-app privacy badge shows `Screenshots analysed: N · checks without a screenshot: M · stored: 0`, and on Pomodoro breaks the app stops capturing.
 
@@ -20,7 +20,7 @@ It was built in one hackathon day with **react-native-macos**: one orchestrator 
 | **Screen classification** | The frontmost app, the window title and (when needed) a screenshot go to a local vision model (`qwen3-vl:4b` via Ollama). It judges the *content*: a YouTube lecture counts as study, YouTube Shorts doesn't. |
 | **Rules + cache fast path** | Known distractions (Instagram, TikTok, Reddit, Netflix, Discord, …) are flagged from the window title alone, and an unchanged window reuses the last verdict. Most checks need no screenshot. |
 | **Power profiles** | Eco, Medium or High sets how often the screen is checked and how big the screenshot is. A session that falls behind steps down on its own, so slower Macs still get answers. |
-| **Webcam presence & phone detection** | CoreML **YOLO11n** detects whether you are there and spots a phone, at 1 fps, natively. |
+| **Webcam presence & phone detection** | **YOLO11n** detects whether you are there and spots a phone, at 1 fps. CoreML on Mac, ONNX Runtime on Windows. |
 | **Floating timer** | A SwiftUI `NSPanel` that floats over every app and Space. It shows green when you're studying, red when you're distracted, grey when you're away and blue on breaks. Hover it for Pomodoro, sound and session controls. |
 | **Now playing** | A strip under the timer shows the current song, the time left, and previous / play / next. The title is shown, never saved. |
 | **Pomodoro** | An optional study format of 25 minutes of focus and a subsequent 5 minute break or 50/10 is available. |
@@ -71,7 +71,7 @@ The classifier stops at the cheapest step that gives an answer:
 
 ### Live: what the panel shows
 
-- **Window changes:** every second the controller reads the frontmost app and title, which needs no screenshot. Once a new window has stayed in front for the profile's settle time (1 s on High, 2 s on Medium, 3 s on Eco), it is labelled straight away: within about half a second through a rule or the cache, about 3 s later through the VLM. Quick ⌘-Tabs are ignored, and a result for a window you have already left is dropped.
+- **Window changes:** every second the controller reads the frontmost app and title, which needs no screenshot. Once a new window has stayed in front for the profile's settle time (1 s on High, 2 s on Medium, 3 s on Eco), it is labelled straight away: within about half a second through a rule or the cache, about 3 s later through the VLM. Quick ⌘-Tabs (Alt-Tabs on Windows) are ignored, and a result for a window you have already left is dropped.
 - **Webcam (1 fps):** `Away` after 5 s without you, `Phone` when it shows in 2 of the last 3 samples. While you are away, no window checks or screenshots happen.
 
 ### Every chunk: what is stored
@@ -110,9 +110,10 @@ Starting a session opens Ollama in the background if it isn't running, then warm
 - **State / storage:** zustand 5, AsyncStorage 2.2.0 (pinned), date-fns 4.
 - **Native (Swift 5, macOS 14+):** ScreenCaptureKit, AVFoundation, Vision, CoreML, UserNotifications, AppKit, SwiftUI.
 - **Now playing:** a vendored [mediaremote-adapter](https://github.com/ungive/mediaremote-adapter) (BSD-3-Clause) run through `/usr/bin/perl`. Since macOS 15.4, a Developer ID app can't read MediaRemote itself.
-- **Models:** Ollama `qwen3-vl:4b` and YOLO11n CoreML (`nms=True`, bundled; presence and phone).
+- **Models:** Ollama `qwen3-vl:4b` and YOLO11n (`nms=True`, bundled; presence and phone). CoreML on Mac, ONNX Runtime on Windows.
 - **Social:** `@supabase/supabase-js` + `react-native-url-polyfill`.
 - **Website:** Vite + TypeScript in `site/`.
+- **Windows:** react-native-windows 0.81 (C++ app, Fabric, WinAppSDK 1.8). Native modules in C++/WinRT: Direct2D + DirectWrite, XAudio2, MediaCapture, ONNX Runtime, WIC, toast notifications.
 
 ## Getting started
 
@@ -134,7 +135,7 @@ It is also worth considering that performance may degrade over time for MacBook 
 ### Software Requirements
 
 - **Xcode 16.1+**.
-- **Node 20** or above.
+- **Node 22** or above.
 - **Cocoapods** (`brew install cocoapods`).
 - **CMake** (`brew install cmake`).
 - **[Ollama](https://ollama.com)** to run the vision model. Onboarding installs it and downloads the model for you (see [First launch](#first-launch)); from a terminal it's `ollama pull qwen3-vl:4b`.
@@ -200,9 +201,38 @@ Onboarding takes four steps:
 
 You can finish without Ollama or the model and set them up later: **Settings → Local AI** has the same **Open Ollama** and **Download model** buttons, and demo mode works offline. In dev builds, Settings → **Run onboarding again** shows it again.
 
+### Windows
+
+The Windows build uses the same TypeScript and the same JS ↔ native contract; only the native modules (`larpless/windows/LarpLess/Native/`) are C++ instead of Swift.
+
+**Requirements**
+
+- Windows 10/11 x64 with 16 GB of RAM or more.
+- **Visual Studio 2026** (Community is fine) with the *Desktop development with C++* and *WinUI application development* workloads, the *MSIX Packaging Tools* component and the **Windows 11 SDK 10.0.22621**.
+- **.NET SDK 10**, **Node 22** or above.
+- **Developer Mode** on and **long paths** enabled (Settings → System → For developers).
+- **[Ollama for Windows](https://ollama.com)** with `qwen3-vl:4b` pulled, as on the Mac.
+
+**Install and run.** From `larpless/`, run `npm ci`, create `src/social/env.ts` as in [Supabase Setup](#supabase-setup), then:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run-windows.ps1
+```
+
+This starts Metro on port 8081 if it isn't already running (log in `.logs/metro-8081.log`), restores the local PowerShell 7 tool the deploy step needs, then builds, deploys and launches the Debug app. The first build takes several minutes. No admin terminal is needed. Allow the camera when Windows asks; there is no Screen Recording permission on Windows.
+
+**Differences from the Mac app**
+
+- Shortcuts use **Ctrl** instead of ⌘ (Ctrl+K palette, Ctrl+Enter start, Ctrl+. end).
+- The webcam uses the same YOLO11n rules as Mac (`person` above 0.5, `cell phone` above 0.4), through ONNX Runtime instead of CoreML. Samples start once the model has loaded.
+- The main window uses Segoe UI, Georgia and Consolas, because react-native-windows can't load bundled fonts yet. The floating panel draws its own text and keeps Inter + Instrument Serif.
+- Page transitions and other `Animated` effects are off on Windows (`ANIMATE` in `src/ui/platform.ts`): react-native-windows drops the content of a re-rendered `Animated.View`. The floating panel's tint, pulse and flash animations are native and unaffected.
+- Closing the main window quits the app (the Windows convention) instead of keeping it in the background.
+- During a session the app holds a Windows power request and opts out of EcoQoS, the counterpart of disabling App Nap.
+
 ### Demo mode
 
-- **⌥-click Start** on Home, or ⌘K → *Start demo session*: replays fixture chunks through the real store and floating panel.
+- **⌥-click Start** on Home, or ⌘K (Ctrl+K on Windows) → *Start demo session*: replays fixture chunks through the real store and floating panel.
 - ⌘K → *Toggle demo fast mode*: short alert thresholds (20 s / 50 s instead of minutes). How often the screen is checked still follows the power profile.
 - `node scripts/demo-social.mjs seed`: creates demo accounts with friendships and sample posts. Also `accept`, `request <user>` and `status`.
 
@@ -265,6 +295,8 @@ cd site && npm install && npm run dev
 ```
 
 `npm run build` type-checks and writes the static site.
+
+On Windows each module is one header in `windows/LarpLess/Native/` (`REACT_MODULE` / `REACT_METHOD` / `REACT_EVENT`). Include it in `LarpLess.cpp` and add a `ClInclude` to `LarpLess.vcxproj`. Files to ship with the app go in `windows/LarpLess/Assets/` as `<None … DeploymentContent="true">` items. To rebuild without the script (Metro already running), use `npx @react-native-community/cli run-windows --no-packager --logging`. Two quirks of the bridgeless runtime: `ReactContext::JSDispatcher()` is empty, so emit events directly (that's thread-safe), and blocking `.get()` on WinRT async calls must run off the UI (STA) thread.
 
 ## Privacy
 

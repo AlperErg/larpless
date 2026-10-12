@@ -658,7 +658,9 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
         // this JS may already be gone by then.
         if (!demo) {
           await deps.classifier.unload().catch(noop);
+          // Mac quits through FLOllama. Windows has no FLOllama module, so it quits through the app shell.
           await native.ollamaHost.quit().catch(noop);
+          native.appShell.stopOllama();
         }
         native.panel.hide().catch(noop);
         native.sound.play('off').catch(noop);
