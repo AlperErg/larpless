@@ -27,11 +27,14 @@ function byTestID(r: ReactTestRenderer, id: string, prop = 'onPress'): ReactTest
   return hits[0];
 }
 
+const mounted: ReactTestRenderer[] = [];
+
 async function render(el: React.ReactElement): Promise<ReactTestRenderer> {
   let r: ReactTestRenderer;
   await act(async () => {
     r = create(el);
   });
+  mounted.push(r!);
   return r!;
 }
 
@@ -86,11 +89,14 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  jest.useRealTimers();
+  // Unmount before resetting the stores: a mounted page would re-render into the reset status
+  // (e.g. 'unconfigured' without Supabase settings) and start a fade on real timers.
   act(() => {
+    mounted.splice(0).forEach((r) => r.unmount());
     useSocialStore.setState(original, true);
     useNavStore.setState({ route: 'home', params: {}, paletteOpen: false });
   });
+  jest.useRealTimers();
 });
 
 describe('FriendsPage', () => {
