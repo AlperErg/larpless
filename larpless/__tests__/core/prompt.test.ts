@@ -129,6 +129,12 @@ describe('prompt', () => {
       expect(buildUserText('Preview', 'notes.pdf')).not.toContain('Class diagrams');
     });
 
+    it('a virtual machine is told to judge what runs inside it', () => {
+      expect(buildUserText('UTM', 'Ubuntu')).toContain('virtual machine');
+      expect(buildUserText('qemu-system-x86_64', null)).toContain('virtual machine');
+      expect(buildUserText('Preview', 'notes.pdf')).not.toContain('virtual machine');
+    });
+
     it('module subject with studying:false → not studying', () => {
       const v = parseVerdict({ studying: false, subject: 'History', activity: 'News', confidence: 0.4 }, fixtureModules);
       expect(v).toMatchObject({ studying: false, moduleId: null });

@@ -249,6 +249,35 @@ describe('classifier', () => {
     expect(shop).toMatchObject({ studying: false, activity: 'Online shopping' });
   });
 
+  it('a virtual machine is a lab unless a game or feed runs inside it', () => {
+    const coding = { id: 'lib_coding', name: 'Coding', color: 'purple' as const, keywords: ['python'] };
+    const os = { id: 'lib_os', name: 'Operating Systems', color: 'blue' as const, keywords: ['kernel', 'scheduling'] };
+    const modules = [...fixtureModules, coding, os];
+    const vm = guessStudy(
+      { studying: false, moduleId: null, activity: 'Using a virtual machine', confidence: 0.95, source: 'vlm' },
+      modules,
+      'UTM',
+      'Ubuntu 24.04',
+    );
+    expect(vm).toMatchObject({ studying: true, moduleId: 'lib_os', activity: '' });
+
+    const noOs = guessStudy(
+      { studying: false, moduleId: null, activity: 'Desktop', confidence: 0.9, source: 'vlm' },
+      [...fixtureModules, coding],
+      'VirtualBox VM',
+      'Windows 11',
+    );
+    expect(noOs).toMatchObject({ studying: true, moduleId: 'lib_coding' });
+
+    const game = guessStudy(
+      { studying: false, moduleId: null, activity: 'Playing a game', confidence: 0.95, source: 'vlm' },
+      modules,
+      'Parallels Desktop',
+      'Windows 11',
+    );
+    expect(game).toMatchObject({ studying: false, activity: 'Playing a game' });
+  });
+
   it('WhatsApp is looked at before it can be called distracted', async () => {
     const s = setup();
     s.setWin({ appName: 'WhatsApp', windowTitle: 'Group project' });

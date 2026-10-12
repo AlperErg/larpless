@@ -13,7 +13,7 @@ import type { CaptureOptions, NativeApis, ScreenSnapshot } from '../contracts/na
 import type { OllamaClient } from './ollama';
 import { BEHIND_WINDOWS } from './powerProfile';
 import type { PowerSpec } from './powerProfile';
-import { MAX_ACTIVITY_CHARS } from './prompt';
+import { MAX_ACTIVITY_CHARS, VM_APP } from './prompt';
 import { matchDistraction, matchStudyTool } from './rules';
 
 export interface ClassifierConfig {
@@ -106,6 +106,9 @@ const CHAT_LABEL = /\b(online chatting|chatting|messaging)\b/i;
 const SHOPPING_ACTIVITY = /\b(shop(?:ping)?|cart|checkout)\b/i;
 const STORE_WINDOW = /\b(amazon|ebay|etsy|shop|store|cart|checkout)\b/i;
 
+/** A reason that is a real distraction even inside a virtual machine. */
+const VM_DISTRACTION = /\b(gam(?:e|es|ing)|social|feed|video|movie|stream\w*|shop(?:ping)?|netflix|youtube|tiktok|instagram|reddit)\b/i;
+
 function echoedShopping(activity: string, appName: string | null, windowTitle: string | null): boolean {
   if (!SHOPPING_ACTIVITY.test(activity)) return false;
   return !STORE_WINDOW.test(`${appName ?? ''} ${windowTitle ?? ''}`);
@@ -113,7 +116,8 @@ function echoedShopping(activity: string, appName: string | null, windowTitle: s
 
 /**
  * Not study is a confident distraction, or it isn't. An unsure answer, or one whose reason is
- * "simulation" / a lab, becomes the closest subject instead of distracted.
+ * "simulation" / a lab, or a virtual machine with no game or feed in it, becomes the closest
+ * subject instead of distracted.
  */
 export function guessStudy(
   verdict: ScreenVerdict,
@@ -125,7 +129,8 @@ export function guessStudy(
   const blob = `${verdict.activity} ${appName ?? ''} ${windowTitle ?? ''}`;
   const chatWork = CHAT_APP.test(appName ?? '') && CHAT_WORK.test(`${verdict.activity} ${windowTitle ?? ''}`);
   const bogusShop = echoedShopping(verdict.activity, appName, windowTitle);
-  const work = WORK_ACTIVITY.test(blob) || chatWork;
+  const vm = VM_APP.test(appName ?? '') && !VM_DISTRACTION.test(verdict.activity);
+  const work = WORK_ACTIVITY.test(blob) || chatWork || vm;
   if (!work && !bogusShop && verdict.confidence >= SURE_NOT_STUDY) return verdict;
 
   const hay = lc(blob);
@@ -143,11 +148,17 @@ export function guessStudy(
   }
   const named = (name: string) => modules.find((m) => lc(m.name) === lc(name));
   const sim = /\bsimulat/i.test(blob);
-  const guessed = mentioned ?? (sim ? named('Computer Architecture') ?? named('Digital Logic') ?? named('Coding') : named('Coding')) ?? modules[0];
+  const guessed =
+    mentioned ??
+    (sim ? named('Computer Architecture') ?? named('Digital Logic') ?? named('Coding') : undefined) ??
+    (vm ? named('Operating Systems') ?? named('Cybersecurity') : undefined) ??
+    named('Coding') ??
+    modules[0];
   return {
     studying: true,
     moduleId: guessed.id,
-    activity: bogusShop || CHAT_LABEL.test(verdict.activity) ? '' : verdict.activity,
+    // A VM reason is about the box ("Using a virtual machine"), not the work; drop it like a chat label.
+    activity: bogusShop || vm || CHAT_LABEL.test(verdict.activity) ? '' : verdict.activity,
     confidence: Math.min(verdict.confidence, 0.55),
     source: verdict.source,
   };

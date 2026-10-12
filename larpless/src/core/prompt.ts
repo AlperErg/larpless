@@ -26,6 +26,7 @@ export const SYSTEM = [
   '- Code in an editor or IDE (Cursor, VS Code, Xcode, a terminal) is Coding unless the code is clearly about a more specific module (e.g. pandas or a Jupyter notebook is Data Science).',
   '- Hardware design tools are studying too: Vivado, ModelSim, QuestaSim, Quartus, GTKWave, Logisim, XSIM and their waveform or simulation views. A gate-level or FPGA lab is Digital Logic. A processor, pipeline, datapath or instruction-set assignment is Computer Architecture. Do not call these a game or "Not study".',
   '- A simulation, lab, homework or assignment is studying. "simulation" is never a reason for "Not study".',
+  '- A virtual machine (UTM, Parallels, VMware, VirtualBox, QEMU) is a coursework tool: an OS, networking or security lab. Judge what runs inside it. Another desktop, a terminal, an installer or settings inside it is studying; pick Operating Systems, Cybersecurity or Coding.',
   '- In a chat, judge the messages and attachments, not the app. Class diagrams, use case diagrams, notes, PDFs, shared documents, and a project named in the title are studying. "Online chatting" is only for a chat with no coursework in it.',
   '- Only a screen you are sure is social media, a game, shopping, entertainment video or unrelated news is "Not study". If you are not sure, guess the closest module and lower your confidence. Do not use "Not study" as the default.',
   '- Use the module keywords to pick the subject. The list covers many fields: pick the most specific module that fits (e.g. Calculus over Maths, Digital Logic over Coding). If it\'s clearly study content but matches no module, pick the closest one and lower your confidence.',
@@ -134,10 +135,16 @@ export function buildSystem(modules: Pick<StudyModule, 'name' | 'keywords'>[]): 
   return lines.join('\n');
 }
 
+/** Frontmost apps that show a whole guest desktop. Shared with the classifier's guard. */
+export const VM_APP = /\b(utm|parallels|vmware|virtualbox|qemu|hyper-v|virtual machine connection)\b/i;
+
 export function buildUserText(appName: string | null, windowTitle: string | null): string {
   const lines = [`Frontmost app: ${appName ?? 'unknown'}`, `Window title: ${windowTitle ?? 'unknown'}`];
   if (/\b(whatsapp|messenger|messages|imessage|telegram|signal)\b/i.test(appName ?? '')) {
     lines.push('This is a chat. Judge the messages and attachments, not the app. Class diagrams, use case diagrams, notes, PDFs, and project files are studying.');
+  }
+  if (VM_APP.test(appName ?? '')) {
+    lines.push('This is a virtual machine. Judge what runs inside it, not the second desktop. A guest desktop, terminal, installer or settings is studying.');
   }
   return lines.join('\n');
 }
