@@ -145,6 +145,19 @@ export interface OllamaHostApi {
   quit(): Promise<void>;
 }
 
+// ---- Keychain (secrets kept out of AsyncStorage) ----
+/**
+ * Small secrets stored outside AsyncStorage's plain JSON: the macOS Keychain (items only this app can read
+ * without asking), or on Windows a DPAPI-encrypted file. Holds the Supabase session.
+ */
+export interface KeychainApi {
+  /** null when there is no such item. */
+  getItem(key: string): Promise<string | null>;
+  setItem(key: string, value: string): Promise<void>;
+  /** No-op when there is no such item. */
+  removeItem(key: string): Promise<void>;
+}
+
 export interface NativeApis {
   screen: ScreenCaptureApi;
   permissions: PermissionsApi;
@@ -155,4 +168,5 @@ export interface NativeApis {
   appShell: AppShellApi;
   nowPlaying: NowPlayingApi;
   ollamaHost: OllamaHostApi;
+  keychain: KeychainApi;
 }

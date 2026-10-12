@@ -3,7 +3,46 @@ import 'react-native-url-polyfill/auto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import type { KeychainApi } from '../contracts/native';
+import { native } from '../native';
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from './env';
+
+type AuthStorage = Pick<KeychainApi, 'getItem' | 'setItem' | 'removeItem'>;
+
+/**
+ * Supabase's session storage: the Keychain, so the access and refresh tokens aren't plain JSON on disk.
+ * A session saved in AsyncStorage by an older build moves over on first read, so signed-in users stay
+ * signed in, and the plain copy is deleted. A Keychain error reads as signed out instead of throwing.
+ */
+export function keychainAuthStorage(keychain: AuthStorage, legacy: AuthStorage): AuthStorage {
+  return {
+    async getItem(key) {
+      let value: string | null;
+      try {
+        value = await keychain.getItem(key);
+      } catch {
+        return null;
+      }
+      if (value !== null) return value;
+      const old = await legacy.getItem(key).catch(() => null);
+      if (old === null) return null;
+      try {
+        await keychain.setItem(key, old);
+        await legacy.removeItem(key);
+      } catch {
+        // Kept in AsyncStorage until a later launch can move it.
+      }
+      return old;
+    },
+    async setItem(key, value) {
+      await keychain.setItem(key, value);
+      await legacy.removeItem(key).catch(() => {});
+    },
+    async removeItem(key) {
+      await Promise.all([keychain.removeItem(key).catch(() => {}), legacy.removeItem(key).catch(() => {})]);
+    },
+  };
+}
 
 /** Settings override. Empty means "use env.ts". A half-filled pair is ignored until both are set. */
 let runtimeUrl = '';
@@ -68,7 +107,7 @@ export function getSupabase(): SupabaseClient {
   const id = `${current.url}\n${current.key}`;
   if (!client || clientId !== id) {
     client = createClient(current.url, current.key, {
-      auth: { storage: AsyncStorage, persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
+      auth: { storage: keychainAuthStorage(native.keychain, AsyncStorage), persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
     });
     clientId = id;
   }

@@ -8,6 +8,7 @@ import { mockSound } from './sound';
 import { mockAppShell } from './appShell';
 import { mockNowPlaying } from './nowPlaying';
 import { mockOllamaHost } from './ollamaHost';
+import { mockKeychain } from './keychain';
 
 export const mockApis: NativeApis = {
   screen: mockScreen,
@@ -19,4 +20,5 @@ export const mockApis: NativeApis = {
   appShell: mockAppShell,
   nowPlaying: mockNowPlaying,
   ollamaHost: mockOllamaHost,
+  keychain: mockKeychain,
 };

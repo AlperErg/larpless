@@ -10,6 +10,7 @@ import { sound } from './sound';
 import { appShell } from './appShell';
 import { nowPlaying } from './nowPlaying';
 import { ollamaHost } from './ollamaHost';
+import { keychain } from './keychain';
 import { mockApis } from './mock';
 
 function pick<K extends keyof NativeApis>(key: K, moduleName: string, real: NativeApis[K]): NativeApis[K] {
@@ -31,4 +32,5 @@ export const native: NativeApis = {
   appShell: pick('appShell', 'FLAppShell', appShell),
   nowPlaying: pick('nowPlaying', 'FLNowPlaying', nowPlaying),
   ollamaHost: pick('ollamaHost', 'FLOllama', ollamaHost),
+  keychain: pick('keychain', 'FLKeychain', keychain),
 };
