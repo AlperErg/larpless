@@ -66,7 +66,7 @@ export function ModulesPage() {
 
   const problem = courseNameProblem(drafts);
   return (
-    <Page testID="page-modules" header={{ icon: '📚', title: 'Subjects' }}>
+    <Page testID="page-modules" header={{ icon: 'library', title: 'Subjects' }}>
       <Text muted style={styles.lead}>
         LarpLess recognises the subjects below automatically. Nothing to set up. If you want sharper labels for a
         specific course, add it here with its course code, topics or lecturer names. Built-in subject names are

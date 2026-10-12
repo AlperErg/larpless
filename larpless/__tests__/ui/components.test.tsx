@@ -91,7 +91,7 @@ describe('UI primitives', () => {
         <Tag label="Biology" color="green" selected onPress={() => {}} />
         <Button title="Start session" variant="primary" size="lg" onPress={() => {}} />
         <Button title="End" variant="danger" />
-        <Callout emoji="💡">
+        <Callout icon="lightbulb">
           <Text>Last check</Text>
         </Callout>
         <ToggleList
@@ -106,7 +106,7 @@ describe('UI primitives', () => {
         <StatusDot kind="subject" pulsing />
         <PrivacyBadge framesAnalysed={14} checksWithoutScreenshot={31} />
         <Heatmap sessions={fixtureSessions} />
-        <PageHeader icon="🎯" title="Focus session" cover="green" subtitle={<Text>sub</Text>} />
+        <PageHeader icon="target" title="Focus session" cover="green" subtitle={<Text>sub</Text>} />
         <EditableTable rows={draftsFromModules(fixtureModules)} onChange={() => {}} />
         <Segmented options={[{ value: 'off', label: 'Off' }, { value: '25/5', label: '25/5' }]} value="off" onChange={() => {}} />
         <Switch value onChange={() => {}} />

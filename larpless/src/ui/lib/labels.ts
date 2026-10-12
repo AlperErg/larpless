@@ -1,4 +1,5 @@
 import type { Appearance, PomodoroPhase, PomodoroPreset, PowerProfile, SoundId, Strictness } from '../../contracts/domain';
+import type { IconName } from '../components/Icon';
 
 export const SOUNDS: SoundId[] = ['off', 'white', 'pink', 'brown', 'rain', 'cafe'];
 
@@ -11,29 +12,29 @@ export const SOUND_LABEL: Record<SoundId, string> = {
   cafe: 'Café',
 };
 
-export const SOUND_ICON: Record<SoundId, string> = {
-  off: '🔇',
-  white: '🔈',
-  pink: '🔈',
-  brown: '🔈',
-  rain: '🌧',
-  cafe: '☕️',
+export const SOUND_ICON: Record<SoundId, IconName> = {
+  off: 'volumeOff',
+  white: 'volume',
+  pink: 'volume',
+  brown: 'volume',
+  rain: 'rain',
+  cafe: 'coffee',
 };
 
 export function nextSound(id: SoundId): SoundId {
   return SOUNDS[(SOUNDS.indexOf(id) + 1) % SOUNDS.length];
 }
 
-export const POMODORO_OPTIONS: { value: PomodoroPreset | 'off'; label: string; icon?: string }[] = [
+export const POMODORO_OPTIONS: { value: PomodoroPreset | 'off'; label: string; icon?: IconName }[] = [
   { value: 'off', label: 'Off' },
-  { value: '25/5', label: '25/5', icon: '🍅' },
-  { value: '50/10', label: '50/10', icon: '🍅' },
+  { value: '25/5', label: '25/5', icon: 'timer' },
+  { value: '50/10', label: '50/10', icon: 'timer' },
 ];
 
-export const APPEARANCE_OPTIONS: { value: Appearance; label: string }[] = [
-  { value: 'system', label: 'System' },
-  { value: 'light', label: 'Light' },
-  { value: 'dark', label: 'Dark' },
+export const APPEARANCE_OPTIONS: { value: Appearance; label: string; icon: IconName }[] = [
+  { value: 'system', label: 'System', icon: 'monitor' },
+  { value: 'light', label: 'Light', icon: 'sun' },
+  { value: 'dark', label: 'Dark', icon: 'moon' },
 ];
 
 export const POWER_OPTIONS: { value: PowerProfile; label: string }[] = [

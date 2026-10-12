@@ -3,6 +3,8 @@ import { StyleSheet, Text as RNText } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { TagColor } from '../../contracts/domain';
 import { fonts, radius, tag } from '../theme';
+import { Icon } from './Icon';
+import type { IconName } from './Icon';
 import { MacPressable, MacView } from './mac';
 
 export interface TagProps {
@@ -10,8 +12,8 @@ export interface TagProps {
   color?: TagColor;
   selected?: boolean;
   onPress?: () => void;
-  /** Leading emoji or symbol. */
-  icon?: string;
+  /** Leading stroke icon. */
+  icon?: IconName;
   tooltip?: string;
   testID?: string;
   style?: StyleProp<ViewStyle>;
@@ -22,10 +24,12 @@ export function Tag({ label, color = 'gray', selected, onPress, icon, tooltip, t
   const [hover, setHover] = useState(false);
   const tone = tag[color];
   const body = (
-    <RNText numberOfLines={1} style={[styles.label, { color: tone.text }]}>
-      {icon ? `${icon} ` : ''}
-      {label}
-    </RNText>
+    <>
+      {icon ? <Icon name={icon} size={12} color={tone.text} strokeWidth={2} /> : null}
+      <RNText numberOfLines={1} style={[styles.label, { color: tone.text }]}>
+        {label}
+      </RNText>
+    </>
   );
   const pillStyle = [
     styles.pill,
@@ -65,6 +69,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: 6,
     paddingVertical: 1,
+    gap: 4,
   },
   label: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 18 },
   hover: { opacity: 0.8 },

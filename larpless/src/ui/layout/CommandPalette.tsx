@@ -5,6 +5,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text as RNText, useColorScheme, View } from 'react-native';
+import type { ViewStyle } from 'react-native';
 import type { TextInput } from 'react-native';
 import { config } from '../../config';
 import type { SessionStatus } from '../../contracts/store';
@@ -13,6 +14,8 @@ import { useNavStore } from '../../store/navStore';
 import type { Route } from '../../store/navStore';
 import { useSessionStore } from '../../store/sessionStore';
 import { useSocialStore } from '../../store/socialStore';
+import { Icon } from '../components/Icon';
+import type { IconName } from '../components/Icon';
 import { MacPressable, MacTextInput, MacView } from '../components/mac';
 import type { HandledKey, MacKeyEvent } from '../components/mac';
 import { endSession, isLive, startSession, togglePause } from '../lib/actions';
@@ -21,19 +24,19 @@ import { colors, fonts, radius, space, themed } from '../theme';
 export interface PaletteCommand {
   id: string;
   group: 'Session' | 'Navigate' | 'Account' | 'Settings';
-  icon: string;
+  icon: IconName;
   title: string;
   hint?: string;
   run: () => void;
 }
 
-const NAV: Array<{ route: Route; icon: string; title: string }> = [
-  { route: 'home', icon: '🏠', title: 'Go to Home' },
-  { route: 'session', icon: '⏱', title: 'Go to Session' },
-  { route: 'history', icon: '🗓', title: 'Go to History' },
-  { route: 'modules', icon: '📚', title: 'Go to Modules' },
-  { route: 'feed', icon: '👥', title: 'Go to Friends' },
-  { route: 'settings', icon: '⚙️', title: 'Go to Settings' },
+const NAV: Array<{ route: Route; icon: IconName; title: string }> = [
+  { route: 'home', icon: 'home', title: 'Go to Home' },
+  { route: 'session', icon: 'timer', title: 'Go to Session' },
+  { route: 'history', icon: 'calendar', title: 'Go to History' },
+  { route: 'modules', icon: 'library', title: 'Go to Modules' },
+  { route: 'feed', icon: 'users', title: 'Go to Friends' },
+  { route: 'settings', icon: 'settings', title: 'Go to Settings' },
 ];
 
 export function buildCommands(ctx: {
@@ -51,33 +54,33 @@ export function buildCommands(ctx: {
   const out: PaletteCommand[] = [];
   const live = isLive(ctx.status);
   if (!live) {
-    out.push({ id: 'start', group: 'Session', icon: '▶︎', title: 'Start session', run: () => startSession() });
+    out.push({ id: 'start', group: 'Session', icon: 'play', title: 'Start session', run: () => startSession() });
     out.push({
       id: 'start-demo',
       group: 'Session',
-      icon: '🎬',
+      icon: 'clapperboard',
       title: 'Start demo session',
       hint: 'replays a recorded session',
       run: () => startSession({ demo: true }),
     });
   }
-  if (ctx.status === 'running') out.push({ id: 'pause', group: 'Session', icon: '⏸', title: 'Pause session', run: togglePause });
-  if (ctx.status === 'paused') out.push({ id: 'resume', group: 'Session', icon: '▶︎', title: 'Resume session', run: togglePause });
+  if (ctx.status === 'running') out.push({ id: 'pause', group: 'Session', icon: 'pause', title: 'Pause session', run: togglePause });
+  if (ctx.status === 'paused') out.push({ id: 'resume', group: 'Session', icon: 'play', title: 'Resume session', run: togglePause });
   if (ctx.status === 'break') {
-    out.push({ id: 'skip', group: 'Session', icon: '⏭', title: 'Skip break', run: () => useSessionStore.getState().skipPomodoroPhase() });
+    out.push({ id: 'skip', group: 'Session', icon: 'skip', title: 'Skip break', run: () => useSessionStore.getState().skipPomodoroPhase() });
   }
-  if (live) out.push({ id: 'end', group: 'Session', icon: '■', title: 'End session', run: () => endSession() });
+  if (live) out.push({ id: 'end', group: 'Session', icon: 'stop', title: 'End session', run: () => endSession() });
 
   NAV.forEach((n) => out.push({ id: `go-${n.route}`, group: 'Navigate', icon: n.icon, title: n.title, run: () => nav.go(n.route) }));
-  if (ctx.hasSummary) out.push({ id: 'go-summary', group: 'Navigate', icon: '🏁', title: 'Go to last summary', run: () => nav.go('summary') });
-  if (ctx.devTools) out.push({ id: 'go-dev', group: 'Navigate', icon: '🛠', title: 'Go to Dev tools', run: () => nav.go('dev') });
+  if (ctx.hasSummary) out.push({ id: 'go-summary', group: 'Navigate', icon: 'flag', title: 'Go to last summary', run: () => nav.go('summary') });
+  if (ctx.devTools) out.push({ id: 'go-dev', group: 'Navigate', icon: 'wrench', title: 'Go to Dev tools', run: () => nav.go('dev') });
 
   if (ctx.auth === 'signedOut') {
-    out.push({ id: 'sign-in', group: 'Account', icon: '🔑', title: 'Sign in', run: () => nav.go('feed', { auth: 'signIn' }) });
+    out.push({ id: 'sign-in', group: 'Account', icon: 'key', title: 'Sign in', run: () => nav.go('feed', { auth: 'signIn' }) });
     out.push({
       id: 'create-account',
       group: 'Account',
-      icon: '✨',
+      icon: 'sparkles',
       title: 'Create account',
       run: () => nav.go('feed', { auth: 'signUp' }),
     });
@@ -86,7 +89,7 @@ export function buildCommands(ctx: {
     out.push({
       id: 'sign-out',
       group: 'Account',
-      icon: '↩',
+      icon: 'logOut',
       title: 'Sign out',
       hint: ctx.username ? `@${ctx.username}` : undefined,
       run: () => {
@@ -100,7 +103,7 @@ export function buildCommands(ctx: {
   out.push({
     id: 'appearance',
     group: 'Settings',
-    icon: '🌙',
+    icon: 'moon',
     title: dark ? 'Use light mode' : 'Use dark mode',
     hint: appearance === 'system' ? 'following the system' : appearance,
     run: () => {
@@ -113,7 +116,7 @@ export function buildCommands(ctx: {
   out.push({
     id: 'demo-fast',
     group: 'Settings',
-    icon: '⚡️',
+    icon: 'zap',
     title: 'Toggle demo fast mode',
     hint: ctx.demoFast ? 'on' : 'off',
     run: () => {
@@ -195,7 +198,7 @@ function PaletteOverlay() {
   let lastGroup = '';
   return (
     <View testID="palette" style={[StyleSheet.absoluteFill, styles.overlay]}>
-      <Pressable testID="palette-backdrop" accessibilityLabel="Close palette" style={[StyleSheet.absoluteFill, styles.backdrop]} onPress={close} />
+      <Pressable testID="palette-backdrop" accessibilityLabel="Close palette" style={[StyleSheet.absoluteFill, styles.backdrop, styles.pointer]} onPress={close} />
       <View style={styles.cardWrap} pointerEvents="box-none">
         {/* Escape anywhere in the card; the input's own keys stop propagating (onKeyDown bubbles in JS). */}
         <MacView
@@ -205,7 +208,9 @@ function PaletteOverlay() {
             if (e.nativeEvent.key === 'Escape') close();
           }}>
           <View style={styles.inputRow}>
-            <RNText style={styles.searchIcon}>🔍</RNText>
+            <View style={styles.searchIcon}>
+              <Icon name="search" size={16} color={colors.muted} />
+            </View>
             <MacTextInput
               ref={inputRef}
               testID="palette-input"
@@ -249,7 +254,9 @@ function PaletteOverlay() {
                     onHoverIn={() => setSel(i)}
                     onPress={() => runAt(i)}
                     style={[styles.row, i === selected ? styles.rowSelected : null]}>
-                    <RNText style={styles.rowIcon}>{c.icon}</RNText>
+                    <View style={styles.rowIcon}>
+                      <Icon name={c.icon} size={16} color={colors.muted} />
+                    </View>
                     <RNText numberOfLines={1} style={styles.rowTitle}>
                       {c.title}
                     </RNText>
@@ -271,6 +278,7 @@ function PaletteOverlay() {
 const styles = themed(() => StyleSheet.create({
   overlay: { zIndex: 100 },
   backdrop: { backgroundColor: colors.backdrop },
+  pointer: { cursor: 'pointer' } as ViewStyle,
   cardWrap: { position: 'absolute', top: '20%', left: 0, right: 0, alignItems: 'center' },
   card: {
     width: 560,
@@ -293,7 +301,7 @@ const styles = themed(() => StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
-  searchIcon: { fontSize: 15, marginRight: space.sm },
+  searchIcon: { marginRight: space.sm },
   input: {
     flex: 1,
     fontFamily: fonts.regular,
@@ -321,7 +329,7 @@ const styles = themed(() => StyleSheet.create({
     borderRadius: radius,
   },
   rowSelected: { backgroundColor: colors.hover },
-  rowIcon: { width: 24, fontSize: 14 },
+  rowIcon: { width: 24, alignItems: 'center' },
   rowTitle: { flex: 1, fontFamily: fonts.regular, fontSize: 14, color: colors.text },
   rowHint: { fontFamily: fonts.regular, fontSize: 12, color: colors.faint, marginLeft: space.sm },
   empty: { fontFamily: fonts.regular, fontSize: 14, color: colors.muted, padding: space.md },

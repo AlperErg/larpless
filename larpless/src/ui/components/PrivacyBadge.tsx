@@ -1,6 +1,7 @@
 import { StyleSheet, Text as RNText, View } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 import { colors, fonts, radius, space, themed } from '../theme';
+import { Icon } from './Icon';
 
 export interface PrivacyBadgeProps {
   framesAnalysed: number;
@@ -11,15 +12,16 @@ export interface PrivacyBadgeProps {
   style?: StyleProp<ViewStyle>;
 }
 
-/** "🔒 Screenshots analysed: N · checks without a screenshot: M · stored: 0" */
+/** "Screenshots analysed: N · checks without a screenshot: M · stored: 0" */
 export function PrivacyBadge({ framesAnalysed, checksWithoutScreenshot, framesStored = 0, testID, style }: PrivacyBadgeProps) {
   return (
     <View
       testID={testID}
       accessibilityLabel={`Screenshots analysed ${framesAnalysed}, checks without a screenshot ${checksWithoutScreenshot}, stored ${framesStored}`}
       style={[styles.badge, style]}>
+      <Icon name="lock" size={13} color={colors.muted} />
       <RNText style={styles.text}>
-        🔒 Screenshots analysed: <RNText style={styles.num}>{framesAnalysed}</RNText>
+        Screenshots analysed: <RNText style={styles.num}>{framesAnalysed}</RNText>
         {' · '}checks without a screenshot: <RNText style={styles.num}>{checksWithoutScreenshot}</RNText>
         {' · '}stored: <RNText style={styles.num}>{framesStored}</RNText>
       </RNText>
@@ -30,6 +32,9 @@ export function PrivacyBadge({ framesAnalysed, checksWithoutScreenshot, framesSt
 const styles = themed(() => StyleSheet.create({
   badge: {
     alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     borderRadius: radius,

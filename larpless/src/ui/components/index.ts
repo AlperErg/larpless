@@ -1,5 +1,7 @@
 export { Text, Strong, Muted } from './Text';
 export type { TextProps, TextVariant, TextWeight } from './Text';
+export { Icon } from './Icon';
+export type { IconName } from './Icon';
 export { Tag } from './Tag';
 export { Button } from './Button';
 export { Callout } from './Callout';

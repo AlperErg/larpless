@@ -78,25 +78,25 @@ export function relookBreakdown(entries: BreakdownEntry[], modules: StudyModule[
 export interface ChunkLook {
   label: string;
   color: TagColor;
-  emoji: string;
+  icon: 'book' | 'phone' | 'ban' | 'footprints' | 'help';
 }
 
 export function lookChunk(c: Pick<Chunk, 'kind' | 'moduleId' | 'reason'>, modules: StudyModule[]): ChunkLook {
   switch (c.kind) {
     case 'subject': {
       const m = lookModule(modules, c.moduleId);
-      return { label: m.name, color: m.color, emoji: '📖' };
+      return { label: m.name, color: m.color, icon: 'book' };
     }
     case 'distracted':
       return {
         label: 'Distracted',
         color: 'red',
-        emoji: c.reason === 'phone' ? '📱' : '🚫',
+        icon: c.reason === 'phone' ? 'phone' : 'ban',
       };
     case 'away':
-      return { label: 'Away', color: 'gray', emoji: '🚶' };
+      return { label: 'Away', color: 'gray', icon: 'footprints' };
     default:
-      return { label: 'Unknown', color: 'gray', emoji: '❔' };
+      return { label: 'Unknown', color: 'gray', icon: 'help' };
   }
 }
 

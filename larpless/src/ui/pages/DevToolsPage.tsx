@@ -42,8 +42,8 @@ export function DevToolsPage() {
   const setPaletteOpen = useNavStore((s) => s.setPaletteOpen);
 
   return (
-    <Page testID="page-dev" header={{ icon: '🛠', title: 'Dev tools' }}>
-      <Callout emoji="🧪">
+    <Page testID="page-dev" header={{ icon: 'wrench', title: 'Dev tools' }}>
+      <Callout icon="flask">
         <Text>
           Fixtures load a store snapshot (plus fixture modules and history). Store actions are no-ops until WS-C
           lands. Mock native: <Strong>{String(config.USE_MOCK_NATIVE)}</Strong>.

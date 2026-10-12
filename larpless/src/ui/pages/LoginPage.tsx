@@ -35,8 +35,8 @@ export function AuthGate() {
 
   if (status === 'unconfigured') {
     return (
-      <Page testID="page-login" header={{ icon: '👥', title: 'Friends' }}>
-        <Callout emoji="⚠️" tone="orange">
+      <Page testID="page-login" header={{ icon: 'users', title: 'Friends' }}>
+        <Callout icon="alert" tone="orange">
           <Text>Supabase isn't configured. Add the project URL and anon key to src/social/env.ts.</Text>
         </Callout>
       </Page>
@@ -68,7 +68,7 @@ export function LoginPage({ onCreateAccount }: { onCreateAccount: () => void }) 
   };
 
   return (
-    <Page testID="page-login" header={{ icon: '🔑', title: 'Sign in' }}>
+    <Page testID="page-login" header={{ icon: 'key', title: 'Sign in' }}>
       <Text muted>Share finished sessions with friends and see how they're studying. Only the stats you post leave this Mac.</Text>
       <View style={styles.card}>
         <Field label="Username or email" testID="login-username" value={username} onChangeText={setUsername} placeholder="e.g. ada_l" onSubmit={submit} />
@@ -114,7 +114,7 @@ export function SignupPage({ onSignIn }: { onSignIn: () => void }) {
   };
 
   return (
-    <Page testID="page-signup" header={{ icon: '✨', title: 'Create account' }}>
+    <Page testID="page-signup" header={{ icon: 'sparkles', title: 'Create account' }}>
       <Text muted>Pick a username friends can add. Only the stats you post leave this Mac.</Text>
       <View style={styles.card}>
         <NameMark username={username} />

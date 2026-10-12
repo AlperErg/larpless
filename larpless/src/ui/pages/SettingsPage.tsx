@@ -79,9 +79,9 @@ export function SettingsPage() {
   const ol = ollamaLine(ollama.status, ollama.model, pull);
 
   return (
-    <Page testID="page-settings" header={{ icon: '⚙️', title: 'Settings' }}>
+    <Page testID="page-settings" header={{ icon: 'settings', title: 'Settings' }}>
       <SectionTitle>Appearance</SectionTitle>
-      <Row label="Theme" hint="System follows the display. Dark is warm paper on near-black.">
+      <Row label="Theme" hint="Dark mode, light mode, or follow the system.">
         <Segmented
           testID="settings-appearance"
           options={APPEARANCE_OPTIONS}
@@ -121,7 +121,7 @@ export function SettingsPage() {
             <Text color={tag[ol.color].text}>● </Text>
             {ol.text}
           </Text>
-          <Button title={checking ? 'Checking…' : 'Retry'} icon="↻" variant="ghost" disabled={checking} onPress={retry} />
+          <Button title={checking ? 'Checking…' : 'Retry'} icon="refresh" variant="ghost" disabled={checking} onPress={retry} />
           {ollama.status === 'down' && local && host?.appInstalled ? (
             <Button
               testID="settings-open-ollama"
@@ -202,7 +202,7 @@ export function SettingsPage() {
         <>
           <SectionTitle>Developer</SectionTitle>
           <View style={styles.inline}>
-            <Button testID="settings-devtools" title="Dev tools" icon="🛠" variant="secondary" onPress={() => go('dev')} />
+            <Button testID="settings-devtools" title="Dev tools" icon="wrench" variant="secondary" onPress={() => go('dev')} />
             <Button title="Run onboarding again" variant="ghost" onPress={() => go('onboarding')} style={styles.gapLeft} />
           </View>
         </>

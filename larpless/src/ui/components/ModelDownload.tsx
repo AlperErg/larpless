@@ -42,7 +42,7 @@ export function ModelDownload({ testID = 'model-download' }: { testID?: string }
         <Button
           testID={`${testID}-start`}
           title={pull.status === 'error' ? 'Try again' : 'Download model'}
-          icon="↓"
+          icon="download"
           variant="primary"
           onPress={() => {
             pullModel().catch(() => {});

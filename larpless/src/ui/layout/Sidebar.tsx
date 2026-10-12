@@ -3,32 +3,37 @@ import type { ReactNode } from 'react';
 import { StyleSheet, Text as RNText, View } from 'react-native';
 import { config } from '../../config';
 import type { ModelPull, OllamaStatus, SessionStatus } from '../../contracts/store';
+import { useAppStore } from '../../store/appStore';
 import { useNavStore } from '../../store/navStore';
 import type { Route } from '../../store/navStore';
 import { useOllamaStore } from '../../store/ollamaStore';
 import { useSessionStore } from '../../store/sessionStore';
+import { Icon } from '../components/Icon';
+import type { IconName } from '../components/Icon';
+import { Segmented } from '../components/Segmented';
 import { MacPressable } from '../components/mac';
 import { StatusDot } from '../components/StatusDot';
 import type { DotKind } from '../components/StatusDot';
+import { APPEARANCE_OPTIONS } from '../lib/labels';
 import { colors, fonts, layout, radius, space, tag, themed } from '../theme';
 import type { TagColor } from '../../contracts/domain';
 
 interface NavItem {
   route: Route;
-  icon: string;
+  icon: IconName;
   label: string;
 }
 
 const ITEMS: NavItem[] = [
-  { route: 'home', icon: '🏠', label: 'Home' },
-  { route: 'session', icon: '⏱', label: 'Session' },
-  { route: 'modules', icon: '📚', label: 'Modules' },
-  { route: 'history', icon: '🗓', label: 'History' },
-  { route: 'feed', icon: '👥', label: 'Friends' },
-  { route: 'settings', icon: '⚙️', label: 'Settings' },
+  { route: 'home', icon: 'home', label: 'Home' },
+  { route: 'session', icon: 'timer', label: 'Session' },
+  { route: 'modules', icon: 'library', label: 'Modules' },
+  { route: 'history', icon: 'calendar', label: 'History' },
+  { route: 'feed', icon: 'users', label: 'Friends' },
+  { route: 'settings', icon: 'settings', label: 'Settings' },
 ];
 
-const DEV_ITEM: NavItem = { route: 'dev', icon: '🛠', label: 'Dev tools' };
+const DEV_ITEM: NavItem = { route: 'dev', icon: 'wrench', label: 'Dev tools' };
 
 export function sessionDot(status: SessionStatus): { kind: DotKind; pulsing: boolean } | null {
   switch (status) {
@@ -71,17 +76,19 @@ export function Sidebar() {
   const dot = sessionDot(status);
   const items = config.SHOW_DEV_TOOLS ? [...ITEMS, DEV_ITEM] : ITEMS;
   const ol = ollamaLine(ollama.status, ollama.model, pull);
+  const appearance = useAppStore((s) => s.settings.appearance);
+  const updateSettings = useAppStore((s) => s.updateSettings);
 
   return (
     <View testID="sidebar" style={styles.sidebar}>
       <View style={styles.workspace}>
         <View style={styles.wsIcon}>
-          <RNText style={styles.wsEmoji}>🎯</RNText>
+          <Icon name="target" size={14} color={tag.red.text} />
         </View>
         <RNText style={styles.wsName}>LarpLess</RNText>
       </View>
 
-      <SidebarRow testID="nav-search" onPress={() => setPaletteOpen(true)} icon="🔍" label="Search" trailing={<RNText style={styles.kbd}>⌘K</RNText>} />
+      <SidebarRow testID="nav-search" onPress={() => setPaletteOpen(true)} icon="search" label="Search" trailing={<RNText style={styles.kbd}>⌘K</RNText>} />
       <View style={styles.gap} />
 
       {items.map((it) => (
@@ -101,6 +108,18 @@ export function Sidebar() {
       ))}
 
       <View style={styles.flex} />
+
+      <View style={styles.theme}>
+        <RNText style={styles.themeLabel}>Theme</RNText>
+        <Segmented
+          testID="sidebar-appearance"
+          options={APPEARANCE_OPTIONS}
+          value={appearance}
+          onChange={(v) => {
+            updateSettings({ appearance: v }).catch(() => {});
+          }}
+        />
+      </View>
 
       <MacPressable
         testID="ollama-status"
@@ -127,7 +146,7 @@ function SidebarRow({
   trailing,
   testID,
 }: {
-  icon: string;
+  icon: IconName;
   label: string;
   active?: boolean;
   onPress: () => void;
@@ -145,7 +164,9 @@ function SidebarRow({
       onHoverIn={() => setHover(true)}
       onHoverOut={() => setHover(false)}
       style={[styles.row, active ? styles.rowActive : hover ? styles.rowHover : null]}>
-      <RNText style={styles.rowIcon}>{icon}</RNText>
+      <View style={styles.rowIcon}>
+        <Icon name={icon} size={16} color={active ? colors.text : colors.muted} />
+      </View>
       <RNText numberOfLines={1} style={[styles.rowLabel, active ? styles.rowLabelActive : null]}>
         {label}
       </RNText>
@@ -174,25 +195,32 @@ const styles = themed(() => StyleSheet.create({
     justifyContent: 'center',
     marginRight: space.sm,
   },
-  wsEmoji: { fontSize: 13, lineHeight: 16 },
   wsName: { fontFamily: fonts.semibold, fontSize: 14, color: colors.text },
   gap: { height: space.sm },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 28,
+    height: 34,
     paddingHorizontal: space.sm,
     borderRadius: radius,
     marginBottom: 1,
   },
   rowHover: { backgroundColor: colors.hover },
   rowActive: { backgroundColor: colors.accentSoft },
-  rowIcon: { width: 22, fontSize: 14, lineHeight: 18 },
+  rowIcon: { width: 22, alignItems: 'center', justifyContent: 'center' },
   rowLabel: { flex: 1, fontFamily: fonts.medium, fontSize: 14, lineHeight: 18, color: colors.muted },
   rowLabelActive: { fontFamily: fonts.semibold, color: colors.text },
   trailing: { marginLeft: space.xs, alignItems: 'center', justifyContent: 'center' },
   kbd: { fontFamily: fonts.regular, fontSize: 11, color: colors.faint },
   flex: { flex: 1 },
+  theme: { paddingHorizontal: 2, paddingBottom: space.sm },
+  themeLabel: {
+    fontFamily: fonts.medium,
+    fontSize: 11,
+    color: colors.faint,
+    paddingHorizontal: space.sm,
+    marginBottom: 4,
+  },
   ollama: { paddingHorizontal: space.sm, paddingVertical: space.xs + 2, borderRadius: radius },
   ollamaText: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16, color: colors.muted },
 }));

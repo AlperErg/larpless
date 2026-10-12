@@ -218,7 +218,7 @@ export const space = {
   xxxl: 48,
 } as const;
 
-export const radius = 8;
+export const radius = 10;
 
 export const motion = { fast: 140, base: 180, slow: 240 } as const;
 
@@ -226,7 +226,7 @@ export const layout = {
   sidebarWidth: 240,
   contentMaxWidth: 900,
   contentPadding: 48,
-  coverHeight: 72,
+  coverHeight: 48,
   controlHeight: 32,
 } as const;
 

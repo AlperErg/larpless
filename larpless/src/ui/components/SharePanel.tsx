@@ -36,7 +36,7 @@ export function SharePanel({ summary, breakdown, focusPct, style }: SharePanelPr
 
   if (status === 'signedOut') {
     return (
-      <Callout testID="share-signin" emoji="👥" style={style}>
+      <Callout testID="share-signin" icon="users" style={style}>
         <Text>Sign in to share this session with your friends.</Text>
         <Button title="Sign in" variant="secondary" onPress={() => go('feed')} style={styles.calloutButton} />
       </Callout>
@@ -45,7 +45,7 @@ export function SharePanel({ summary, breakdown, focusPct, style }: SharePanelPr
 
   if (posted) {
     return (
-      <Callout testID="share-posted" emoji="✅" tone="green" style={style}>
+      <Callout testID="share-posted" icon="check" tone="green" style={style}>
         <Text>Posted to your friends' feed.</Text>
         <Button title="View feed" variant="secondary" onPress={() => go('feed')} style={styles.calloutButton} />
       </Callout>
@@ -80,7 +80,7 @@ export function SharePanel({ summary, breakdown, focusPct, style }: SharePanelPr
         <Button
           testID="share-post"
           title={busy ? 'Posting…' : 'Post to friends'}
-          icon="📤"
+          icon="upload"
           variant="primary"
           disabled={busy}
           onPress={post}

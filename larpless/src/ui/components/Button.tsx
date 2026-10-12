@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { StyleSheet, Text as RNText } from 'react-native';
 import type { GestureResponderEvent, StyleProp, ViewStyle } from 'react-native';
 import { colors, fonts, layout, radius, tag } from '../theme';
+import { Icon } from './Icon';
+import type { IconName } from './Icon';
 import { MacPressable } from './mac';
 
 export type ButtonVariant = 'primary' | 'ghost' | 'danger' | 'secondary';
@@ -12,7 +14,7 @@ export interface ButtonProps {
   onPress?: (e: GestureResponderEvent) => void;
   variant?: ButtonVariant;
   size?: ButtonSize;
-  icon?: string;
+  icon?: IconName;
   disabled?: boolean;
   tooltip?: string;
   testID?: string;
@@ -54,8 +56,8 @@ export function Button({
         disabled ? styles.disabled : null,
         style,
       ]}>
+      {icon ? <Icon name={icon} size={size === 'lg' ? 16 : 15} color={v.text} /> : null}
       <RNText numberOfLines={1} style={[styles.label, size === 'lg' ? styles.labelLg : null, { color: v.text }]}>
-        {icon ? `${icon}  ` : ''}
         {title}
       </RNText>
     </MacPressable>
@@ -81,6 +83,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'flex-start',
+    gap: 8,
   },
   lg: { height: 40, paddingHorizontal: 18 },
   label: { fontFamily: fonts.medium, fontSize: 14, lineHeight: 18 },

@@ -65,8 +65,8 @@ export function SummaryPage() {
 
   if (!summary) {
     return (
-      <Page testID="page-summary" header={{ icon: '🏁', title: 'Summary' }}>
-        <Callout testID="summary-empty" emoji="🌱">
+      <Page testID="page-summary" header={{ icon: 'flag', title: 'Summary' }}>
+        <Callout testID="summary-empty" icon="sprout">
           <Text>No finished session yet. Start one and its summary lands here.</Text>
         </Callout>
         <Button title="Go home" variant="secondary" onPress={() => go('home')} style={styles.block} />
@@ -87,7 +87,7 @@ export function SummaryPage() {
     <Page
       testID="page-summary"
       header={{
-        icon: '🏁',
+        icon: 'flag',
         title: 'Session complete',
         cover: top?.color ?? null,
         subtitle: (

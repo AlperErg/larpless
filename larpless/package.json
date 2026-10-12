@@ -13,9 +13,11 @@
     "@react-native-async-storage/async-storage": "2.2.0",
     "@supabase/supabase-js": "^2.117.3",
     "date-fns": "^4.4.0",
+    "lucide-react-native": "^1.55.0",
     "react": "19.1.4",
     "react-native": "0.81.6",
     "react-native-macos": "^0.81.9",
+    "react-native-svg": "^15.15.5",
     "react-native-url-polyfill": "^4.0.0",
     "zustand": "^5.0.15"
   },

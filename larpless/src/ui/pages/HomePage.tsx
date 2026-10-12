@@ -5,13 +5,13 @@ import type { PomodoroPreset } from '../../contracts/domain';
 import { useAppStore } from '../../store/appStore';
 import { useNavStore } from '../../store/navStore';
 import { useSessionStore } from '../../store/sessionStore';
-import { Button, Callout, Heatmap, Segmented, Strong, Text, ToggleList, isAltPress, sessionToggleItem } from '../components';
+import { Button, Callout, Heatmap, Icon, Segmented, Strong, Text, ToggleList, isAltPress, sessionToggleItem } from '../components';
 import { Page } from '../layout/Page';
 import { isLive, startSession } from '../lib/actions';
 import { streakDays } from '../lib/derive';
 import { formatDuration, greeting } from '../lib/format';
 import { POMODORO_OPTIONS } from '../lib/labels';
-import { space } from '../theme';
+import { colors, space } from '../theme';
 import { useAllModules } from '../lib/useAllModules';
 
 const RECENT = 7;
@@ -40,9 +40,9 @@ export function HomePage() {
   return (
     <Page
       testID="page-home"
-      header={{ icon: '🎯', title: 'LarpLess', subtitle: <Text muted>{`${greeting(now)}. Ready when you are.`}</Text> }}>
+      header={{ icon: 'target', title: 'LarpLess', subtitle: <Text muted>{`${greeting(now)}. Ready when you are.`}</Text> }}>
       {live ? (
-        <Callout testID="home-live" emoji="⏱" tone="green">
+        <Callout testID="home-live" icon="timer" tone="green">
           <View style={styles.liveRow}>
             <Text style={styles.flex}>
               A session is {status === 'break' ? 'on a break' : status === 'paused' ? 'paused' : 'running'}.
@@ -56,7 +56,7 @@ export function HomePage() {
             <Button
               testID="start-session"
               title="Start session"
-              icon="▶︎"
+              icon="play"
               variant="primary"
               size="lg"
               tooltip="⌥-click for a demo session"
@@ -86,9 +86,12 @@ export function HomePage() {
 
       <View style={styles.section}>
         <View style={styles.streakRow}>
-          <Text variant="h2" testID="streak">
-            {streak > 0 ? `🔥 ${streak}-day streak` : '🔥 No streak yet'}
-          </Text>
+          <View style={styles.streakTitle}>
+            <Icon name="flame" size={18} color={colors.text} />
+            <Text variant="h2" testID="streak">
+              {streak > 0 ? `${streak}-day streak` : 'No streak yet'}
+            </Text>
+          </View>
           <Text muted style={styles.week}>
             This week: <Strong>{formatDuration(weekS)}</Strong>
           </Text>
@@ -103,7 +106,7 @@ export function HomePage() {
         {recent.length ? (
           <ToggleList testID="recent-sessions" items={recent.map((s) => sessionToggleItem(s, modules, (id) => go('summary', { sessionId: id })))} />
         ) : (
-          <Callout testID="home-empty" emoji="🌱">
+          <Callout testID="home-empty" icon="sprout">
             <Text>No sessions yet. Your first one will show up here.</Text>
           </Callout>
         )}
@@ -125,6 +128,7 @@ const styles = StyleSheet.create({
   block: { marginTop: space.lg },
   section: { marginTop: space.xxl },
   streakRow: { flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap' },
+  streakTitle: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   week: { marginLeft: space.lg },
   heatmap: { marginTop: space.md },
   h3: { marginBottom: space.sm },

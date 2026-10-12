@@ -14,7 +14,8 @@ import { useAppStore } from '../../store/appStore';
 import { useNavStore } from '../../store/navStore';
 import { useOllamaStore } from '../../store/ollamaStore';
 import { useSessionStore } from '../../store/sessionStore';
-import { Button, Callout, CodeBlock, EditableTable, ModelDownload, Muted, SubjectLibrary, PageHeader, Strong, Tag, Text } from '../components';
+import { Button, Callout, CodeBlock, EditableTable, Icon, ModelDownload, Muted, SubjectLibrary, PageHeader, Strong, Tag, Text } from '../components';
+import type { IconName } from '../components';
 import { PageBody } from '../layout/Page';
 import { courseNameProblem, draftsFromModules, modulesFromDrafts } from '../lib/modules';
 import type { ModuleDraft } from '../lib/modules';
@@ -43,7 +44,7 @@ export function OnboardingPage() {
 
   return (
     <ScrollView testID="page-onboarding" style={styles.scroll} contentContainerStyle={styles.scrollContent}>
-      <PageHeader icon="👋" title="Welcome to LarpLess" subtitle={<Text muted>Strava for studying. Everything is analysed on this Mac.</Text>} />
+      <PageHeader icon="hand" title="Welcome to LarpLess" subtitle={<Text muted>Strava for studying. Everything is analysed on this Mac.</Text>} />
       <PageBody>
         <Progress step={step} />
         <Animated.View style={{ opacity: fade, transform: [{ translateY }] }}>
@@ -177,7 +178,7 @@ function PermissionsStep({ onBack, onNext }: { onBack: () => void; onNext: () =>
 
       <PermRow
         id="screen"
-        icon="🖥"
+        icon="monitor"
         title="Screen Recording"
         body="Reads the frontmost window to tell study from distraction."
         status={perm?.screen ?? null}
@@ -196,7 +197,7 @@ function PermissionsStep({ onBack, onNext }: { onBack: () => void; onNext: () =>
       />
       <PermRow
         id="camera"
-        icon="📷"
+        icon="camera"
         title="Camera"
         body="Notices when you step away or pick up your phone. Optional."
         status={perm?.camera ?? null}
@@ -205,7 +206,7 @@ function PermissionsStep({ onBack, onNext }: { onBack: () => void; onNext: () =>
       />
       <PermRow
         id="notifications"
-        icon="🔔"
+        icon="bell"
         title="Notifications"
         body="A gentle nudge when you drift off for a few minutes."
         status={notif}
@@ -236,7 +237,7 @@ function PermRow({
   extra,
 }: {
   id: string;
-  icon: string;
+  icon: IconName;
   title: string;
   body: string;
   status: PermissionStatus | null;
@@ -248,7 +249,9 @@ function PermRow({
   return (
     <View testID={`perm-${id}`} style={styles.permRow}>
       <View style={styles.permMain}>
-        <Text style={styles.permIcon}>{icon}</Text>
+        <View style={styles.permIcon}>
+          <Icon name={icon} size={18} color={colors.text} />
+        </View>
         <View style={styles.flex}>
           <View style={styles.permTitleRow}>
             <Text weight="semibold">{title}</Text>
@@ -337,7 +340,9 @@ function OllamaStep({ onBack, onNext }: { onBack: () => void; onNext: () => void
 
       <View testID="ollama-host" style={styles.permRow}>
         <View style={styles.permMain}>
-          <Text style={styles.permIcon}>🦙</Text>
+          <View style={styles.permIcon}>
+            <Icon name="bot" size={18} color={colors.text} />
+          </View>
           <View style={styles.flex}>
             <View style={styles.permTitleRow}>
               <Text weight="semibold">Ollama</Text>
@@ -349,7 +354,7 @@ function OllamaStep({ onBack, onNext }: { onBack: () => void; onNext: () => void
             <Button
               testID="ollama-download"
               title="Download Ollama"
-              icon="↓"
+              icon="download"
               variant="secondary"
               onPress={() => {
                 Linking.openURL(config.OLLAMA_DOWNLOAD_URL).catch(() => {});
@@ -387,9 +392,10 @@ function MemoryNote() {
   const prepare = useOllamaStore((s) => s.prepare);
   if (host?.promptCache === 'off') {
     return (
-      <Text testID="ollama-memory" variant="small" style={styles.permExtra}>
-        ✓ Memory saver on: Ollama runs without its 8 GB prompt cache.
-      </Text>
+      <View testID="ollama-memory" style={[styles.permExtra, styles.memoryOn]}>
+        <Icon name="check" size={14} color={colors.muted} />
+        <Text variant="small">Memory saver on: Ollama runs without its 8 GB prompt cache.</Text>
+      </View>
     );
   }
   if (host?.promptCache !== 'default') return null;
@@ -446,7 +452,7 @@ function ModelStep({ onBack, onFinish }: { onBack: () => void; onFinish: () => v
         }, and it runs entirely on this Mac.`}
       </Text>
       {ok ? (
-        <Callout testID="ollama-ready" emoji="🟢" tone="green">
+        <Callout testID="ollama-ready" icon="check" tone="green">
           <Text>
             <Strong>{name}</Strong> is ready. Everything stays on this Mac.
           </Text>
@@ -454,7 +460,7 @@ function ModelStep({ onBack, onFinish }: { onBack: () => void; onFinish: () => v
       ) : ollama.status === 'modelMissing' || pulling ? (
         <ModelDownload testID="ollama-pull" />
       ) : ollama.status === 'down' ? (
-        <Callout testID="ollama-down" emoji="🔴" tone="red">
+        <Callout testID="ollama-down" icon="alert" tone="red">
           <Text>Ollama isn’t running, so the model can’t download yet. Go back a step to start it.</Text>
         </Callout>
       ) : (
@@ -497,7 +503,7 @@ const styles = themed(() => StyleSheet.create({
     marginBottom: space.sm,
   },
   permMain: { flexDirection: 'row', alignItems: 'center' },
-  permIcon: { fontSize: 22, lineHeight: 28, marginRight: space.md },
+  permIcon: { width: 28, marginRight: space.md, alignItems: 'center' },
   permTitleRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 2 },
   permButtons: { flexDirection: 'row', marginLeft: space.md },
   relaunch: {
@@ -509,6 +515,7 @@ const styles = themed(() => StyleSheet.create({
     borderTopColor: colors.border,
   },
   permExtra: { marginTop: space.sm },
+  memoryOn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   codeGap: { marginTop: space.xs },
   stepLabel: { marginTop: space.lg, marginBottom: space.xs },
 }));

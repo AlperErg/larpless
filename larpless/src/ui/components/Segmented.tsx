@@ -2,12 +2,13 @@ import { StyleSheet, View } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { TagColor } from '../../contracts/domain';
 import { space } from '../theme';
+import type { IconName } from './Icon';
 import { Tag } from './Tag';
 
 export interface SegmentedOption<T extends string | number> {
   value: T;
   label: string;
-  icon?: string;
+  icon?: IconName;
 }
 
 export interface SegmentedProps<T extends string | number> {

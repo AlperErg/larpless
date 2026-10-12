@@ -20,9 +20,9 @@ export function HistoryPage() {
   const open = (id: string) => go('summary', { sessionId: id });
 
   return (
-    <Page testID="page-history" header={{ icon: '🗓', title: 'History' }}>
+    <Page testID="page-history" header={{ icon: 'calendar', title: 'History' }}>
       {sessions.length === 0 ? (
-        <Callout testID="history-empty" emoji="🌱">
+        <Callout testID="history-empty" icon="sprout">
           <Text>Nothing here yet. Finish a session and it shows up, grouped by week.</Text>
         </Callout>
       ) : (

@@ -4,6 +4,8 @@ import type { StyleProp, ViewStyle } from 'react-native';
 import { colors, fonts, radius, space, themed } from '../theme';
 import type { ModuleDraft } from '../lib/modules';
 import { blankDraft, nextTagColor } from '../lib/modules';
+import { Icon } from './Icon';
+import type { IconName } from './Icon';
 import { MacPressable, MacTextInput, MacView } from './mac';
 import { Tag } from './Tag';
 
@@ -29,9 +31,9 @@ export function EditableTable({ rows, onChange, onCommit, testID, style }: Edita
   return (
     <View testID={testID} style={[styles.table, style]}>
       <View style={[styles.row, styles.headerRow]}>
-        <HeaderCell icon="Aa" label="Name" style={styles.colName} />
-        <HeaderCell icon="◎" label="Colour" style={styles.colColor} />
-        <HeaderCell icon="≡" label="Keywords" style={styles.colKeywords} last />
+        <HeaderCell icon="type" label="Name" style={styles.colName} />
+        <HeaderCell icon="palette" label="Colour" style={styles.colColor} />
+        <HeaderCell icon="list" label="Keywords" style={styles.colKeywords} last />
       </View>
       {rows.map((r) => (
         <Row
@@ -52,14 +54,11 @@ export function EditableTable({ rows, onChange, onCommit, testID, style }: Edita
   );
 }
 
-function HeaderCell({ icon, label, style, last }: { icon: string; label: string; style: StyleProp<ViewStyle>; last?: boolean }) {
+function HeaderCell({ icon, label, style, last }: { icon: IconName; label: string; style: StyleProp<ViewStyle>; last?: boolean }) {
   return (
-    <View style={[styles.cell, last ? null : styles.cellDivider, style]}>
-      <RNText style={styles.headerText}>
-        <RNText style={styles.headerIcon}>{icon}</RNText>
-        {'  '}
-        {label}
-      </RNText>
+    <View style={[styles.cell, styles.headerCell, last ? null : styles.cellDivider, style]}>
+      <Icon name={icon} size={13} color={colors.faint} />
+      <RNText style={styles.headerText}>{label}</RNText>
     </View>
   );
 }
@@ -127,7 +126,7 @@ function Row({
           enableFocusRing={false}
           onPress={onRemove}
           style={[styles.remove, hover ? null : styles.invisible]}>
-          <RNText style={styles.removeText}>×</RNText>
+          <Icon name="trash" size={14} color={colors.muted} />
         </MacPressable>
       </View>
     </MacView>
@@ -145,7 +144,10 @@ function NewRow({ onPress }: { onPress: () => void }) {
       onHoverIn={() => setHover(true)}
       onHoverOut={() => setHover(false)}
       style={[styles.newRow, hover ? styles.rowHover : null]}>
-      <RNText style={styles.newText}>＋ New</RNText>
+      <View style={styles.newInner}>
+        <Icon name="plus" size={14} color={colors.faint} />
+        <RNText style={styles.newText}>New</RNText>
+      </View>
     </MacPressable>
   );
 }
@@ -171,8 +173,8 @@ const styles = themed(() => StyleSheet.create({
   colKeywords: { flex: 1 },
   colorCell: { alignItems: 'flex-start' },
   keywordsCell: { flexDirection: 'row', alignItems: 'center' },
+  headerCell: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   headerText: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18, color: colors.muted },
-  headerIcon: { fontFamily: fonts.medium, fontSize: 11, color: colors.faint },
   input: {
     fontFamily: fonts.regular,
     fontSize: 14,
@@ -186,8 +188,8 @@ const styles = themed(() => StyleSheet.create({
   inputName: { fontFamily: fonts.medium },
   flex: { flex: 1 },
   remove: { width: 22, height: 22, borderRadius: radius, alignItems: 'center', justifyContent: 'center' },
-  removeText: { fontSize: 16, lineHeight: 18, color: colors.muted },
   invisible: { opacity: 0 },
   newRow: { height: 32, justifyContent: 'center', paddingHorizontal: space.sm },
+  newInner: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   newText: { fontFamily: fonts.regular, fontSize: 14, color: colors.faint },
 }));

@@ -39,7 +39,7 @@ export function FriendsPage() {
 
   if (status === 'loading') {
     return (
-      <Page testID="page-friends" header={{ icon: '👥', title: 'Friends' }}>
+      <Page testID="page-friends" header={{ icon: 'users', title: 'Friends' }}>
         <Text muted>Loading…</Text>
       </Page>
     );
@@ -50,7 +50,7 @@ export function FriendsPage() {
     <Page
       testID="page-friends"
       header={{
-        icon: '👥',
+        icon: 'users',
         title: 'Friends',
         subtitle: <Text variant="small">{profile ? `Signed in as @${profile.username}` : 'Signed in'}</Text>,
         right: (
@@ -62,11 +62,11 @@ export function FriendsPage() {
         value={tab}
         onChange={setTab}
         options={[
-          { value: 'feed', label: 'Feed', icon: '📰' },
+          { value: 'feed', label: 'Feed', icon: 'newspaper' },
           {
             value: 'friends',
             label: incoming ? `Friends · ${incoming} new` : friendCount ? `Friends (${friendCount})` : 'Friends',
-            icon: '🤝',
+            icon: 'handshake',
           },
         ]}
       />
@@ -90,7 +90,7 @@ function FeedTab({ onAddFriends }: { onAddFriends: () => void }) {
         <Button
           testID="feed-refresh"
           title={refreshing ? 'Refreshing…' : 'Refresh'}
-          icon="↻"
+          icon="refresh"
           variant="secondary"
           disabled={refreshing}
           onPress={() => refresh().catch(() => {})}
@@ -103,7 +103,7 @@ function FeedTab({ onAddFriends }: { onAddFriends: () => void }) {
           {offline ? "Couldn't load the feed." : 'Loading the feed…'}
         </Text>
       ) : feed.length === 0 ? (
-        <Callout testID="feed-empty" emoji="🌱" style={styles.block}>
+        <Callout testID="feed-empty" icon="sprout" style={styles.block}>
           <Text>
             {friendCount
               ? 'No posts yet. Finish a session and hit "Post to friends" on the summary.'

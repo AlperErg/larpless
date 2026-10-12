@@ -2,6 +2,7 @@ import { StyleSheet, View } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 import { SUBJECT_GROUPS } from '../../core/subjectLibrary';
 import { space } from '../theme';
+import type { IconName } from './Icon';
 import { Tag } from './Tag';
 import { Text } from './Text';
 
@@ -25,7 +26,7 @@ export function SubjectLibrary({ testID, style }: SubjectLibraryProps) {
                 key={s.name}
                 testID={`subject-${s.name}`}
                 label={s.name}
-                icon={s.emoji}
+                icon={s.icon as IconName}
                 color={s.color}
                 tooltip={s.keywords.join(', ')}
                 style={styles.tag}

@@ -37,7 +37,7 @@ export class ErrorBoundary extends Component<Props, State> {
     if (this.state.error) {
       return (
         <View style={styles.box}>
-          <Callout emoji="🧯" tone="red">
+          <Callout icon="shieldAlert" tone="red">
             <Text weight="semibold">This page hit a snag.</Text>
             <Text variant="small">{String(this.state.error.message)}</Text>
           </Callout>

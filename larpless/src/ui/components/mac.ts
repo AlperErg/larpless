@@ -6,14 +6,18 @@
  * serves react-native-macos, which supports them. These aliases are the same components,
  * re-typed with the extra props.
  */
+import { createElement, forwardRef } from 'react';
 import type { ComponentType, RefAttributes } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
 import type {
   GestureResponderEvent,
   NativeSyntheticEvent,
   PressableProps,
+  PressableStateCallbackType,
+  StyleProp,
   TextInputProps,
   ViewProps,
+  ViewStyle,
 } from 'react-native';
 
 export interface MacKeyEventData {
@@ -50,8 +54,44 @@ export type MacPressableProps = PressableProps & MacOnlyProps;
 export type MacTextInputProps = TextInputProps & MacOnlyProps;
 
 export const MacView = View as unknown as ComponentType<MacViewProps & RefAttributes<View>>;
-export const MacPressable = Pressable as unknown as ComponentType<MacPressableProps & RefAttributes<View>>;
-export const MacTextInput = TextInput as unknown as ComponentType<MacTextInputProps & RefAttributes<TextInput>>;
+
+type CursorName = 'default' | 'pointer' | 'text';
+
+/** react-native core types omit `cursor`; macOS and Windows Fabric both honour it on the style. */
+function cursorStyle(cursor: CursorName): ViewStyle {
+  return { cursor } as ViewStyle;
+}
+
+function pressableStyle(
+  style: StyleProp<ViewStyle> | ((state: PressableStateCallbackType) => StyleProp<ViewStyle>) | undefined,
+  cursor: CursorName,
+): MacPressableProps['style'] {
+  const extra = cursorStyle(cursor);
+  if (typeof style === 'function') {
+    return (state) => [extra, style(state)];
+  }
+  return [extra, style];
+}
+
+/** Clickable rows, buttons, and chips. The pointer cursor is the affordance that the control does something. */
+export const MacPressable = forwardRef<View, MacPressableProps>(function MacPressable(props, ref) {
+  const { style, disabled, ...rest } = props;
+  return createElement(Pressable, {
+    ...rest,
+    ref,
+    disabled,
+    style: pressableStyle(style, disabled ? 'default' : 'pointer'),
+  });
+});
+
+export const MacTextInput = forwardRef<TextInput, MacTextInputProps>(function MacTextInput(props, ref) {
+  const { style, ...rest } = props;
+  return createElement(TextInput, {
+    ...rest,
+    ref,
+    style: [cursorStyle('text'), style],
+  });
+});
 
 /** macOS press events carry modifier flags on the native event. */
 export function isAltPress(e: GestureResponderEvent | undefined | null): boolean {

@@ -46,7 +46,7 @@ export function PostCard({ post, mine, testID, style }: PostCardProps) {
         <Text variant="small" style={styles.flex} numberOfLines={1}>
           {formatDistanceToNow(post.createdAt, { addSuffix: true })}
         </Text>
-        {post.streak > 0 ? <Tag icon="🔥" label={`${post.streak} day${post.streak === 1 ? '' : 's'}`} color="orange" /> : null}
+        {post.streak > 0 ? <Tag icon="flame" label={`${post.streak} day${post.streak === 1 ? '' : 's'}`} color="orange" /> : null}
       </View>
 
       {post.caption ? <Text style={styles.caption}>{post.caption}</Text> : null}
