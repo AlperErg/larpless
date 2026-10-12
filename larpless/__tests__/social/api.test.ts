@@ -201,4 +201,37 @@ describe('posts', () => {
     expect(feed[0].breakdown[0]).toMatchObject({ label: 'Maths', color: 'blue', pct: 70 });
     expect(f.opsFor('posts')).toContainEqual(['order', ['created_at', { ascending: false }]]);
   });
+
+  it('drops malformed breakdown entries from a friend’s post instead of passing them to the UI', () => {
+    const row = {
+      id: 'p1',
+      user_id: THEM,
+      local_session_id: 's9',
+      total_s: 60,
+      focus_pct: 50,
+      pomodoros: 0,
+      streak: 0,
+      caption: null,
+      started_at: '2026-10-09T13:00:00Z',
+      created_at: '2026-10-09T13:30:00Z',
+      profiles: { username: 'them' },
+    };
+    const post = api.toFeedPost({
+      ...row,
+      breakdown: [
+        { label: 'Maths', color: 'nope', seconds: 30, pct: 150 },
+        { label: { x: 1 }, color: 'blue', seconds: 30, pct: 50 },
+        { label: 'Art', color: 'blue', seconds: -1, pct: 50 },
+        { label: 'Art', color: 'blue', seconds: 30, pct: 'x' },
+        null,
+        'Maths',
+        ...Array.from({ length: 30 }, (_, i) => ({ label: `S${i}`, color: 'green', seconds: 1, pct: -5 })),
+      ],
+    });
+    expect(post.breakdown[0]).toEqual({ key: '0:Maths', label: 'Maths', color: 'gray', seconds: 30, pct: 100 });
+    expect(post.breakdown).toHaveLength(1 + (api.MAX_BREAKDOWN - 6));
+    expect(post.breakdown.every((e) => typeof e.label === 'string' && e.pct >= 0 && e.pct <= 100)).toBe(true);
+    expect(api.toFeedPost({ ...row, breakdown: { label: 'Maths' } }).breakdown).toEqual([]);
+    expect(api.toFeedPost({ ...row, breakdown: null }).breakdown).toEqual([]);
+  });
 });

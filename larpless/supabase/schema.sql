@@ -114,6 +114,30 @@ create table if not exists public.posts (
 
 create index if not exists posts_created_at_idx on public.posts (created_at desc);
 
+-- Friends' clients render the breakdown, so only well-formed entries in the tag palette get in
+-- (src/social/api.ts MAX_BREAKDOWN). Not valid: rows already stored aren't re-checked.
+create or replace function public.valid_breakdown(b jsonb)
+returns boolean
+language sql
+immutable
+as $$
+  select case
+    when jsonb_typeof(b) <> 'array' then false
+    when jsonb_array_length(b) > 20 then false
+    else not exists (
+      select 1 from jsonb_array_elements(b) e
+      where jsonb_typeof(e) is distinct from 'object'
+        or jsonb_typeof(e -> 'label') is distinct from 'string'
+        or coalesce(e ->> 'color', '') not in ('gray', 'brown', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'red')
+        or jsonb_typeof(e -> 'seconds') is distinct from 'number'
+        or jsonb_typeof(e -> 'pct') is distinct from 'number'
+    )
+  end
+$$;
+
+alter table public.posts drop constraint if exists posts_breakdown_valid;
+alter table public.posts add constraint posts_breakdown_valid check (public.valid_breakdown(breakdown)) not valid;
+
 alter table public.posts enable row level security;
 
 drop policy if exists "posts visible to author and friends" on public.posts;

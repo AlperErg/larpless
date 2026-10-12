@@ -22,7 +22,7 @@ export interface TagProps {
 /** Notion pill: tag bg + tag text, 12 px Medium, radius 4, padding 2×6. `selected` adds a 1 px ring. */
 export function Tag({ label, color = 'gray', selected, onPress, icon, tooltip, testID, style }: TagProps) {
   const [hover, setHover] = useState(false);
-  const tone = tag[color];
+  const tone = tag[color] ?? tag.gray;
   const body = (
     <>
       {icon ? <Icon name={icon} size={12} color={tone.text} strokeWidth={2} /> : null}

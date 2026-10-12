@@ -68,7 +68,7 @@ function Segment({ entry, last }: { entry: BreakdownEntry; last: boolean }) {
       testID={`segment-${entry.key}`}
       style={[
         styles.segment,
-        { width, backgroundColor: tag[entry.color].text },
+        { width, backgroundColor: (tag[entry.color] ?? tag.gray).text },
         last ? null : styles.separator,
       ]}
     />

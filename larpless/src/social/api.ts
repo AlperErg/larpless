@@ -53,6 +53,9 @@ export interface PublishInput {
 export const USERNAME_RE = /^[a-z0-9_]{3,20}$/;
 export const MIN_PASSWORD = 6;
 export const MAX_CAPTION = 280;
+/** Most subjects a post's breakdown carries. supabase/schema.sql enforces the same cap. */
+export const MAX_BREAKDOWN = 20;
+const TAG_COLORS: readonly TagColor[] = ['gray', 'brown', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'red'];
 const EMAIL_DOMAIN = 'larpless.local';
 /** Accounts created before the rebrand. Username sign-in still accepts them. */
 const LEGACY_EMAIL_DOMAIN = 'focusline.local';
@@ -210,7 +213,8 @@ interface PostRow {
   focus_pct: number;
   pomodoros: number;
   streak: number;
-  breakdown: { label: string; color: TagColor; seconds: number; pct: number }[] | null;
+  /** Written by other people's clients: may hold anything, so it is checked in toFeedPost(). */
+  breakdown: unknown;
   caption: string | null;
   started_at: string;
   created_at: string;
@@ -226,7 +230,7 @@ export function postPayload(myId: string, input: PublishInput) {
     focus_pct: Math.round(input.focusPct),
     pomodoros: input.summary.pomodoros,
     streak: input.streak,
-    breakdown: input.breakdown.map((e) => ({ label: e.label, color: e.color, seconds: Math.round(e.seconds), pct: e.pct })),
+    breakdown: input.breakdown.slice(0, MAX_BREAKDOWN).map((e) => ({ label: e.label, color: e.color, seconds: Math.round(e.seconds), pct: e.pct })),
     caption: caption || null,
     started_at: new Date(input.summary.startedAt).toISOString(),
   };
@@ -236,6 +240,26 @@ export function postPayload(myId: string, input: PublishInput) {
 export async function publishSession(client: SupabaseClient, myId: string, input: PublishInput): Promise<void> {
   const { error } = await client.from('posts').insert(postPayload(myId, input));
   if (error && error.code !== UNIQUE_VIOLATION) throw new SocialError(error.message);
+}
+
+/** Keeps only well-formed entries, so one friend's bad post can't break the feed. */
+function cleanBreakdown(raw: unknown): BreakdownEntry[] {
+  if (!Array.isArray(raw)) return [];
+  const out: BreakdownEntry[] = [];
+  for (const e of raw.slice(0, MAX_BREAKDOWN)) {
+    if (!e || typeof e !== 'object') continue;
+    const { label, color, seconds, pct } = e as Record<string, unknown>;
+    if (typeof label !== 'string' || typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds < 0) continue;
+    if (typeof pct !== 'number' || !Number.isFinite(pct)) continue;
+    out.push({
+      key: `${out.length}:${label}`,
+      label,
+      color: TAG_COLORS.includes(color as TagColor) ? (color as TagColor) : 'gray',
+      seconds,
+      pct: Math.min(100, Math.max(0, pct)),
+    });
+  }
+  return out;
 }
 
 export function toFeedPost(r: PostRow): FeedPost {
@@ -248,8 +272,8 @@ export function toFeedPost(r: PostRow): FeedPost {
     focusPct: r.focus_pct,
     pomodoros: r.pomodoros,
     streak: r.streak,
-    breakdown: (r.breakdown ?? []).map((e, i) => ({ key: `${i}:${e.label}`, ...e })),
-    caption: r.caption,
+    breakdown: cleanBreakdown(r.breakdown),
+    caption: typeof r.caption === 'string' ? r.caption : null,
     startedAt: Date.parse(r.started_at),
     createdAt: Date.parse(r.created_at),
   };

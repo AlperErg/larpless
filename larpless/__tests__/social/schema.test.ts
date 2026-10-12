@@ -290,7 +290,7 @@ describe('posts', () => {
     expect(await changed(as('alice', 'delete from public.posts where user_id = $1', [ids.alice]))).toBe(1);
   });
 
-  it('rejects out-of-range stats, long captions and a non-array breakdown', async () => {
+  it('rejects out-of-range stats, long captions and a malformed breakdown', async () => {
     const bad: Record<string, unknown>[] = [
       { focus_pct: 101 },
       { focus_pct: -1 },
@@ -299,6 +299,12 @@ describe('posts', () => {
       { streak: -1 },
       { caption: 'x'.repeat(281) },
       { breakdown: { label: 'Maths' } },
+      { breakdown: [{ label: 'Maths', color: 'nope', seconds: 30, pct: 50 }] },
+      { breakdown: [{ label: { x: 1 }, color: 'blue', seconds: 30, pct: 50 }] },
+      { breakdown: [{ label: 'Maths', color: 'blue', seconds: '30', pct: 50 }] },
+      { breakdown: [{ label: 'Maths', color: 'blue', seconds: 30 }] },
+      { breakdown: ['Maths'] },
+      { breakdown: Array.from({ length: 21 }, (_, i) => ({ label: `S${i}`, color: 'blue', seconds: 1, pct: 1 })) },
     ];
     for (const patch of bad) {
       await expect(insertAs('alice', 'posts', { ...postRow('alice'), ...patch })).rejects.toMatchObject({ code: '23514' });

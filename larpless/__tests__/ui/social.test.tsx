@@ -1,6 +1,7 @@
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import type { BreakdownEntry, SessionSummary } from '../../src/contracts/domain';
+import * as api from '../../src/social/api';
 import type { FeedPost, FriendLists } from '../../src/social/api';
 import { useNavStore } from '../../src/store/navStore';
 import { useSocialStore } from '../../src/store/socialStore';
@@ -166,6 +167,34 @@ describe('FriendsPage', () => {
     expect(t).toContain('Physics');
     expect(t).toContain('Mock exam done');
     expect(t).toContain('Offline');
+  });
+
+  it('a friend’s malformed post still renders alongside the others', async () => {
+    const bad = api.toFeedPost({
+      id: 'p2',
+      user_id: 'u3',
+      local_session_id: 's2',
+      total_s: 60,
+      focus_pct: 50,
+      pomodoros: 0,
+      streak: 0,
+      breakdown: [
+        { label: 'Maths', color: 'nope', seconds: 30, pct: 50 },
+        { label: { x: 1 }, color: 'blue', seconds: 30, pct: 50 },
+      ],
+      caption: 'bad post',
+      started_at: '2026-10-09T13:00:00Z',
+      created_at: '2026-10-09T13:30:00Z',
+      profiles: { username: 'mallory' },
+    });
+    act(() => signedIn({ feed: [bad, friendPost], lists: { ...noLists, friends: [] } }));
+    const r = await render(<FriendsPage />);
+    const t = textOf(r);
+    expect(t).not.toContain('hit a snag');
+    expect(t).toContain('@mallory');
+    expect(t).toContain('Maths');
+    expect(t).toContain('@grace');
+    expect(t).toContain('Physics');
   });
 
   it('shows the empty state and incoming requests with Accept', async () => {
