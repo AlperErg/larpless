@@ -1,0 +1,6 @@
+# Netlify's base directory is site/. Build with Vite and publish its output:
+# public/ (home.webp, og.png…) is only copied to the web root by the build,
+# and src/main.ts must be compiled before the browser can run it.
+[build]
+  command = "npm run build"
+  publish = "dist"
