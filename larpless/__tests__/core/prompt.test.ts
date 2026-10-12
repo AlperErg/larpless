@@ -4,6 +4,7 @@ import {
   buildSchema,
   buildSystem,
   buildTitleUserText,
+  buildUserText,
   NOT_STUDY,
   parseVerdict,
   SYSTEM,
@@ -119,6 +120,13 @@ describe('prompt', () => {
       expect(text).toContain('No screenshot');
       expect(text).toContain('Frontmost app: Chrome');
       expect(text).toContain('Window title: Inbox - Gmail');
+    });
+
+    it('a chat app is told to judge the attachments', () => {
+      const text = buildUserText('WhatsApp', 'info management project');
+      expect(text).toContain('Class diagrams');
+      expect(text).toContain('not the app');
+      expect(buildUserText('Preview', 'notes.pdf')).not.toContain('Class diagrams');
     });
 
     it('module subject with studying:false → not studying', () => {

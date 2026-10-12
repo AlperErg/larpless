@@ -97,6 +97,19 @@ export const SURE_NOT_STUDY = 0.8;
 
 /** Coursework the model keeps misreading as a distraction reason. */
 const WORK_ACTIVITY = /\b(simulat\w*|lab|homework|assignment|coursework|problem set|waveform)\b/i;
+/** A chat about schoolwork. The window title is only read here, never stored. */
+const CHAT_APP = /\b(whatsapp|messenger|messages|imessage|telegram|signal)\b/i;
+const CHAT_WORK = /\b(group project|project|assignment|homework|coursework|lecture|exam|lab|diagram)\b/i;
+/** A generic chat label. Dropped when the chat is actually schoolwork, so the panel does not keep it. */
+const CHAT_LABEL = /\b(online chatting|chatting|messaging)\b/i;
+/** The small model copies "Online shopping" onto screens that are not a store. */
+const SHOPPING_ACTIVITY = /\b(shop(?:ping)?|cart|checkout)\b/i;
+const STORE_WINDOW = /\b(amazon|ebay|etsy|shop|store|cart|checkout)\b/i;
+
+function echoedShopping(activity: string, appName: string | null, windowTitle: string | null): boolean {
+  if (!SHOPPING_ACTIVITY.test(activity)) return false;
+  return !STORE_WINDOW.test(`${appName ?? ''} ${windowTitle ?? ''}`);
+}
 
 /**
  * Not study is a confident distraction, or it isn't. An unsure answer, or one whose reason is
@@ -110,23 +123,31 @@ export function guessStudy(
 ): ScreenVerdict {
   if (verdict.studying || verdict.source === 'rule' || modules.length === 0) return verdict;
   const blob = `${verdict.activity} ${appName ?? ''} ${windowTitle ?? ''}`;
-  const work = WORK_ACTIVITY.test(blob);
-  if (!work && verdict.confidence >= SURE_NOT_STUDY) return verdict;
+  const chatWork = CHAT_APP.test(appName ?? '') && CHAT_WORK.test(`${verdict.activity} ${windowTitle ?? ''}`);
+  const bogusShop = echoedShopping(verdict.activity, appName, windowTitle);
+  const work = WORK_ACTIVITY.test(blob) || chatWork;
+  if (!work && !bogusShop && verdict.confidence >= SURE_NOT_STUDY) return verdict;
 
   const hay = lc(blob);
-  const mentioned = modules.find((m) =>
-    [m.name, ...m.keywords].some((k) => {
+  // Longest keyword wins, so "info management" beats "management".
+  let mentioned: (typeof modules)[number] | undefined;
+  let mentionedLen = 0;
+  for (const m of modules) {
+    for (const k of [m.name, ...m.keywords]) {
       const kw = lc(k.trim());
-      return kw.length >= 4 && hay.includes(kw);
-    }),
-  );
+      if (kw.length >= 4 && kw.length > mentionedLen && hay.includes(kw)) {
+        mentioned = m;
+        mentionedLen = kw.length;
+      }
+    }
+  }
   const named = (name: string) => modules.find((m) => lc(m.name) === lc(name));
   const sim = /\bsimulat/i.test(blob);
   const guessed = mentioned ?? (sim ? named('Computer Architecture') ?? named('Digital Logic') ?? named('Coding') : named('Coding')) ?? modules[0];
   return {
     studying: true,
     moduleId: guessed.id,
-    activity: verdict.activity,
+    activity: bogusShop || CHAT_LABEL.test(verdict.activity) ? '' : verdict.activity,
     confidence: Math.min(verdict.confidence, 0.55),
     source: verdict.source,
   };

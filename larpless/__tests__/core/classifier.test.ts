@@ -201,6 +201,54 @@ describe('classifier', () => {
     expect(unsure).toMatchObject({ studying: true, moduleId: 'lib_coding', confidence: 0.4 });
   });
 
+  it('WhatsApp labeled online shopping is a guess, and a real shop still is not', () => {
+    const coding = { id: 'lib_coding', name: 'Coding', color: 'purple' as const, keywords: ['python'] };
+    const modules = [...fixtureModules, coding];
+    const chat = guessStudy(
+      { studying: false, moduleId: null, activity: 'Online shopping', confidence: 0.96, source: 'vlm' },
+      modules,
+      'WhatsApp',
+      'Alex',
+    );
+    expect(chat).toMatchObject({ studying: true, moduleId: 'lib_coding', activity: '' });
+
+    const project = guessStudy(
+      { studying: false, moduleId: null, activity: 'Messaging', confidence: 0.95, source: 'vlm' },
+      modules,
+      'WhatsApp',
+      'Group project',
+    );
+    expect(project).toMatchObject({ studying: true, moduleId: 'lib_coding' });
+
+    const diagrams = guessStudy(
+      { studying: false, moduleId: null, activity: 'Online chatting', confidence: 0.96, source: 'vlm' },
+      [
+        ...modules,
+        { id: 'lib_business', name: 'Business', color: 'orange', keywords: ['management'] },
+        { id: 'lib_information_management', name: 'Information Management', color: 'blue', keywords: ['info management', 'class diagram', 'use case'] },
+      ],
+      'WhatsApp',
+      'info management project',
+    );
+    expect(diagrams).toMatchObject({ studying: true, moduleId: 'lib_information_management', activity: '' });
+
+    const social = guessStudy(
+      { studying: false, moduleId: null, activity: 'Online chatting', confidence: 0.96, source: 'vlm' },
+      modules,
+      'WhatsApp',
+      'Alex',
+    );
+    expect(social).toMatchObject({ studying: false, activity: 'Online chatting' });
+
+    const shop = guessStudy(
+      { studying: false, moduleId: null, activity: 'Online shopping', confidence: 0.96, source: 'vlm' },
+      modules,
+      'Safari',
+      'Amazon.com: Shopping Cart',
+    );
+    expect(shop).toMatchObject({ studying: false, activity: 'Online shopping' });
+  });
+
   it('WhatsApp is looked at before it can be called distracted', async () => {
     const s = setup();
     s.setWin({ appName: 'WhatsApp', windowTitle: 'Group project' });
