@@ -4,6 +4,7 @@ import type { SessionStore, SessionStoreState } from '../contracts/store';
 import { createClassifier } from '../core/classifier';
 import { createOllama } from '../core/ollama';
 import { effectiveProfile } from '../core/powerProfile';
+import { createScreenModelStep } from '../core/screenModel';
 import { createSessionController } from '../core/sessionController';
 import type { SessionController } from '../core/sessionController';
 import { fixtureChunks } from '../fixtures/data';
@@ -46,6 +47,7 @@ export function getSessionController(): SessionController {
       now: Date.now,
       config,
       getPower: () => effectiveProfile(settings().powerProfile),
+      screenModel: createScreenModelStep({ api: native.screenModel, now: Date.now }),
     });
     controller = createSessionController({
       native,

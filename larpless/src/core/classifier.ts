@@ -1,5 +1,7 @@
 /**
- * Screen classifier: PLAN.md §6 steps 2–5 (isSelf → rules → cache → single-flight VLM).
+ * Screen classifier: PLAN.md §6 steps 2–5 (isSelf → rules → cache → single-flight VLM). On the screenshot
+ * path the on-device screen model (core/screenModel.ts, Windows) answers first when it's confident; Ollama
+ * takes the rest.
  *
  * Single flight: one screenshot at a time. A call for the same window shares that result.
  * A call for another window waits, and when the running call finishes exactly one follow-up
@@ -15,6 +17,8 @@ import { BEHIND_WINDOWS } from './powerProfile';
 import type { PowerSpec } from './powerProfile';
 import { MAX_ACTIVITY_CHARS } from './prompt';
 import { matchDistraction } from './rules';
+import { FALLBACK_CONFIDENCE, MIN_CONFIDENCE } from './screenModel';
+import type { ScreenModelStep } from './screenModel';
 
 export interface ClassifierConfig {
   USE_MOCK_CLASSIFIER: boolean;
@@ -38,6 +42,8 @@ export interface ClassifierDeps {
   config: ClassifierConfig;
   /** Capture size, cache TTL, timeout and keep_alive. Falls back to `config` when omitted. */
   getPower?: () => PowerSpec;
+  /** On-device screen model (Windows), tried before the Ollama screenshot when it's installed. */
+  screenModel?: ScreenModelStep;
 }
 
 /** Why there's no verdict (the chunk becomes `unknown`). */
@@ -128,7 +134,7 @@ interface Flight {
   followUp?: Promise<ClassifyResult>;
 }
 
-export function createClassifier({ native, ollama, now, config, getPower }: ClassifierDeps): Classifier {
+export function createClassifier({ native, ollama, now, config, getPower, screenModel }: ClassifierDeps): Classifier {
   let previous: ScreenVerdict | null = null;
   let previousApp: string | null = null;
   let previousKey: string | null = null;
@@ -164,14 +170,63 @@ export function createClassifier({ native, ollama, now, config, getPower }: Clas
     return v;
   };
 
+  /**
+   * The on-device screen model (FLScreenModel), first on the screenshot path. Returns a finished result when
+   * it's confident; otherwise the low-confidence verdict to use if Ollama can't answer either (or null).
+   */
+  async function runScreenModel(
+    modules: StudyModule[],
+    appName: string | null,
+    started: number,
+    budget: number,
+    maxWidth: number,
+  ): Promise<{ done: ClassifyResult } | { fallback: ScreenVerdict | null }> {
+    if (!screenModel || !(await screenModel.ready())) return { fallback: null };
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    try {
+      const deadline = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('screen model timeout')), Math.max(0, budget - (now() - started)));
+      });
+      const r = await Promise.race([screenModel.classify(modules, { maxWidth }), deadline]);
+      const snapApp = r.window.appName ?? appName;
+      const snapKey = windowKey(snapApp, r.window.windowTitle);
+      if (r.verdict && r.verdict.confidence >= MIN_CONFIDENCE) {
+        if (r.window.windowTitle !== null) {
+          cache = { appName: snapApp, windowTitle: r.window.windowTitle, verdict: r.verdict, at: now(), ttlMs: cacheTtl() };
+        }
+        return {
+          done: {
+            verdict: remember(r.verdict, snapApp, snapKey),
+            tookScreenshot: true,
+            appName: snapApp,
+            key: snapKey,
+            tookMs: Math.max(0, now() - started),
+          },
+        };
+      }
+      return { fallback: r.verdict && r.verdict.confidence >= FALLBACK_CONFIDENCE ? r.verdict : null };
+    } catch {
+      return { fallback: null }; // not installed, model error or timeout: Ollama as before
+    } finally {
+      if (timer !== null) clearTimeout(timer);
+    }
+  }
+
   async function runVlm(modules: StudyModule[], ctx: ClassifyContext, appName: string | null, key: string): Promise<ClassifyResult> {
     const started = now();
     const budget = ceilingMs();
     let snap: ScreenSnapshot | null = null;
     const spec = power();
+    const capture = spec?.capture ?? config.CAPTURE;
+    let embedFallback: ScreenVerdict | null = null;
+    if (!(ctx.mockClassifier ?? config.USE_MOCK_CLASSIFIER)) {
+      const embedded = await runScreenModel(modules, appName, started, budget, capture.maxWidth);
+      if ('done' in embedded) return embedded.done;
+      embedFallback = embedded.fallback;
+    }
     try {
       try {
-        snap = await captureWithin(budget, spec?.capture ?? config.CAPTURE);
+        snap = await captureWithin(Math.max(1, budget - (now() - started)), capture);
       } catch (e) {
         return {
           verdict: null,
@@ -197,11 +252,13 @@ export function createClassifier({ native, ollama, now, config, getPower }: Clas
           error: 'capture',
         };
       }
-      const verdict = useMock
+      const vlmVerdict = useMock
         ? mockVerdictFromTitle(snapApp, snapTitle, modules)
         : spec
           ? await ollama.classify(snap, modules, { timeoutMs: left, keepAlive: spec.keepAlive })
           : await ollama.classify(snap, modules, { timeoutMs: left });
+      // Ollama couldn't answer (not installed, timeout): a moderately confident on-device verdict beats `unknown`.
+      const verdict = vlmVerdict ?? embedFallback;
       if (verdict && snapTitle !== null) {
         cache = { appName: snapApp, windowTitle: snapTitle, verdict, at: now(), ttlMs: cacheTtl() };
       }
@@ -317,7 +374,7 @@ export function createClassifier({ native, ollama, now, config, getPower }: Clas
 
     async unload() {
       if (config.USE_MOCK_CLASSIFIER) return;
-      await ollama.unload();
+      await Promise.all([ollama.unload(), screenModel?.unload()]);
     },
 
     async classifyCurrent(modules, ctx = {}) {

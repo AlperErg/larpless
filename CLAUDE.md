@@ -38,7 +38,7 @@ Layering is strict: **`ui` → `store` → `core` → `native` facades → Swift
 - **`src/contracts/`** holds the shared types: `domain.ts` (Chunk, Settings, SessionSummary…), `native.ts` (the `NativeApis` interface every Swift module implements, including event names), `store.ts` (store state/actions). Change a contract first, then both sides.
 - **`src/core/`** is pure TypeScript with injected dependencies and no imports of React Native, AsyncStorage or the stores. Time comes from an injected `now()`. This is what lets the whole session loop run under Jest with fake timers.
   - `sessionController.ts` is the runtime loop: it owns timers, chunk windows (no drift; pauses/breaks shift the open window), webcam subscription, pomodoro, alerts, panel updates and persistence. `toPanelState()` maps store state to the floating panel.
-  - Per chunk, a label is resolved by the cheapest step that answers: webcam away → LarpLess frontmost (reuse previous) → `rules.ts` distraction keywords → 2 min cache by app+title → VLM (`classifier.ts` + `ollama.ts` + `prompt.ts`). `chunkFuser.ts` fuses the screen verdict with webcam samples (phone visible > ⅙ → distracted). Failures produce `unknown`, which is excluded from focus %.
+  - Per chunk, a label is resolved by the cheapest step that answers: webcam away → LarpLess frontmost (reuse previous) → `rules.ts` distraction keywords → 2 min cache by app+title → on-device screen model when installed (`screenModel.ts`, Windows; answers at confidence ≥ 0.5) → VLM (`classifier.ts` + `ollama.ts` + `prompt.ts`). `chunkFuser.ts` fuses the screen verdict with webcam samples (phone visible > ⅙ → distracted). Failures produce `unknown`, which is excluded from focus %.
   - `alerts.ts` and `pomodoro.ts` are pure state machines; `focus.ts` computes summaries/streaks; `db.ts` persists over an injected `KeyValue`.
 - **`src/store/`** (zustand 5) is where the concrete dependencies are wired. `sessionStore.ts` lazily builds the one `SessionController` with real `native`, Ollama, `appDb` and `Date.now`; store actions just delegate to it, and the controller writes back via `setState`. `appStore.ts` injects AsyncStorage into `core/db`. `navStore.ts` is the router (no navigation library; `App.tsx` switches on `route` and auto-routes on session status changes). `socialStore.ts` wraps `src/social/api.ts`.
 - **`src/native/`** has one thin facade per Swift module (`NativeModules.FLx` + `NativeEventEmitter`) plus `mock/` implementations. `native/index.ts` picks the mock when `config.USE_MOCK_NATIVE` is true or the module is missing.
@@ -59,6 +59,7 @@ These are product guarantees; preserve them in any change:
 - Screenshots, webcam frames, base64 strings, pixel buffers and `CGImage`s stay in memory only: never written to disk/AsyncStorage/temp files, never logged (log sizes and timings only), never sent anywhere but local Ollama. This also applies to `__FL` harness results and `js-eval` output.
 - Only labels are persisted; window titles are never stored. `privacy.framesStored` is the constant `0`.
 - A screenshot is taken only on the VLM path. Nothing is captured during Pomodoro breaks or while the user is away.
+- OCR text and image/text embeddings count as frame data: FLScreenModel (Windows) keeps them in native memory and returns only scores and the OCR character count to JS.
 
 ## Windows
 

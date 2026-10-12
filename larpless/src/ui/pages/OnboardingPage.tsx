@@ -14,7 +14,7 @@ import { useAppStore } from '../../store/appStore';
 import { useNavStore } from '../../store/navStore';
 import { useOllamaStore } from '../../store/ollamaStore';
 import { useSessionStore } from '../../store/sessionStore';
-import { Button, Callout, CodeBlock, EditableTable, Icon, ModelDownload, Muted, SubjectLibrary, PageHeader, Strong, Tag, Text } from '../components';
+import { Button, Callout, CodeBlock, EditableTable, Icon, ModelDownload, Muted, ScreenModelDownload, SubjectLibrary, PageHeader, Strong, Tag, Text } from '../components';
 import type { IconName } from '../components';
 import { PageBody } from '../layout/Page';
 import { courseNameProblem, draftsFromModules, modulesFromDrafts } from '../lib/modules';
@@ -476,6 +476,11 @@ function ModelStep({ onBack, onFinish }: { onBack: () => void; onFinish: () => v
           <Muted>You can finish now and download it later from Settings; demo mode works offline.</Muted>
         </Text>
       ) : null}
+      {IS_WINDOWS ? (
+        <View style={styles.screenModel}>
+          <ScreenModelDownload />
+        </View>
+      ) : null}
       <View style={styles.actions}>
         <Button title="Back" variant="ghost" onPress={onBack} />
         <Button testID="onboarding-finish" title={ok ? 'Finish' : 'Finish anyway'} variant="primary" onPress={onFinish} style={styles.gapLeft} />
@@ -486,6 +491,7 @@ function ModelStep({ onBack, onFinish }: { onBack: () => void; onFinish: () => v
 
 const styles = themed(() => StyleSheet.create({
   presets: { marginTop: space.lg },
+  screenModel: { marginTop: space.lg },
   scroll: { flex: 1, backgroundColor: colors.bg },
   scrollContent: { paddingBottom: 96 },
   progress: { flexDirection: 'row', marginBottom: space.xl },

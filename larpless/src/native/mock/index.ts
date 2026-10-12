@@ -9,9 +9,11 @@ import { mockAppShell } from './appShell';
 import { mockNowPlaying } from './nowPlaying';
 import { mockOllamaHost } from './ollamaHost';
 import { mockKeychain } from './keychain';
+import { mockScreenModel } from './screenModel';
 
 export const mockApis: NativeApis = {
   screen: mockScreen,
+  screenModel: mockScreenModel,
   permissions: mockPermissions,
   webcam: mockWebcam,
   panel: mockPanel,

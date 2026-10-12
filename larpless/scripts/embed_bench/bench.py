@@ -82,24 +82,9 @@ LABELS = NAMES + [NOT_STUDY]
 SLUGS = {s["id"].removeprefix("lib_"): s["name"] for s in SUBJECTS}
 SLUGS["notstudy"] = NOT_STUDY
 
-IMAGE_TEMPLATES = [
-    "a screenshot of a computer screen showing {name} study material: {kws}",
-    "a screenshot of {name} lecture notes, slides, homework or a textbook",
-]
-STUDY_PROMPTS = [
-    "a screenshot of a computer screen showing study material, lecture notes, a textbook, slides or homework",
-    "a screenshot of a student doing schoolwork, reading a paper or solving exercises",
-    "a screenshot of a code editor with a programming assignment",
-]
-DISTRACTION_PROMPTS = [
-    "a screenshot of a social media feed with photos, likes and comments",
-    "a screenshot of a video game",
-    "a screenshot of an online shopping website with products and prices",
-    "a screenshot of a chat app with messages between friends",
-    "a screenshot of a music video or entertainment video on YouTube",
-    "a screenshot of a streaming service like Netflix",
-    "a screenshot of a news website",
-]
+sys.path.insert(0, str(HERE))  # `python -I` leaves the script's folder off sys.path
+from prompts import DISTRACTION_PROMPTS, IMAGE_TEMPLATES, STUDY_PROMPTS  # noqa: E402
+
 TEXT_DISTRACTIONS = [
     "social media feed: likes, followers, comments, stories, reels, posts",
     "online shopping: add to cart, price, checkout, free delivery, reviews",
@@ -251,6 +236,11 @@ def fused_predict(item: dict, prm: dict) -> tuple[str, float]:
     return NAMES[k], float(p_study * probs[k])
 
 
+# The parameters the app ships with (src/core/screenModel.ts FUSION). Keep the two in sync. Chosen by hand
+# because on the synthetic bench every grid point ties at 100%, so the fit can't tell them apart: equal
+# weight to image and text for the subject, both margins in the gate.
+APP_PARAMS = dict(alpha=0.5, t_img=1.0, t_txt=0.05, g_img=1.0, g_txt=10.0, bias=0.0)
+
 GRID = [
     dict(alpha=a, t_img=ti, t_txt=tt, g_img=gi, g_txt=gt, bias=b)
     for a in (0.0, 0.25, 0.5, 0.75, 1.0)
@@ -375,7 +365,6 @@ def main() -> None:
     txt = TextScorer(args.text_model)
     ocr = None
     if args.ocr == "windows":
-        sys.path.insert(0, str(HERE))  # `python -I` leaves the script's folder off sys.path
         from ocr import WindowsOcr
 
         ocr = WindowsOcr(args.ocr_lang)
@@ -458,6 +447,8 @@ def main() -> None:
     report("keyword", [(it["kw_pred"], 1.0) for it in items], items)
     report("fused", fused, items)
     coverage_curve(fused, items)
+    report("app", [fused_predict(it, APP_PARAMS) for it in items], items)
+    print(f"  params fitted on all images: {fit(items)} (app uses {APP_PARAMS})")
 
     print("\nLATENCY per image, ms (first image excluded as warm-up)")
     for k, v in lat.items():

@@ -11,6 +11,7 @@ import { appShell } from './appShell';
 import { nowPlaying } from './nowPlaying';
 import { ollamaHost } from './ollamaHost';
 import { keychain } from './keychain';
+import { screenModel } from './screenModel';
 import { mockApis } from './mock';
 
 function pick<K extends keyof NativeApis>(key: K, moduleName: string, real: NativeApis[K]): NativeApis[K] {
@@ -24,6 +25,8 @@ function pick<K extends keyof NativeApis>(key: K, moduleName: string, real: Nati
 
 export const native: NativeApis = {
   screen: pick('screen', 'FLScreenCapture', screen),
+  // The macOS module is a stub that reports `supported: false`; only Windows runs the model so far.
+  screenModel: pick('screenModel', 'FLScreenModel', screenModel),
   permissions: pick('permissions', 'FLPermissions', permissions),
   webcam: pick('webcam', 'FLWebcam', webcam),
   panel: pick('panel', 'FLFloatingPanel', panel),

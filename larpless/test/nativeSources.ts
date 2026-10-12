@@ -247,6 +247,10 @@ function sampleFor(checker: ts.TypeChecker, type: ts.Type, at: ts.Node, depth = 
   if (type.flags & ts.TypeFlags.NumberLike) return 1;
   if (type.flags & ts.TypeFlags.BooleanLike) return true;
   if (checker.getSignaturesOfType(type, ts.SignatureKind.Call).length) return () => {};
+  if (type.symbol?.getName() === 'Array' && depth < 3) {
+    const [element] = checker.getTypeArguments(type as ts.TypeReference);
+    return element ? [sampleFor(checker, element, at, depth + 1)] : [];
+  }
   if (type.flags & ts.TypeFlags.Object && depth < 3) {
     const obj: Record<string, unknown> = {};
     for (const prop of checker.getPropertiesOfType(type)) {

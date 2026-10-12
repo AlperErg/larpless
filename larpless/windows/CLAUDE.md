@@ -44,6 +44,7 @@ Each module is **one header** (`REACT_MODULE` / `REACT_METHOD` / `REACT_EVENT` /
 | FLPermissions | camera via `AppCapability("webcam")`; `openSettings` → `ms-settings:privacy-webcam`; `relaunch` → `AppInstance::Restart` | no screen permission on Windows |
 | FLSound | XAudio2 port of the Swift engine (xorshift white, Kellet pink, brown; equal-power ramps; chimes) | — |
 | FLWebcam | MediaCapture + MediaFrameReader (BGRA), YOLO11n via ONNX Runtime | — (same `person` / `cell phone` thresholds as Mac) |
+| FLScreenModel | on-device screen classifier: GDI capture to BGRA (`FLScreenCapture::CaptureBgra`), `Windows.Media.Ocr`, SigLIP 2 vision tower + all-MiniLM-L6-v2 (C++ WordPiece in `FLWordPiece.h`) via ONNX Runtime; returns scores only, `core/screenModel.ts` fuses them. Models (~460 MB, pinned HF commits + SHA-256) download at onboarding into `LocalFolder\Models`; the fixed SigLIP prompt embeddings ship as `Assets/Models/FLScreenModelPrompts.json` (`scripts/embed_bench/export_prompts.py`) | Windows only: the Swift module is a stub that reports `supported: false`, so the Mac keeps using Ollama |
 | FLFloatingPanel | layered `WS_EX_TOPMOST\|TOOLWINDOW\|NOACTIVATE` popup drawn with Direct2D (DC render target on a DIB + `UpdateLayeredWindow`) and DirectWrite with the bundled Inter + Instrument Serif | — (same size, states, hub and payloads) |
 
 Closing the main window quits the app (Windows convention) instead of keeping it in the background.

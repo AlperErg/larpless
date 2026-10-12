@@ -123,10 +123,12 @@
     <ClInclude Include="Native\FLPermissions.h" />
     <ClInclude Include="Native\FLPing.h" />
     <ClInclude Include="Native\FLScreenCapture.h" />
+    <ClInclude Include="Native\FLScreenModel.h" />
     <ClInclude Include="Native\FLSound.h" />
     <ClInclude Include="Native\FLUtil.h" />
     <ClInclude Include="Native\FLWebcam.h" />
     <ClInclude Include="Native\FLWindow.h" />
+    <ClInclude Include="Native\FLWordPiece.h" />
   </ItemGroup>
   <ItemGroup>
     <!-- Packaged next to the exe (Assets\) for the notification logo; copied from the macOS bundle resources. -->
@@ -139,6 +141,11 @@
     </None>
     <!-- Single file, so it lands next to the exe under Assets\Models. -->
     <None Include="Assets\Models\yolo11n.onnx">
+      <DeploymentContent>true</DeploymentContent>
+    </None>
+    <!-- FLScreenModel's fixed SigLIP prompt embeddings (scripts/embed_bench/export_prompts.py). The model weights
+         themselves are downloaded at onboarding into LocalFolder\Models. -->
+    <None Include="Assets\Models\FLScreenModelPrompts.json">
       <DeploymentContent>true</DeploymentContent>
     </None>
   </ItemGroup>

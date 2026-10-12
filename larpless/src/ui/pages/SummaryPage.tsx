@@ -173,6 +173,7 @@ const SOURCE_LABEL: Record<Chunk['source'], string> = {
   none: '',
   user: 'edited',
   title: 'title',
+  embed: 'on-device',
 };
 
 function ChunkHeader({ c, modules }: { c: Chunk; modules: StudyModule[] }) {

@@ -160,8 +160,71 @@ export interface KeychainApi {
   removeItem(key: string): Promise<void>;
 }
 
+/* ---------- FLScreenModel (Windows only for now) ---------- */
+/**
+ * On-device screen classifier: SigLIP 2 image embeddings + Windows OCR text embedded with MiniLM, via ONNX
+ * Runtime. Returns scores only; src/core/screenModel.ts turns them into a verdict. The macOS app has no
+ * counterpart yet: there `native.screenModel.status()` reports `supported: false` and the classifier skips it.
+ */
+export interface ScreenModelFile {
+  /** One of 'siglip2-vision.onnx', 'minilm.onnx', 'minilm-vocab.txt'. */
+  name: string;
+  /** https://huggingface.co/… pinned to a commit. */
+  url: string;
+  sha256: string;
+  size: number;
+}
+export interface ScreenModelStatus {
+  /** False where the native module doesn't exist (macOS, tests without a mock). */
+  supported: boolean;
+  /** Every file is in the model folder with the expected size. */
+  installed: boolean;
+  missing: string[];
+  /** Sessions are in memory (about 1 GB). */
+  loaded: boolean;
+}
+export interface ScreenModelProgress {
+  name: string;
+  receivedBytes: number;
+  totalBytes: number;
+  fileIndex: number;
+  fileCount: number;
+}
+export interface ScreenModelInput {
+  /** Capture width (the power profile's), at least 224. */
+  maxWidth: number;
+  /** BCP-47 tag for Windows OCR; default 'en-US'. */
+  ocrLanguage?: string;
+  /** Labels to score the screen text against (module descriptions, distraction descriptions). */
+  texts: { id: string; text: string }[];
+}
+export interface ScreenModelScores extends ActiveWindow {
+  width: number;
+  height: number;
+  capturedAt: number;
+  /** Logit per fixed SigLIP prompt: 'lib_<subject>', 'study:<i>', 'distract:<i>'. */
+  image: Record<string, number>;
+  /** Cosine between the title + screen text and each input text; null when there was no text at all. */
+  text: Record<string, number> | null;
+  /** Characters OCR found. The text itself never leaves native code. */
+  ocrChars: number;
+  timings: { captureMs: number; ocrMs: number; imageMs: number; textMs: number };
+}
+export interface ScreenModelApi {
+  status(files: Pick<ScreenModelFile, 'name' | 'size'>[]): Promise<ScreenModelStatus>;
+  /** Downloads missing files, checking size and SHA-256. Rejects E_BUSY / E_DOWNLOAD / E_CHECKSUM / E_CANCELLED. */
+  download(files: ScreenModelFile[]): Promise<void>;
+  cancelDownload(): Promise<void>;
+  onProgress(cb: (p: ScreenModelProgress) => void): Unsubscribe; // event 'FLScreenModelProgress'
+  /** Captures and scores the screen. Rejects E_NOT_INSTALLED / E_MODEL / E_CAPTURE. */
+  classify(input: ScreenModelInput): Promise<ScreenModelScores>;
+  /** Frees the model sessions. */
+  unload(): Promise<void>;
+}
+
 export interface NativeApis {
   screen: ScreenCaptureApi;
+  screenModel: ScreenModelApi;
   permissions: PermissionsApi;
   webcam: WebcamApi;
   panel: FloatingPanelApi;

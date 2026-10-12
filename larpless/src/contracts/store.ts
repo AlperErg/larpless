@@ -1,7 +1,7 @@
 import type {
   Chunk, ChunkKind, PomodoroPreset, PomodoroState, SessionSummary, Settings, SoundId, StudyModule,
 } from './domain';
-import type { OllamaHostInfo } from './native';
+import type { OllamaHostInfo, ScreenModelStatus } from './native';
 
 export type SessionStatus = 'idle' | 'running' | 'paused' | 'break' | 'ended';
 export type OllamaStatus = 'unknown' | 'ok' | 'down' | 'modelMissing';
@@ -86,6 +86,20 @@ export interface OllamaSetupActions {
   cancelPull(): void;
 }
 export type OllamaSetupStore = OllamaSetupState & OllamaSetupActions;
+
+/** The on-device screen model's files (FLScreenModel, Windows). Reuses ModelPull's shape for the download. */
+export interface ScreenModelSetupState {
+  /** null until refresh() has run. */
+  status: ScreenModelStatus | null;
+  download: ModelPull;
+}
+export interface ScreenModelSetupActions {
+  refresh(): Promise<void>;
+  /** Downloads the pinned model files (~460 MB) with progress. Never rejects. */
+  downloadModels(): Promise<void>;
+  cancelDownload(): void;
+}
+export type ScreenModelSetupStore = ScreenModelSetupState & ScreenModelSetupActions;
 
 export interface AppDataState {
   loaded: boolean;

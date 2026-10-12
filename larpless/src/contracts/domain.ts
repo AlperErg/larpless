@@ -16,7 +16,8 @@ export interface StudyModule {
 
 export type ChunkKind = 'subject' | 'distracted' | 'away' | 'unknown';
 export type DistractionReason = 'phone' | 'screen' | 'rule';
-export type ChunkSource = 'vlm' | 'rule' | 'cache' | 'webcam' | 'none' | 'user' | 'title';
+/** 'embed': the on-device screen model (FLScreenModel, Windows), before Ollama. */
+export type ChunkSource = 'vlm' | 'rule' | 'cache' | 'webcam' | 'none' | 'user' | 'title' | 'embed';
 
 export interface Chunk {
   id: string;
@@ -57,7 +58,7 @@ export interface ScreenVerdict {
   moduleId: string | null;
   activity: string;
   confidence: number;
-  source: 'vlm' | 'rule' | 'cache' | 'title';
+  source: 'vlm' | 'rule' | 'cache' | 'title' | 'embed';
 }
 
 export type Strictness = 2 | 5 | 10;               // minutes until the first notification
