@@ -81,7 +81,12 @@ const summary: SessionSummary = {
 };
 const breakdown: BreakdownEntry[] = [{ key: 'm1', label: 'Biology', color: 'green', seconds: 3000, pct: 83 }];
 
+beforeEach(() => {
+  jest.useFakeTimers(); // the auth and header fades must not outlive a test
+});
+
 afterEach(() => {
+  jest.useRealTimers();
   act(() => {
     useSocialStore.setState(original, true);
     useNavStore.setState({ route: 'home', params: {}, paletteOpen: false });
