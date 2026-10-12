@@ -39,7 +39,8 @@ Each module is **one header** (`REACT_MODULE` / `REACT_METHOD` / `REACT_EVENT` /
 | FLPing | smoke test | — |
 | FLNotifications | toast XML (`Windows.UI.Notifications`), logo from `Assets\FLNotificationIcon.png`, silent unless `sound`; click brings the main window forward | — |
 | FLAppShell | `PowerCreateRequest` + EcoQoS opt-out; `WH_KEYBOARD` thread hook for Ctrl+K / Ctrl+Enter / Ctrl+. → `FLMenuCommand` | Ctrl instead of ⌘ |
-| FLScreenCapture | foreground window → pid → FileDescription; GDI StretchBlt of the primary screen → WIC JPEG in an `HGlobal` stream; own window hidden with `WDA_EXCLUDEFROMCAPTURE` during capture | `bundleId` is the exe name; Screen Recording is always `granted` |
+| FLScreenCapture | foreground window → pid → FileDescription; GDI StretchBlt of the foreground window's monitor → WIC JPEG in an `HGlobal` stream; own window hidden with `WDA_EXCLUDEFROMCAPTURE` during capture | `bundleId` is the exe name; Screen Recording is always `granted` |
+| FLKeychain | DPAPI (current user) encrypted file per key under `%LOCALAPPDATA%\LarpLess\Secrets` | no per-app Keychain on Windows: protects against copied disks and backups, not other processes running as the user |
 | FLPermissions | camera via `AppCapability("webcam")`; `openSettings` → `ms-settings:privacy-webcam`; `relaunch` → `AppInstance::Restart` | no screen permission on Windows |
 | FLSound | XAudio2 port of the Swift engine (xorshift white, Kellet pink, brown; equal-power ramps; chimes) | — |
 | FLWebcam | MediaCapture + MediaFrameReader (BGRA), YOLO11n via ONNX Runtime | — (same `person` / `cell phone` thresholds as Mac) |

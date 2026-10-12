@@ -199,10 +199,20 @@ struct FLScreenCapture {
     return w;
   }
 
-  // Primary display, scaled to at most maxWidth (never upscaled), JPEG-encoded in memory.
+  // The monitor showing the foreground window (else the primary one), so the screenshot matches the app name and
+  // title. Scaled to at most maxWidth (never upscaled), JPEG-encoded in memory.
   static bool CaptureFrame(int maxWidth, float quality, Frame &frame) {
-    const int screenW{GetSystemMetrics(SM_CXSCREEN)};
-    const int screenH{GetSystemMetrics(SM_CYSCREEN)};
+    MONITORINFO monitor{};
+    monitor.cbSize = sizeof(monitor);
+    const HMONITOR target{MonitorFromWindow(GetForegroundWindow(), MONITOR_DEFAULTTOPRIMARY)};
+    if (!target || !GetMonitorInfoW(target, &monitor)) {
+      return false;
+    }
+    // Screen-DC coordinates: the primary monitor starts at 0,0; others can be negative.
+    const int screenX{monitor.rcMonitor.left};
+    const int screenY{monitor.rcMonitor.top};
+    const int screenW{monitor.rcMonitor.right - monitor.rcMonitor.left};
+    const int screenH{monitor.rcMonitor.bottom - monitor.rcMonitor.top};
     if (screenW <= 0 || screenH <= 0) {
       return false;
     }
@@ -224,7 +234,7 @@ struct FLScreenCapture {
       const HGDIOBJ previous{SelectObject(memory, bitmap)};
       SetStretchBltMode(memory, HALFTONE);
       SetBrushOrgEx(memory, 0, 0, nullptr);
-      ok = StretchBlt(memory, 0, 0, w, h, screen, 0, 0, screenW, screenH, SRCCOPY | CAPTUREBLT) != FALSE;
+      ok = StretchBlt(memory, 0, 0, w, h, screen, screenX, screenY, screenW, screenH, SRCCOPY | CAPTUREBLT) != FALSE;
       SelectObject(memory, previous);
     }
     if (hideMain) {
