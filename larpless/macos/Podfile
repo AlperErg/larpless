@@ -31,6 +31,10 @@ target 'Focusline-macOS' do
       target.build_configurations.each do |config|
         config.build_settings['MACOSX_DEPLOYMENT_TARGET'] = '14.0'
       end
+      # Hermes' "Replace Hermes" script declares no outputs; mark it run-every-build to silence the warning.
+      target.shell_script_build_phases.each do |phase|
+        phase.always_out_of_date = '1' if phase.name&.include?('Replace Hermes')
+      end
     end
   end
 end

@@ -16,6 +16,7 @@ if [[ -f macos/signing.local ]]; then
   SIGNING=(CODE_SIGN_IDENTITY="${CODE_SIGN_IDENTITY:?set in macos/signing.local}" DEVELOPMENT_TEAM="${DEVELOPMENT_TEAM:-}")
 fi
 xcodebuild -workspace macos/Focusline.xcworkspace -scheme Focusline-macOS -configuration Debug \
+  -destination "platform=macOS,arch=arm64" \
   -derivedDataPath macos/build ${SIGNING[@]+"${SIGNING[@]}"} \
   GCC_PREPROCESSOR_DEFINITIONS='$(inherited) RCT_METRO_PORT='"$PORT" build | tail -n 25
 APP="$(find macos/build/Build/Products/Debug -maxdepth 1 -name '*.app' | head -1)"
