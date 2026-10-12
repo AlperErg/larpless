@@ -46,6 +46,7 @@ p.add_argument("--jpeg-quality", type=int, default=60)
 p.add_argument("--only", default="", help="only files whose name contains this")
 p.add_argument("--onnx", action="store_true", help="export the image tower to ONNX and time fp32 + int8")
 p.add_argument("--offline", action="store_true", help="use cached weights only")
+p.add_argument("--courses", action="store_true", help='add sidecar "course" names as custom courses (text-only, like the app)')
 args = p.parse_args()
 sys.stdout.reconfigure(encoding="utf-8")  # Windows consoles default to cp1252; `-I` ignores PYTHONIOENCODING
 
@@ -81,6 +82,8 @@ NAMES = [s["name"] for s in SUBJECTS]
 LABELS = NAMES + [NOT_STUDY]
 SLUGS = {s["id"].removeprefix("lib_"): s["name"] for s in SUBJECTS}
 SLUGS["notstudy"] = NOT_STUDY
+# Library subjects plus, with --courses, custom courses (no image prompt, as in the app). Set in main().
+MODULES: list[dict] = list(SUBJECTS)
 
 sys.path.insert(0, str(HERE))  # `python -I` leaves the script's folder off sys.path
 from prompts import DISTRACTION_PROMPTS, IMAGE_TEMPLATES, STUDY_PROMPTS  # noqa: E402
@@ -197,8 +200,8 @@ class TextScorer:
 def keyword_scores(text: str) -> np.ndarray:
     """Whole-word keyword hits per subject (control baseline)."""
     lower = text.lower()
-    out = np.zeros(len(SUBJECTS))
-    for i, s in enumerate(SUBJECTS):
+    out = np.zeros(len(MODULES))
+    for i, s in enumerate(MODULES):
         for kw in s["keywords"] + [s["name"]]:
             if re.search(rf"(?<![a-z0-9]){re.escape(kw.lower())}(?![a-z0-9])", lower):
                 out[i] += 1
@@ -229,11 +232,15 @@ def fused_predict(item: dict, prm: dict) -> tuple[str, float]:
     p_study = 1 / (1 + np.exp(-gate))
     if p_study < 0.5:
         return NOT_STUDY, 1 - p_study
-    probs = softmax(item["img_subj"], prm["t_img"])
+    img = item["img_subj"]
+    known = np.isfinite(img)  # custom courses have no image prompt
+    probs = np.zeros(len(img))
+    probs[known] = softmax(img[known], prm["t_img"])
     if item["has_text"]:
-        probs = (1 - prm["alpha"]) * probs + prm["alpha"] * softmax(item["txt_subj"], prm["t_txt"])
+        txt = softmax(item["txt_subj"], prm["t_txt"])
+        probs = (1 - prm["alpha"]) * probs + prm["alpha"] * txt if known.any() else txt
     k = int(probs.argmax())
-    return NAMES[k], float(p_study * probs[k])
+    return MODULES[k]["name"], float(p_study * probs[k])
 
 
 # The parameters the app ships with (src/core/screenModel.ts FUSION). Keep the two in sync. Chosen by hand
@@ -294,10 +301,10 @@ def report(name: str, preds: list[tuple[str | None, float]], items: list[dict]) 
 
 def coverage_curve(preds: list[tuple[str, float]], items: list[dict]) -> None:
     print("  abstain threshold -> coverage / accuracy of answered (rest would be 'unknown'):")
-    for tau in (0.0, 0.3, 0.5, 0.7, 0.9):
+    for tau in (0.0, 0.05, 0.1, 0.15, 0.2, 0.3, 0.5, 0.7):
         kept = [(p, it) for (p, c), it in zip(preds, items) if c >= tau]
         acc = sum(hit(p, it) for p, it in kept) / len(kept) if kept else 0.0
-        print(f"    >= {tau:.1f}: {len(kept)}/{len(items)} answered, {100 * acc:3.0f}% correct")
+        print(f"    >= {tau:.2f}: {len(kept)}/{len(items)} answered, {100 * acc:3.0f}% correct")
 
 
 # --------------------------------------------------------------------------------------------------
@@ -355,9 +362,14 @@ def main() -> None:
     synthetic = all(s.get("synthetic") for s in sides.values())
     skipped = [f.name for f in files if expected_label(f) is None]
     files = [f for f in files if expected_label(f) is not None]
+    courses = sorted({sides[f]["course"] for f in files if args.courses and sides[f].get("course") and sides[f]["course"] not in NAMES})
+    global MODULES
+    MODULES = list(SUBJECTS) + [{"id": "mod_" + c.lower().replace(" ", "_"), "name": c, "keywords": []} for c in courses]
 
     print(f"embed bench · {len(files)} images{' (all synthetic)' if synthetic else ''} · image {args.image_model} · "
           f"text {args.text_model} · OCR {args.ocr} · capture {args.width}px q{args.jpeg_quality} · {torch.get_num_threads()} threads")
+    if courses:
+        print(f"  custom courses (text only): {', '.join(courses)}")
     if skipped:
         print(f"  skipped (unknown label prefix): {', '.join(skipped)}")
 
@@ -380,7 +392,7 @@ def main() -> None:
     idx["distract"] = list(range(len(prompts), len(prompts) + len(DISTRACTION_PROMPTS)))
     prompts += DISTRACTION_PROMPTS
     img_txt_emb = img.embed_texts(prompts)
-    subj_txt_emb = txt.embed([subject_text(s) for s in SUBJECTS])
+    subj_txt_emb = txt.embed([subject_text(s) if s["keywords"] else s["name"] for s in MODULES])
     dist_txt_emb = txt.embed(TEXT_DISTRACTIONS)
 
     items, pixel_batches = [], []
@@ -390,6 +402,8 @@ def main() -> None:
         side = sides[f]
         expected = expected_label(f)
         accept = {expected, *side.get("accept", [])}
+        if side.get("course") in courses:
+            expected, accept = side["course"], {side["course"]}
         try:
             t0 = time.perf_counter()
             capture = load_like_capture(f)
@@ -407,7 +421,7 @@ def main() -> None:
                 txt_subj = (temb @ subj_txt_emb.T)[0]
                 txt_margin = float(txt_subj.max() - (temb @ dist_txt_emb.T)[0].max())
             else:
-                txt_subj, txt_margin = np.zeros(len(SUBJECTS)), 0.0
+                txt_subj, txt_margin = np.zeros(len(MODULES)), 0.0
             t4 = time.perf_counter()
             kw = keyword_scores(text)
             ocr_chars = len(screen_text)
@@ -417,15 +431,16 @@ def main() -> None:
             continue
 
         logits = img.logits(img_emb, img_txt_emb)
-        img_subj = np.array([logits[ix].mean() for ix in idx["subjects"]])
-        img_scores = np.append(img_subj, logits[idx["distract"]].max())
-        img_margin = float(max(logits[idx["study"]].max(), img_subj.max()) - logits[idx["distract"]].max())
+        lib_subj = np.array([logits[ix].mean() for ix in idx["subjects"]])
+        img_scores = np.append(lib_subj, logits[idx["distract"]].max())
+        img_margin = float(max(logits[idx["study"]].max(), lib_subj.max()) - logits[idx["distract"]].max())
+        img_subj = np.append(lib_subj, [np.nan] * (len(MODULES) - len(SUBJECTS)))
         item = dict(file=f.name, expected=expected, accept=accept, img_subj=img_subj, img_margin=img_margin,
                     txt_subj=txt_subj, txt_margin=txt_margin, has_text=has_text,
                     img_pred=LABELS[int(img_scores.argmax())],
                     img_conf=float(1 / (1 + np.exp(-img_scores.max()))) if img.kind == "siglip" else float(softmax(img_scores, 1).max()),
-                    txt_pred=(NAMES[int(txt_subj.argmax())] if txt_margin > 0 else NOT_STUDY) if has_text else None,
-                    kw_pred=NAMES[int(kw.argmax())] if kw.max() > 0 else None)
+                    txt_pred=(MODULES[int(txt_subj.argmax())]["name"] if txt_margin > 0 else NOT_STUDY) if has_text else None,
+                    kw_pred=MODULES[int(kw.argmax())]["name"] if kw.max() > 0 else None)
         items.append(item)
         pixel_batches.append(pv)
         if n > 0:  # first image warms up the models
@@ -447,7 +462,11 @@ def main() -> None:
     report("keyword", [(it["kw_pred"], 1.0) for it in items], items)
     report("fused", fused, items)
     coverage_curve(fused, items)
-    report("app", [fused_predict(it, APP_PARAMS) for it in items], items)
+    app_preds = [fused_predict(it, APP_PARAMS) for it in items]
+    report("app", app_preds, items)
+    print("  app confidences: right " + ", ".join(f"{c:.2f}" for (p_, c), it in zip(app_preds, items) if hit(p_, it))
+          + " | wrong " + ", ".join(f"{c:.2f}" for (p_, c), it in zip(app_preds, items) if not hit(p_, it)))
+    coverage_curve(app_preds, items)
     print(f"  params fitted on all images: {fit(items)} (app uses {APP_PARAMS})")
 
     print("\nLATENCY per image, ms (first image excluded as warm-up)")
