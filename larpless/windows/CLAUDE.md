@@ -9,18 +9,19 @@ The Windows app is **react-native-windows 0.81.36** (cpp-app template: C++/WinRT
 - Visual Studio 2026 Community 18.x (toolset **v145**) with Desktop C++, WinUI app development (`Microsoft.VisualStudio.ComponentGroup.UWP.VC`), MSIX Packaging Tools and **Windows 11 SDK 10.0.22621**. Install with explicit `--add` workloads; a partial install leaves missing `WindowsXaml…Cpp.targets` / `DesktopBridge.props`.
 - .NET SDK 10, Node 22+, Developer Mode on, long paths on.
 - `larpless/dotnet-tools.json` pins **PowerShell 7** as a local .NET tool: the RNW deploy step needs `pwsh.exe` (`dotnet tool restore`).
-- `larpless/Directory.Build.props` patches `ReactNativeAsyncStorage`: disables the WinAppSDK transitive-dependency check (false positive from its stale `packages.config`) and force-imports `windows/AsyncStorageToolset.props` so it builds with the installed toolset instead of the missing v143.
+- `larpless/Directory.Build.props` patches autolinked native modules (`ReactNativeAsyncStorage`, `RNSVG`): WinAppSDK false positive on AsyncStorage, v143 toolset override, and Composition desktop settings for RNSVG. After `npm ci`, `node scripts/patch-rnsvg-windows.mjs` pins RNSVG's SDK to 10.0.22621 (also run from `scripts/run-windows.ps1`).
 
 ## Commands
 
 Run from `larpless/` (PowerShell):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\run-windows.ps1     # Metro on 8081 if needed + tool restore + build/deploy/launch
+powershell -ExecutionPolicy Bypass -File scripts\run-windows.ps1     # stops old LarpLess, removes sideloaded AppX, Metro, patch RNSVG, build/deploy/launch
 Get-Process LarpLess -EA SilentlyContinue | Stop-Process; npx @react-native-community/cli run-windows --no-packager --logging *> .logs\build-windows.log   # rebuild only
 ```
 
 - Stop the running app before rebuilding. A first build takes several minutes; incremental ones about one.
+- Debug builds set `UseDeveloperSupport(false)` so RNW does not paint its green Metro **Loading** bar (that is not `BootScreen`). Themed launch is `BootScreen.tsx` after JS loads. `LarpLess.cpp` also sets the Win32 window canvas to match `theme.ts` before React paints.
 - Compile errors: the newest `windows\msbuild_*.err`. The build log written with `*>` is UTF-16 — read it with `Get-Content`.
 - Relaunch the installed build without rebuilding: `Start-Process "shell:AppsFolder\$((Get-AppxPackage *LarpLess*).PackageFamilyName)!App"`.
 - App icons (`LarpLess\LarpLess.ico`, `LarpLess.Package\Images\*.png`) are generated from `brand/larpless-logo.png`: `powershell -ExecutionPolicy Bypass -File scripts\make-windows-icons.ps1`. Windows caches tile/taskbar icons, so an updated logo may only show after unpinning/repinning or a sign-out.

@@ -22,6 +22,28 @@
 #include "Native/FLWebcam.h"
 #include "Native/FLWindow.h"
 
+#include <winrt/Windows.UI.ViewManagement.h>
+
+namespace {
+
+// Same canvases as src/ui/theme.ts and macos/Focusline-macOS/AppDelegate.mm (fl_syncWindowBackground).
+void SyncMainWindowCanvas(HWND hwnd) {
+  if (!hwnd) {
+    return;
+  }
+  winrt::Windows::UI::ViewManagement::UISettings ui;
+  const auto bg = ui.GetColorValue(winrt::Windows::UI::ViewManagement::UIColorType::Background);
+  const bool dark = bg.R < 128;
+  const COLORREF canvas = dark ? RGB(16, 17, 15) : RGB(243, 245, 248);
+  const HBRUSH brush = CreateSolidBrush(canvas);
+  if (brush) {
+    SetClassLongPtrW(hwnd, GCLP_HBRBACKGROUND, reinterpret_cast<LONG_PTR>(brush));
+    InvalidateRect(hwnd, nullptr, TRUE);
+  }
+}
+
+} // namespace
+
 // A PackageProvider containing any turbo modules you define within this app project
 struct CompReactPackageProvider
     : winrt::implements<CompReactPackageProvider, winrt::Microsoft::ReactNative::IReactPackageProvider> {
@@ -73,10 +95,10 @@ _Use_decl_annotations_ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE, PSTR 
 #endif
 #if _DEBUG
   // For Debug builds
-  // Enable Direct Debugging of JS
+  // Direct debugger + Metro still work; js-eval and Fast Refresh do not need the dev menu.
   settings.UseDirectDebugger(true);
-  // Enable the Developer Menu
-  settings.UseDeveloperSupport(true);
+  // RNW draws a green "Loading" bar while the bundle loads when this is true (not our BootScreen).
+  settings.UseDeveloperSupport(false);
 #else
   // For Release builds:
   // Disable Direct Debugging of JS
@@ -92,6 +114,7 @@ _Use_decl_annotations_ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE, PSTR 
   appWindow.Title(L"LarpLess");
   const HWND hwnd{winrt::Microsoft::UI::GetWindowFromWindowId(appWindow.Id())};
   LarpLess::MainWindow() = hwnd;
+  SyncMainWindowCanvas(hwnd);
   const UINT dpi{GetDpiForWindow(hwnd)};
   // Title bar / Alt+Tab icon from the exe's icon resource (LarpLess.ico); AppWindow doesn't pick it up by itself.
   const int iconSize{GetSystemMetricsForDpi(SM_CXICON, dpi)};

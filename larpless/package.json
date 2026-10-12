@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "windows": "npx @react-native-community/cli run-windows",
-    "test:windows": "jest --config jest.config.windows.js"
+    "test:windows": "jest --config jest.config.windows.js",
+    "postinstall": "node scripts/patch-rnsvg-windows.mjs"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",

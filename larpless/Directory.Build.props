@@ -14,4 +14,18 @@
     <!-- It also hard-codes the VS 2022 toolset (v143); see windows/AsyncStorageToolset.props. -->
     <ForceImportBeforeCppProps>$(MSBuildThisFileDirectory)windows\AsyncStorageToolset.props</ForceImportBeforeCppProps>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'RNSVG'">
+    <!-- vcxproj Choose runs before ReactNativeArchitecture.props; force Composition desktop. -->
+    <RnwNewArch>true</RnwNewArch>
+    <UseFabric>true</UseFabric>
+    <UseWinUI3>true</UseWinUI3>
+    <UseHermes>true</UseHermes>
+    <AppContainerApplication>false</AppContainerApplication>
+    <ApplicationType />
+    <Keyword>Win32Proj</Keyword>
+    <AppxPackage>false</AppxPackage>
+    <WindowsTargetPlatformVersion>10.0.22621.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformMinVersion>10.0.17763.0</WindowsTargetPlatformMinVersion>
+    <ForceImportBeforeCppProps>$(MSBuildThisFileDirectory)windows\AsyncStorageToolset.props</ForceImportBeforeCppProps>
+  </PropertyGroup>
 </Project>

@@ -208,7 +208,7 @@ const styles = themed(() => StyleSheet.create({
   },
   rowHover: { backgroundColor: colors.hover },
   rowActive: { backgroundColor: colors.accentSoft },
-  rowIcon: { width: 22, alignItems: 'center', justifyContent: 'center' },
+  rowIcon: { width: 22, marginRight: space.sm, alignItems: 'center', justifyContent: 'center' },
   rowLabel: { flex: 1, fontFamily: fonts.medium, fontSize: 14, lineHeight: 18, color: colors.muted },
   rowLabelActive: { fontFamily: fonts.semibold, color: colors.text },
   trailing: { marginLeft: space.xs, alignItems: 'center', justifyContent: 'center' },
