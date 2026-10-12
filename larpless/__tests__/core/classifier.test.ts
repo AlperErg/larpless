@@ -1,6 +1,6 @@
 import type { ScreenVerdict } from '../../src/contracts/domain';
 import type { ActiveWindow, ScreenSnapshot } from '../../src/contracts/native';
-import { createClassifier, mockVerdictFromTitle, TITLE_CHECK_MIN_CONFIDENCE, windowKey } from '../../src/core/classifier';
+import { createClassifier, guessStudy, mockVerdictFromTitle, TITLE_CHECK_MIN_CONFIDENCE, windowKey } from '../../src/core/classifier';
 import { config } from '../../src/config';
 import type { ClassifierConfig } from '../../src/core/classifier';
 import { fixtureModules } from '../../src/fixtures/data';
@@ -166,6 +166,86 @@ describe('classifier', () => {
     expect(r.verdict).toEqual({ studying: false, moduleId: null, activity: 'Instagram', confidence: 1, source: 'rule' });
     expect(s.capture).not.toHaveBeenCalled();
     expect(s.classify).not.toHaveBeenCalled();
+  });
+
+  it('an unsure or simulation verdict is a subject guess, not distracted', async () => {
+    const s = setup({
+      verdict: { studying: false, moduleId: null, activity: 'simulation', confidence: 0.9, source: 'vlm' },
+    });
+    const arch = { id: 'lib_computer_architecture', name: 'Computer Architecture', color: 'blue' as const, keywords: ['processor', 'pipeline'] };
+    s.setWin({ appName: 'Java', windowTitle: 'Behavioral Simulation' });
+    const guessed = await s.c.classifyCurrent([...fixtureModules, arch]);
+    expect(guessed.verdict).toEqual({
+      studying: true,
+      moduleId: 'lib_computer_architecture',
+      activity: 'simulation',
+      confidence: 0.55,
+      source: 'vlm',
+    });
+    expect(s.capture).toHaveBeenCalledTimes(1);
+
+    const sure = guessStudy(
+      { studying: false, moduleId: null, activity: 'Playing a game', confidence: 0.93, source: 'vlm' },
+      [...fixtureModules, arch],
+      'Steam',
+      'Library',
+    );
+    expect(sure).toMatchObject({ studying: false, activity: 'Playing a game' });
+
+    const unsure = guessStudy(
+      { studying: false, moduleId: null, activity: 'Browsing', confidence: 0.4, source: 'vlm' },
+      [...fixtureModules, { id: 'lib_coding', name: 'Coding', color: 'purple', keywords: ['python'] }],
+      'Chrome',
+      'New Tab',
+    );
+    expect(unsure).toMatchObject({ studying: true, moduleId: 'lib_coding', confidence: 0.4 });
+  });
+
+  it('WhatsApp is looked at before it can be called distracted', async () => {
+    const s = setup();
+    s.setWin({ appName: 'WhatsApp', windowTitle: 'Group project' });
+    const r = await s.c.classifyCurrent(fixtureModules);
+    expect(s.capture).toHaveBeenCalledTimes(1);
+    expect(s.classify).toHaveBeenCalledTimes(1);
+    expect(r.verdict?.source).not.toBe('rule');
+  });
+
+  it('Vivado is studying even after the model cached it as simulation', async () => {
+    const s = setup({
+      verdict: { studying: false, moduleId: null, activity: 'simulation', confidence: 0.9, source: 'vlm' },
+    });
+    s.setWin({ appName: 'Vivado', windowTitle: 'sim_1 - Behavioral Simulation - Vivado 2024.1' });
+    // No Digital Logic module yet, so the tool rule cannot name it. "simulation" is still a study guess.
+    const missed = await s.c.classifyCurrent(fixtureModules);
+    expect(missed.verdict).toMatchObject({ studying: true, moduleId: 'mod_biology', activity: 'simulation', confidence: 0.55 });
+    expect(s.classify).toHaveBeenCalledTimes(1);
+
+    const modules = [
+      ...fixtureModules,
+      { id: 'lib_digital_logic', name: 'Digital Logic', color: 'yellow' as const, keywords: ['Vivado', 'Verilog'] },
+    ];
+    s.advance(1_000);
+    const r = await s.c.classifyCurrent(modules);
+    expect(r.tookScreenshot).toBe(false);
+    expect(r.verdict).toEqual({
+      studying: true,
+      moduleId: 'lib_digital_logic',
+      activity: 'Vivado',
+      confidence: 1,
+      source: 'rule',
+    });
+    expect(s.capture).toHaveBeenCalledTimes(1);
+    expect(s.classify).toHaveBeenCalledTimes(1);
+  });
+
+  it('a distraction in the title still beats a study-tool name', async () => {
+    const s = setup();
+    s.setWin({ appName: 'Safari', windowTitle: 'reddit.com/r/vivado' });
+    const r = await s.c.classifyCurrent([
+      { id: 'lib_digital_logic', name: 'Digital Logic', color: 'yellow', keywords: ['Vivado'] },
+    ]);
+    expect(r.verdict).toMatchObject({ studying: false, activity: 'Reddit', source: 'rule' });
+    expect(s.capture).not.toHaveBeenCalled();
   });
 
   it('cache path: same app + title within the TTL reuses the VLM verdict without a screenshot', async () => {

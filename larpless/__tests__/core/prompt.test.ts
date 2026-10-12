@@ -18,6 +18,8 @@ describe('prompt', () => {
     expect(s.required.sort()).toEqual(['confidence', 'studying', 'subject']);
     expect(s.properties.activity.type).toBe('string');
     expect(SYSTEM).toContain('Online shopping');
+    expect(SYSTEM).toContain('simulation');
+    expect(SYSTEM).toContain('guess the closest module');
     expect(SYSTEM).not.toContain('Checking email');
     expect(s.properties.studying.type).toBe('boolean');
     expect(s.properties.confidence.type).toBe('number');

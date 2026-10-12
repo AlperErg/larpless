@@ -14,7 +14,7 @@ import type { OllamaClient } from './ollama';
 import { BEHIND_WINDOWS } from './powerProfile';
 import type { PowerSpec } from './powerProfile';
 import { MAX_ACTIVITY_CHARS } from './prompt';
-import { matchDistraction } from './rules';
+import { matchDistraction, matchStudyTool } from './rules';
 
 export interface ClassifierConfig {
   USE_MOCK_CLASSIFIER: boolean;
@@ -88,6 +88,49 @@ interface CacheEntry {
 }
 
 const lc = (s: string) => s.toLowerCase();
+
+/**
+ * A "Not study" verdict is kept only when the model is at least this sure.
+ * Below it, the label is a guess at a subject. The prompt asks for 0.9 or more on a clear feed.
+ */
+export const SURE_NOT_STUDY = 0.8;
+
+/** Coursework the model keeps misreading as a distraction reason. */
+const WORK_ACTIVITY = /\b(simulat\w*|lab|homework|assignment|coursework|problem set|waveform)\b/i;
+
+/**
+ * Not study is a confident distraction, or it isn't. An unsure answer, or one whose reason is
+ * "simulation" / a lab, becomes the closest subject instead of distracted.
+ */
+export function guessStudy(
+  verdict: ScreenVerdict,
+  modules: readonly StudyModule[],
+  appName: string | null,
+  windowTitle: string | null,
+): ScreenVerdict {
+  if (verdict.studying || verdict.source === 'rule' || modules.length === 0) return verdict;
+  const blob = `${verdict.activity} ${appName ?? ''} ${windowTitle ?? ''}`;
+  const work = WORK_ACTIVITY.test(blob);
+  if (!work && verdict.confidence >= SURE_NOT_STUDY) return verdict;
+
+  const hay = lc(blob);
+  const mentioned = modules.find((m) =>
+    [m.name, ...m.keywords].some((k) => {
+      const kw = lc(k.trim());
+      return kw.length >= 4 && hay.includes(kw);
+    }),
+  );
+  const named = (name: string) => modules.find((m) => lc(m.name) === lc(name));
+  const sim = /\bsimulat/i.test(blob);
+  const guessed = mentioned ?? (sim ? named('Computer Architecture') ?? named('Digital Logic') ?? named('Coding') : named('Coding')) ?? modules[0];
+  return {
+    studying: true,
+    moduleId: guessed.id,
+    activity: verdict.activity,
+    confidence: Math.min(verdict.confidence, 0.55),
+    source: verdict.source,
+  };
+}
 
 /**
  * USE_MOCK_CLASSIFIER: derive a verdict from the window title, no Ollama.
@@ -197,11 +240,12 @@ export function createClassifier({ native, ollama, now, config, getPower }: Clas
           error: 'capture',
         };
       }
-      const verdict = useMock
+      const raw = useMock
         ? mockVerdictFromTitle(snapApp, snapTitle, modules)
         : spec
           ? await ollama.classify(snap, modules, { timeoutMs: left, keepAlive: spec.keepAlive })
           : await ollama.classify(snap, modules, { timeoutMs: left });
+      const verdict = raw ? guessStudy(raw, modules, snapApp, snapTitle) : raw;
       if (verdict && snapTitle !== null) {
         cache = { appName: snapApp, windowTitle: snapTitle, verdict, at: now(), ttlMs: cacheTtl() };
       }
@@ -238,6 +282,18 @@ export function createClassifier({ native, ollama, now, config, getPower }: Clas
     const rule = matchDistraction(win.appName, win.windowTitle);
     if (rule) {
       const verdict: ScreenVerdict = { studying: false, moduleId: null, activity: rule.activity, confidence: 1, source: 'rule' };
+      return { kind: 'fast', result: { verdict: remember(verdict, appName, key), tookScreenshot: false, appName, key } };
+    }
+    // Before the cache: a Vivado window the model already called "simulation" must not stay distracted.
+    const study = matchStudyTool(win.appName, win.windowTitle, modules);
+    if (study) {
+      const verdict: ScreenVerdict = {
+        studying: true,
+        moduleId: study.moduleId,
+        activity: study.activity,
+        confidence: 1,
+        source: 'rule',
+      };
       return { kind: 'fast', result: { verdict: remember(verdict, appName, key), tookScreenshot: false, appName, key } };
     }
     const t = now();
