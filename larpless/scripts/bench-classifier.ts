@@ -10,15 +10,16 @@
  * ("notstudy" means "Not study"). An optional sidecar bench/<name>.json holds
  * { appName, windowTitle } for the prompt.
  *
- * If bench/ has no images it renders 10 SYNTHETIC mock-ups (local HTML → headless Chrome).
- * It never captures the real screen.
+ * If bench/ has no images it renders 10 SYNTHETIC mock-ups (local HTML → headless Chrome on macOS,
+ * Edge on Windows). It never captures the real screen. `--generate-only` also works on Windows, for
+ * scripts/embed_bench.
  *
  * PRIVACY: prints file names, labels, confidences and latencies only — never image data.
  */
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { StudyModule } from '../src/contracts/domain';
 import { buildMessages, buildSchema, extractJson, NOT_STUDY, NUM_CTX, parseVerdict } from '../src/core/prompt.ts';
 
@@ -46,7 +47,10 @@ const PREFILL = !flag('no-prefill'); // empty-think assistant prefill, as the ap
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const BENCH = path.resolve(HERE, '..', 'bench');
 const TMP = path.join(BENCH, '.tmp');
-const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const CHROME =
+  process.platform === 'win32'
+    ? 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe'
+    : '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 
 /* Fixture modules (same as src/fixtures/data.ts). */
 const MODULES: StudyModule[] = [
@@ -64,6 +68,8 @@ interface Scene {
   appName: string;
   windowTitle: string;
   html: string;
+  /** Library subjects that also count as correct (embed_bench scores against all 44; this bench uses 3 modules). */
+  accept?: string[];
 }
 
 const FONT = `-apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif`;
@@ -153,6 +159,7 @@ const SCENES: Scene[] = [
   },
   {
     file: 'maths__problem-set',
+    accept: ['Calculus', 'Linear Algebra'],
     appName: 'Preview',
     windowTitle: 'MATH201 Problem set 3.pdf',
     html: desktop(
@@ -193,7 +200,7 @@ const SCENES: Scene[] = [
           <div style="font-size:17px;line-height:1.75">
             <p style="margin-bottom:14px">By 1789 the French monarchy faced a fiscal crisis. Decades of war, including support for the American Revolution, had left the crown deeply in debt, and the tax burden fell almost entirely on the Third Estate.</p>
             <h3 style="font-size:22px;margin:18px 0 8px">1. Social inequality under the Ancien Régime</h3>
-            <p style="margin-bottom:14px">The clergy and nobility held privileges and tax exemptions, while peasants and the urban bourgeoisie paid the taille and seigneurial dues. Enlightenment writers such as Rousseau and Montesquieu questioned this order.</p>
+            <p style="margin-bottom:14px">The clergy and nobility held privileges and tax exemptions, while peasants and the urban bourgeoisie paid the taille and seigneurial dues. Enlightenment writers such as Rousseau and Montesquieu questioned this order. Archive reference ZEBRASENTINEL.</p>
             <h3 style="font-size:22px;margin:18px 0 8px">2. The Estates-General and the Tennis Court Oath</h3>
             <p>When Louis XVI summoned the Estates-General in May 1789, the Third Estate declared itself the National Assembly …</p>
           </div></div></div>`,
@@ -231,6 +238,7 @@ const SCENES: Scene[] = [
   },
   {
     file: 'maths__youtube-lecture',
+    accept: ['Calculus'],
     appName: 'Safari',
     windowTitle: 'Integration by parts – YouTube',
     html: desktop(
@@ -350,6 +358,7 @@ const SCENES: Scene[] = [
   },
   {
     file: 'maths__code-editor',
+    accept: ['Linear Algebra', 'Coding'],
     appName: 'Code',
     windowTitle: 'matrix_hw.py — MATH201',
     html: desktop(
@@ -426,11 +435,14 @@ function generateSynthetic(): void {
         `--user-data-dir=${profile}`,
         '--window-size=1440,900',
         `--screenshot=${out}`,
-        `file://${htmlPath}`,
+        pathToFileURL(htmlPath).href,
       ],
       { stdio: 'ignore' },
     );
-    fs.writeFileSync(path.join(BENCH, `${s.file}.json`), JSON.stringify({ appName: s.appName, windowTitle: s.windowTitle, synthetic: true }));
+    fs.writeFileSync(
+      path.join(BENCH, `${s.file}.json`),
+      JSON.stringify({ appName: s.appName, windowTitle: s.windowTitle, synthetic: true, ...(s.accept ? { accept: s.accept } : {}) }),
+    );
     console.log(`rendered ${s.file}.png`);
   }
   fs.rmSync(htmlDir, { recursive: true, force: true });

@@ -1,0 +1,4 @@
+# Python virtual environment and downloaded model weights (HF_HOME points here).
+.venv/
+.models/
+__pycache__/
