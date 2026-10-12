@@ -37,4 +37,9 @@ SIGN="${EXPANDED_CODE_SIGN_IDENTITY:-}"
 if [ -z "${SIGN}" ] || [ "${SIGN}" = "-" ]; then
   SIGN="-"
 fi
-codesign --force --sign "${SIGN}" --timestamp=none "${DEST}/MediaRemoteAdapter.framework"
+
+TIMESTAMP="--timestamp=none"
+case "${EXPANDED_CODE_SIGN_IDENTITY_NAME:-}" in
+  "Developer ID Application"*) TIMESTAMP="--timestamp" ;;
+esac
+codesign --force --sign "${SIGN}" "${TIMESTAMP}" "${DEST}/MediaRemoteAdapter.framework"
