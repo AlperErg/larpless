@@ -664,7 +664,7 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
         // this JS may already be gone by then.
         if (!demo) {
           await deps.classifier.unload().catch(noop);
-          // Mac quits through FLOllama. Windows has no FLOllama module, so it quits through the app shell.
+          // FLOllama quits the app, the server and the runner holding the model; stopOllama catches anything left.
           await native.ollamaHost.quit().catch(noop);
           native.appShell.stopOllama();
         }

@@ -81,19 +81,21 @@ Re-export (Python + ultralytics) and replace the file:
 yolo export model=yolo11n.pt format=onnx nms=True imgsz=640 conf=0.2 iou=0.6
 ```
 
-## Ollama on Windows (open issue)
+## Ollama on Windows
 
-Measured on the dev PC (Ryzen 5 7545U, Radeon 740M iGPU, 15 GB RAM), Ollama 0.40.2:
+Ollama skips integrated GPUs unless the **`OLLAMA_IGPU_ENABLE=1`** user environment variable is set (restart Ollama after setting it). With it, AMD iGPUs run through **Vulkan**; check `%LOCALAPPDATA%\Ollama\server.log` for `inference compute … library=Vulkan` and `offloaded N/N layers to GPU`.
 
-- Ollama runs **CPU only**: it drops the integrated GPU ("set `OLLAMA_IGPU_ENABLE=1`" in `%LOCALAPPDATA%\Ollama\server.log`) and ROCm has no kernels for gfx1103.
-- `qwen3-vl:2b` processes the prompt at ~36 tokens/s; a 640 px screenshot + prompt is ~1,100 tokens ⇒ **≥ 30 s per check**. `qwen3-vl:4b` at 640 px timed out at 30 s. With the default 8 s `CLASSIFY_TIMEOUT_MS` every chunk becomes `unknown`. (On Apple silicon the same check is ~3 s.)
-- Smaller screenshots + a longer limit alone don't fix it, so that change was **not** committed.
-- Options still to decide: enable the iGPU (`OLLAMA_IGPU_ENABLE=1` user env var, restart Ollama, re-measure); window-title-only classification on Windows; or slow checks (≈90 s limit, 448 px, 2B model).
-- The 4B model takes ~4.4 GB (`llama-server`); with other apps open, free RAM fell below 1 GB.
+Current dev PC (Framework 13, Ryzen AI 7 350, Radeon 860M = gfx1152, 24 GB RAM), Ollama 0.40.3, `qwen3-vl:2b`, all layers and the vision encoder on Vulkan:
+
+- Screenshot check: **~3–7 s**. Title-only request: ~0.9 s. That's close to Apple silicon, so Windows uses the normal screenshot path (`config.TITLE_CHECK` is off).
+- **ROCm doesn't work on gfx1152**: Ollama drops it (no rocBLAS kernels), and forcing `HSA_OVERRIDE_GFX_VERSION=11.5.0` loads the model, then crashes with `device kernel image is invalid`. Leave it on Vulkan.
+- **The NPU is unused**: Ollama has no NPU backend. AMD's Lemonade Server can use it, but it speaks an OpenAI-style API and has limited vision-model support, so it isn't wired in.
+
+CPU-only PCs are much slower. On a Ryzen 5 7545U (Radeon 740M = gfx1103, no Vulkan offload at the time) a 640 px screenshot check took **≥ 30 s** and the 4B model timed out. For machines like that, `TITLE_CHECK: true` asks the model about the window title first and only accepts a confident *studying* answer; anything else still takes a screenshot, because the title can't show what's on the page.
 
 ### Unresolved crash
 
-LarpLess crashed twice in `hermes.dll` with `0xc0000005` at offset `0x1c59d0`, both while screenshot checks were timing out with the 4B model loaded and < 1 GB RAM free. A repro of "abort a fetch, the response arrives later" (local server answering after 5 s) did **not** crash, so that alone isn't the cause; memory pressure is the main suspect. Re-check once the classifier is fast enough not to time out.
+On the old CPU-only PC, LarpLess crashed twice in `hermes.dll` with `0xc0000005` at offset `0x1c59d0`, both while screenshot checks were timing out with the 4B model loaded and < 1 GB RAM free. A repro of "abort a fetch, the response arrives later" (local server answering after 5 s) did **not** crash, so that alone isn't the cause; memory pressure is the main suspect. Re-check once the classifier is fast enough not to time out.
 
 ### Benchmarking the classifier
 

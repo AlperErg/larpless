@@ -134,8 +134,17 @@ _Use_decl_annotations_ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE, PSTR 
                           .WorkArea()};
   const auto size{appWindow.Size()};
   appWindow.Move({workArea.X + (workArea.Width - size.Width) / 2, workArea.Y + (workArea.Height - size.Height) / 2});
-  // Closing the window quits the process. JS may already be gone, so unload Ollama here too.
-  appWindow.Closing([](auto&&, auto&&) { LarpLess::StopLocalOllama(); });
+  // Closing the window quits the process. JS may already be gone, so quit Ollama here too, including the
+  // llama-server runner that holds the model: Windows doesn't end child processes with their parent.
+  // Skip the full quit if a launch/restart holds the lock rather than block the close on it.
+  appWindow.Closing([](auto&&, auto&&) {
+    try {
+      std::unique_lock lock{LarpLess::OllamaHost::g_busy, std::try_to_lock};
+      if (lock.owns_lock()) LarpLess::OllamaHost::QuitApp();
+    } catch (...) {
+    }
+    LarpLess::StopLocalOllama();
+  });
 
   // Get the ReactViewOptions so we can set the initial RN component to load
   auto viewOptions{reactNativeWin32App.ReactViewOptions()};

@@ -23,7 +23,7 @@ export interface ClassifierConfig {
   /**
    * After the rules and the cache, ask the model about the window title with no screenshot.
    * A confident "studying" answer is used; anything else still goes to the vision model, since a
-   * title can't show what's on the page. Windows only.
+   * title can't show what's on the page. Off by default; meant for CPU-only Ollama.
    */
   TITLE_CHECK?: boolean;
 }

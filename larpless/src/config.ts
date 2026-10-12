@@ -6,7 +6,7 @@ export const config = {
   CAPTURE: { maxWidth: 1280, jpegQuality: 0.7 }, // fallback when a caller has no power profile; live sessions use the profile
   CLASSIFY_TIMEOUT_MS: 30_000, // ceiling so a slow machine can finish; profiles change cadence, not this
   CACHE_TTL_MS: 120_000,
-  /** Set per platform in sessionStore. Off everywhere except Windows. */
+  /** Ask the model about the window title before taking a screenshot. Only worth it when vision checks are slow (CPU-only Ollama). */
   TITLE_CHECK: false,
   WEBCAM_FPS: 1,
   SHOW_DEV_TOOLS: __DEV__,
@@ -20,11 +20,6 @@ export const config = {
  * (`cleanSettings`); a model chosen after that is left alone.
  */
 export const MODEL_DEFAULT_REV = 2;
-
-/** Windows classifies from the window title before a screenshot. The Mac stays on the vision model. */
-export function titleCheckForOs(os: string): boolean {
-  return os === 'windows';
-}
 
 export const DEFAULT_SETTINGS: Settings = {
   model: 'qwen3-vl:2b',

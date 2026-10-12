@@ -1,7 +1,7 @@
 import type { ScreenVerdict } from '../../src/contracts/domain';
 import type { ActiveWindow, ScreenSnapshot } from '../../src/contracts/native';
 import { createClassifier, mockVerdictFromTitle, TITLE_CHECK_MIN_CONFIDENCE, windowKey } from '../../src/core/classifier';
-import { titleCheckForOs } from '../../src/config';
+import { config } from '../../src/config';
 import type { ClassifierConfig } from '../../src/core/classifier';
 import { fixtureModules } from '../../src/fixtures/data';
 import type { PowerSpec } from '../../src/core/powerProfile';
@@ -80,10 +80,8 @@ const BIO_KEY = windowKey('Preview', 'BIO101 Lecture 4.pdf');
 const tick = () => new Promise<void>((r) => setImmediate(() => r()));
 
 describe('classifier', () => {
-  it('title check is on for Windows and off for Mac', () => {
-    expect(titleCheckForOs('windows')).toBe(true);
-    expect(titleCheckForOs('macos')).toBe(false);
-    expect(titleCheckForOs('ios')).toBe(false);
+  it('title check is off by default', () => {
+    expect(config.TITLE_CHECK).toBe(false);
     expect(TITLE_CHECK_MIN_CONFIDENCE).toBe(0.6);
   });
 
@@ -126,7 +124,7 @@ describe('classifier', () => {
     expect(r.verdict?.source).toBe('vlm');
   });
 
-  it('Mac (title check off) does not call classifyTitle', async () => {
+  it('with the title check off, classifyTitle is never called', async () => {
     const s = setup();
     await s.c.classifyCurrent(fixtureModules);
     expect(s.classifyTitle).not.toHaveBeenCalled();
