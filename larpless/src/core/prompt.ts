@@ -22,12 +22,14 @@ export const NUM_CTX = 4096;
 export const SYSTEM = [
   'You label what a student is doing on their Mac for a study tracker. You get a screenshot of the main display, the frontmost app name, and its window title. Decide whether the visible content is studying for one of the student\'s modules.',
   '- Judge the content, not the app: a lecture on YouTube, slides in Preview, notes in Notion, a problem set in a browser or an IDE exercise all count as studying if they match a module.',
-  '- Social media, messaging, games, shopping, entertainment video and unrelated news are "Not study".',
+  '- Looking things up is studying: search results, Wikipedia, documentation, Stack Overflow, papers, forums about a topic, or an AI assistant chat about coursework. Pick the module the search is about.',
+  '- Code in an editor or IDE (Cursor, VS Code, Xcode, a terminal) is Coding unless the code is clearly about a more specific module (e.g. pandas or a Jupyter notebook is Data Science).',
+  '- Only social media, messaging, games, shopping, entertainment video and unrelated news are "Not study". If you can\'t tell, choose the closest module with low confidence rather than "Not study".',
   '- Use the module keywords to pick the subject. The list covers many fields: pick the most specific module that fits (e.g. Calculus over Maths, Digital Logic over Coding). If it\'s clearly study content but matches no module, pick the closest one and lower your confidence.',
   '- The window title is a strong hint; if it conflicts with the screenshot, trust the screenshot.',
   '- "confidence": 0 to 1, how certain you are that the subject you chose is correct. It is NOT the probability of studying: a clear social feed is "Not study" with confidence 0.9 or more; use low values only when you are unsure which label fits.',
   '- Do not describe the screen. The subject is the whole answer.',
-  '- When the subject is "Not study", also set "activity" to a generic 2 to 4 word reason such as "Checking email", "Watching YouTube" or "Online shopping". Never copy names, message text, subjects or the window title. When the subject is a module, leave "activity" empty.',
+  '- When the subject is "Not study", also set "activity" to a generic 2 to 4 word reason for what is actually visible, e.g. "Online shopping" or "Playing a game". Say email only when a mail inbox or message is on screen. Never copy names, message text, subjects or the window title. When the subject is a module, leave "activity" empty.',
   '',
   'Reply with JSON only, matching the schema: {"studying": true or false, "subject": one of the module names or "Not study", "confidence": 0.0 to 1.0, "activity": "" or a short reason}',
 ].join('\n');
@@ -135,7 +137,10 @@ export function buildUserText(appName: string | null, windowTitle: string | null
 
 /** Same window line as the vision prompt, without an image, so Windows can answer before a screenshot. */
 export function buildTitleUserText(appName: string | null, windowTitle: string | null): string {
-  return ['No screenshot this time. Judge from the app and window title only.', buildUserText(appName, windowTitle)].join('\n');
+  return [
+    'No screenshot this time. Judge from the app and window title only. If the title doesn\'t say what the page is about, answer with confidence below 0.5.',
+    buildUserText(appName, windowTitle),
+  ].join('\n');
 }
 
 export function buildMessages({ appName, windowTitle, modules, imageBase64, prefillNoThink }: PromptInput): ChatMessage[] {

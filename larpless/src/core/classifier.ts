@@ -22,7 +22,8 @@ export interface ClassifierConfig {
   CAPTURE: CaptureOptions;
   /**
    * After the rules and the cache, ask the model about the window title with no screenshot.
-   * A confident answer is used; a weak one still goes to the vision model. Windows only.
+   * A confident "studying" answer is used; anything else still goes to the vision model, since a
+   * title can't show what's on the page. Windows only.
    */
   TITLE_CHECK?: boolean;
 }
@@ -258,7 +259,7 @@ export function createClassifier({ native, ollama, now, config, getPower }: Clas
         timeoutMs: Math.min(8_000, ceilingMs()),
         keepAlive: power()?.keepAlive,
       });
-      if (titleVerdict && titleVerdict.confidence >= TITLE_CHECK_MIN_CONFIDENCE) {
+      if (titleVerdict && titleVerdict.studying && titleVerdict.confidence >= TITLE_CHECK_MIN_CONFIDENCE) {
         const verdict: ScreenVerdict = { ...titleVerdict, source: 'title' };
         cache = { appName, windowTitle: win.windowTitle, verdict, at: now(), ttlMs: cacheTtl() };
         return {

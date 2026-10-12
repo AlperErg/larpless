@@ -7,7 +7,8 @@ describe('prompt', () => {
     expect(s.properties.subject.enum).toEqual(['Biology', 'Maths', NOT_STUDY]);
     expect(s.required.sort()).toEqual(['confidence', 'studying', 'subject']);
     expect(s.properties.activity.type).toBe('string');
-    expect(SYSTEM).toContain('Checking email');
+    expect(SYSTEM).toContain('Online shopping');
+    expect(SYSTEM).not.toContain('Checking email');
     expect(s.properties.studying.type).toBe('boolean');
     expect(s.properties.confidence.type).toBe('number');
   });

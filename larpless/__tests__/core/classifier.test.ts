@@ -87,18 +87,31 @@ describe('classifier', () => {
     expect(TITLE_CHECK_MIN_CONFIDENCE).toBe(0.6);
   });
 
-  it('a confident title check skips the screenshot', async () => {
+  it('a confident studying title check skips the screenshot', async () => {
     const s = setup({
       config: { TITLE_CHECK: true },
-      classifyTitle: async () => ({ studying: false, moduleId: null, activity: 'Checking email', confidence: 0.8, source: 'vlm' }),
+      classifyTitle: async () => ({ studying: true, moduleId: 'mod_biology', activity: '', confidence: 0.8, source: 'vlm' }),
     });
-    s.setWin({ appName: 'Chrome', windowTitle: 'Inbox (2) - Gmail', bundleId: 'chrome' });
+    s.setWin({ appName: 'Chrome', windowTitle: 'Mitosis - Wikipedia', bundleId: 'chrome' });
     const r = await s.c.classifyCurrent(fixtureModules);
     expect(r.tookScreenshot).toBe(false);
-    expect(r.verdict).toMatchObject({ studying: false, activity: 'Checking email', source: 'title', confidence: 0.8 });
+    expect(r.verdict).toMatchObject({ studying: true, moduleId: 'mod_biology', source: 'title', confidence: 0.8 });
     expect(s.capture).not.toHaveBeenCalled();
     expect(s.classify).not.toHaveBeenCalled();
     expect(s.classifyTitle).toHaveBeenCalledTimes(1);
+  });
+
+  it('a confident "Not study" title check still looks at the screen', async () => {
+    const s = setup({
+      config: { TITLE_CHECK: true },
+      classifyTitle: async () => ({ studying: false, moduleId: null, activity: 'Checking email', confidence: 0.9, source: 'vlm' }),
+    });
+    s.setWin({ appName: 'Cursor', windowTitle: 'classifier.ts - notion-hackathon', bundleId: 'cursor' });
+    const r = await s.c.classifyCurrent(fixtureModules);
+    expect(s.classifyTitle).toHaveBeenCalledTimes(1);
+    expect(s.capture).toHaveBeenCalledTimes(1);
+    expect(r.tookScreenshot).toBe(true);
+    expect(r.verdict?.source).toBe('vlm');
   });
 
   it('a weak title check falls through to the vision model', async () => {
