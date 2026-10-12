@@ -9,8 +9,10 @@
  */
 import type { OllamaHostApi } from '../contracts/native';
 import type { OllamaPrepareOutcome } from '../contracts/store';
-import { sameModel } from './ollama';
+import { isLocalUrl, sameModel } from './ollama';
 import type { OllamaClient } from './ollama';
+
+export { isLocalUrl };
 
 export interface PrepareDeps {
   host: OllamaHostApi;
@@ -33,13 +35,6 @@ export interface PrepareOptions {
 /** How long a launched or restarted Ollama gets to answer. */
 export const SERVER_WAIT_MS = 20_000;
 const POLL_MS = 500;
-
-/** Ollama.app can only be managed when the URL points at this Mac. */
-export function isLocalUrl(url: string): boolean {
-  const host = /^[a-z][a-z0-9+.-]*:\/\/(\[[^\]]*\]|[^/:?#]*)/i.exec(url.trim())?.[1]?.toLowerCase();
-  if (!host) return false;
-  return host === 'localhost' || host === '[::1]' || /^127\.\d+\.\d+\.\d+$/.test(host);
-}
 
 export async function prepareOllama(deps: PrepareDeps, opts: PrepareOptions): Promise<OllamaPrepareOutcome> {
   const log = deps.log ?? (() => {});

@@ -44,6 +44,17 @@ describe('db', () => {
     expect(await db.updateChunk({ ...ch, id: 'other' })).toBe(false);
   });
 
+  it('resets an Ollama URL that is not on this machine', async () => {
+    const kv = createMemoryKv();
+    const db = createDb(kv);
+    await kv.setItem(KEYS.settings, JSON.stringify({ ollamaUrl: 'https://example.com' }));
+    expect((await db.loadSettings()).ollamaUrl).toBe(DEFAULT_SETTINGS.ollamaUrl);
+    await kv.setItem(KEYS.settings, JSON.stringify({ ollamaUrl: 42 }));
+    expect((await db.loadSettings()).ollamaUrl).toBe(DEFAULT_SETTINGS.ollamaUrl);
+    await kv.setItem(KEYS.settings, JSON.stringify({ ollamaUrl: ' http://localhost:11500 ' }));
+    expect((await db.loadSettings()).ollamaUrl).toBe('http://localhost:11500');
+  });
+
   it('drops a track title stuffed into settings', async () => {
     const kv = createMemoryKv();
     const db = createDb(kv);

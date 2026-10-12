@@ -91,13 +91,37 @@ describe('ollama', () => {
   it('tolerates code fences / stray text around the JSON reply', async () => {
     const fetchImpl: FetchLike = () =>
       chatRes('```json\n{"studying":true,"subject":"Maths","activity":"Problem set","confidence":0.8}\n```');
-    const o = createOllama({ baseUrl: 'http://x', model: 'm', fetchImpl, log });
+    const o = createOllama({ baseUrl: 'http://localhost', model: 'm', fetchImpl, log });
     await expect(o.classify(SNAP, fixtureModules)).resolves.toMatchObject({ studying: true, moduleId: 'mod_maths' });
+  });
+
+  it('never sends a screenshot or title to a URL off this machine', async () => {
+    const fetchImpl = jest.fn<ReturnType<FetchLike>, Parameters<FetchLike>>(() => chatRes('{}'));
+    for (const baseUrl of ['https://example.com', 'http://10.0.0.2:11434', 'http://127.0.0.1.evil.com', 'http://localhost.evil.com']) {
+      const o = createOllama({ baseUrl, model: 'm', fetchImpl, log });
+      await expect(o.classify(SNAP, fixtureModules)).resolves.toBeNull();
+      await expect(o.classifyTitle('Preview', 'BIO101', fixtureModules)).resolves.toBeNull();
+    }
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(logs[0]).toMatch(/refused/);
+    expect(logs.join('\n')).not.toContain('BIO101');
+  });
+
+  it('checks the URL on every request, not once at creation', async () => {
+    let baseUrl = 'http://127.0.0.1:11434';
+    const fetchImpl = jest.fn<ReturnType<FetchLike>, Parameters<FetchLike>>(() =>
+      chatRes('{"studying":false,"subject":"Not study","activity":"Feed","confidence":0.9}'),
+    );
+    const o = createOllama({ baseUrl: () => baseUrl, model: 'm', fetchImpl, log });
+    await o.classify(SNAP, fixtureModules);
+    baseUrl = 'https://example.com';
+    await expect(o.classify(SNAP, fixtureModules)).resolves.toBeNull();
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
   it('never logs the image or the request body', async () => {
     const fetchImpl: FetchLike = () => chatRes('{"studying":false,"subject":"Not study","activity":"Feed","confidence":0.9}');
-    const o = createOllama({ baseUrl: 'http://x', model: 'm', fetchImpl, log });
+    const o = createOllama({ baseUrl: 'http://localhost', model: 'm', fetchImpl, log });
     await o.classify(SNAP, fixtureModules);
     expect(logs).toHaveLength(1);
     expect(logs[0]).toMatch(/ms → Not study/);
@@ -116,7 +140,7 @@ describe('ollama', () => {
             reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
           });
         });
-      const o = createOllama({ baseUrl: 'http://x', model: 'm', fetchImpl, timeoutMs: 8_000, log });
+      const o = createOllama({ baseUrl: 'http://localhost', model: 'm', fetchImpl, timeoutMs: 8_000, log });
       const p = o.classify(SNAP, fixtureModules);
       await jest.advanceTimersByTimeAsync(8_000);
       await expect(p).resolves.toBeNull();
@@ -132,7 +156,7 @@ describe('ollama', () => {
     jest.useFakeTimers();
     try {
       const fetchImpl: FetchLike = () => new Promise(() => {});
-      const o = createOllama({ baseUrl: 'http://x', model: 'm', fetchImpl, timeoutMs: 1000, log });
+      const o = createOllama({ baseUrl: 'http://localhost', model: 'm', fetchImpl, timeoutMs: 1000, log });
       const p = o.classify(SNAP, fixtureModules);
       await jest.advanceTimersByTimeAsync(1000);
       await expect(p).resolves.toBeNull();
@@ -150,7 +174,7 @@ describe('ollama', () => {
       () => Promise.reject(new TypeError('Network request failed')),
     ];
     for (const fetchImpl of cases) {
-      const o = createOllama({ baseUrl: 'http://x', model: 'm', fetchImpl, log });
+      const o = createOllama({ baseUrl: 'http://localhost', model: 'm', fetchImpl, log });
       await expect(o.classify(SNAP, fixtureModules)).resolves.toBeNull();
     }
   });
@@ -174,7 +198,7 @@ describe('ollama', () => {
     });
 
     it('never rejects', async () => {
-      const o = createOllama({ baseUrl: 'http://x', model: 'm', fetchImpl: () => Promise.reject(new Error('down')), log });
+      const o = createOllama({ baseUrl: 'http://localhost', model: 'm', fetchImpl: () => Promise.reject(new Error('down')), log });
       await expect(o.warmUp(fixtureModules)).resolves.toBeUndefined();
       expect(logs[0]).toMatch(/warm-up failed/);
     });
@@ -194,7 +218,7 @@ describe('ollama', () => {
 
     it('never rejects (Ollama down or HTTP error)', async () => {
       for (const fetchImpl of [() => Promise.reject(new Error('x')), () => jsonRes({}, false, 500)] as FetchLike[]) {
-        await expect(createOllama({ baseUrl: 'http://x', model: 'm', fetchImpl, log }).unload()).resolves.toBeUndefined();
+        await expect(createOllama({ baseUrl: 'http://localhost', model: 'm', fetchImpl, log }).unload()).resolves.toBeUndefined();
       }
       expect(logs).toEqual(['[ollama] m unload failed', '[ollama] m unload failed']);
     });
@@ -204,20 +228,20 @@ describe('ollama', () => {
     const tags = (names: string[]): FetchLike => () => jsonRes({ models: names.map((name) => ({ name, model: name })) });
 
     it('ok when the model is listed (with or without :latest)', async () => {
-      expect(await createOllama({ baseUrl: 'http://x', model: 'qwen3-vl:4b', fetchImpl: tags(['qwen3-vl:4b']) }).checkHealth()).toBe('ok');
-      expect(await createOllama({ baseUrl: 'http://x', model: 'gemma4', fetchImpl: tags(['gemma4:latest']) }).checkHealth()).toBe('ok');
-      expect(await createOllama({ baseUrl: 'http://x', model: 'gemma4:latest', fetchImpl: tags(['gemma4']) }).checkHealth()).toBe('ok');
+      expect(await createOllama({ baseUrl: 'http://localhost', model: 'qwen3-vl:4b', fetchImpl: tags(['qwen3-vl:4b']) }).checkHealth()).toBe('ok');
+      expect(await createOllama({ baseUrl: 'http://localhost', model: 'gemma4', fetchImpl: tags(['gemma4:latest']) }).checkHealth()).toBe('ok');
+      expect(await createOllama({ baseUrl: 'http://localhost', model: 'gemma4:latest', fetchImpl: tags(['gemma4']) }).checkHealth()).toBe('ok');
     });
 
     it('modelMissing when it is not', async () => {
-      expect(await createOllama({ baseUrl: 'http://x', model: 'qwen3-vl:8b', fetchImpl: tags(['qwen3-vl:4b']) }).checkHealth()).toBe(
+      expect(await createOllama({ baseUrl: 'http://localhost', model: 'qwen3-vl:8b', fetchImpl: tags(['qwen3-vl:4b']) }).checkHealth()).toBe(
         'modelMissing',
       );
     });
 
     it('down on network error or HTTP error', async () => {
-      expect(await createOllama({ baseUrl: 'http://x', model: 'm', fetchImpl: () => Promise.reject(new Error('x')) }).checkHealth()).toBe('down');
-      expect(await createOllama({ baseUrl: 'http://x', model: 'm', fetchImpl: () => jsonRes({}, false, 500) }).checkHealth()).toBe('down');
+      expect(await createOllama({ baseUrl: 'http://localhost', model: 'm', fetchImpl: () => Promise.reject(new Error('x')) }).checkHealth()).toBe('down');
+      expect(await createOllama({ baseUrl: 'http://localhost', model: 'm', fetchImpl: () => jsonRes({}, false, 500) }).checkHealth()).toBe('down');
     });
 
     it('reads model and url lazily (settings can change)', async () => {
@@ -241,7 +265,7 @@ describe('ollama loadedModels', () => {
     const o = createOllama({ baseUrl: 'http://x/', model: 'm', fetchImpl });
     expect(await o.loadedModels()).toEqual(['qwen3-vl:4b', 'llama3']);
     expect(fetchImpl.mock.calls[0][0]).toBe('http://x/api/ps');
-    const down = createOllama({ baseUrl: 'http://x', model: 'm', fetchImpl: () => Promise.reject(new Error('refused')) });
+    const down = createOllama({ baseUrl: 'http://localhost', model: 'm', fetchImpl: () => Promise.reject(new Error('refused')) });
     expect(await down.loadedModels()).toBeNull();
   });
 });
@@ -287,7 +311,7 @@ describe('ollama pull', () => {
   });
 
   it("rejects with Ollama's error line, an HTTP error, or a stream that stops early", async () => {
-    const pull = (streamImpl: StreamLike) => createOllama({ baseUrl: 'http://x', model: 'nope', streamImpl, log: () => {} }).pull(() => {});
+    const pull = (streamImpl: StreamLike) => createOllama({ baseUrl: 'http://localhost', model: 'nope', streamImpl, log: () => {} }).pull(() => {});
     await expect(pull(stream([line({ error: 'pull model manifest: file does not exist' })], 500))).rejects.toThrow(
       'pull model manifest: file does not exist',
     );
@@ -305,7 +329,7 @@ describe('ollama pull', () => {
           reject(e);
         });
       });
-    const done = createOllama({ baseUrl: 'http://x', model: 'm', streamImpl, log: () => {} }).pull(() => {}, { signal: abort.signal });
+    const done = createOllama({ baseUrl: 'http://localhost', model: 'm', streamImpl, log: () => {} }).pull(() => {}, { signal: abort.signal });
     abort.abort();
     await expect(done).rejects.toMatchObject({ name: 'AbortError' });
   });

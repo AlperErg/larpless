@@ -3,6 +3,7 @@
  * Keys: CONTRACTS.md §8. Labels only: never images, never window titles.
  */
 import { DEFAULT_SETTINGS, MODEL_DEFAULT_REV } from '../config';
+import { isLocalUrl } from './ollama';
 import { isPowerProfile } from './powerProfile';
 import type { Chunk, SessionSummary, Settings, StudyModule } from '../contracts/domain';
 
@@ -64,6 +65,9 @@ export function cleanSettings(raw: unknown): Settings {
   if (out.appearance !== 'system' && out.appearance !== 'light' && out.appearance !== 'dark') {
     out.appearance = DEFAULT_SETTINGS.appearance;
   }
+  // Screenshots go to this URL, so only this machine is allowed.
+  if (typeof out.ollamaUrl !== 'string' || !isLocalUrl(out.ollamaUrl)) out.ollamaUrl = DEFAULT_SETTINGS.ollamaUrl;
+  out.ollamaUrl = out.ollamaUrl.trim();
   out.supabaseUrl = typeof out.supabaseUrl === 'string' ? out.supabaseUrl.trim() : '';
   out.supabaseAnonKey = typeof out.supabaseAnonKey === 'string' ? out.supabaseAnonKey.trim() : '';
   return out;

@@ -189,14 +189,29 @@ describe('Settings page', () => {
     expect(settings().model).toBe('llava:7b');
     expect((await stored()).model).toBe('llava:7b');
 
-    await type(r, 'settings-url', 'http://10.0.0.2:11434 ', 'onSubmitEditing');
-    expect(settings().ollamaUrl).toBe('http://10.0.0.2:11434');
+    await type(r, 'settings-url', 'http://localhost:11500 ', 'onSubmitEditing');
+    expect(settings().ollamaUrl).toBe('http://localhost:11500');
 
     const writes = settingsWrites();
     await type(r, 'settings-model', '   ', 'onBlur');
-    await type(r, 'settings-url', 'http://10.0.0.2:11434', 'onBlur');
+    await type(r, 'settings-url', 'http://localhost:11500', 'onBlur');
     expect(settingsWrites()).toBe(writes);
-    expect(settings()).toMatchObject({ model: 'llava:7b', ollamaUrl: 'http://10.0.0.2:11434' });
+    expect(settings()).toMatchObject({ model: 'llava:7b', ollamaUrl: 'http://localhost:11500' });
+    act(() => r.unmount());
+  });
+
+  it('rejects an Ollama URL that is not on this computer', async () => {
+    const r = render();
+    const writes = settingsWrites();
+
+    await type(r, 'settings-url', 'https://example.com', 'onBlur');
+    expect(settingsWrites()).toBe(writes);
+    expect(settings().ollamaUrl).toBe('http://127.0.0.1:11434');
+    expect(r.root.findAllByProps({ testID: 'settings-url-error' }).length).toBeGreaterThan(0);
+
+    await type(r, 'settings-url', 'http://127.0.0.1:11500', 'onBlur');
+    expect(settings().ollamaUrl).toBe('http://127.0.0.1:11500');
+    expect(r.root.findAllByProps({ testID: 'settings-url-error' })).toHaveLength(0);
     act(() => r.unmount());
   });
 

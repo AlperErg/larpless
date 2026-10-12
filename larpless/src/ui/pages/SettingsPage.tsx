@@ -41,6 +41,7 @@ export function SettingsPage() {
   const go = useNavStore((st) => st.go);
   const [model, setModel] = useState(s.model);
   const [url, setUrl] = useState(s.ollamaUrl);
+  const [urlRejected, setUrlRejected] = useState(false);
   const [supabaseUrl, setSupabaseUrl] = useState(s.supabaseUrl);
   const [supabaseKey, setSupabaseKey] = useState(s.supabaseAnonKey);
   useEffect(() => setModel(s.model), [s.model]);
@@ -75,6 +76,13 @@ export function SettingsPage() {
   };
   const commitUrl = () => {
     const v = url.trim();
+    // Screenshots go to this URL, so it has to be this machine.
+    const ok = !v || isLocalUrl(v);
+    setUrlRejected(!ok);
+    if (!ok) {
+      setUrl(s.ollamaUrl);
+      return;
+    }
     if (v && v !== s.ollamaUrl) update({ ollamaUrl: v });
   };
   const commitSupabase = () => {
@@ -143,7 +151,7 @@ export function SettingsPage() {
           style={styles.input}
         />
       </Row>
-      <Row label="Ollama URL">
+      <Row label="Ollama URL" hint="Must be on this computer: localhost or 127.0.0.1.">
         <MacTextInput
           testID="settings-url"
           value={url}
@@ -154,6 +162,11 @@ export function SettingsPage() {
           autoCorrect={false}
           style={styles.input}
         />
+        {urlRejected ? (
+          <Text testID="settings-url-error" variant="small" color={tag.red.text}>
+            Screenshots never leave this computer, so the Ollama URL has to point at it.
+          </Text>
+        ) : null}
       </Row>
       <Row label="Status">
         <View style={styles.inline}>

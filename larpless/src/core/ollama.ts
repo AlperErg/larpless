@@ -154,6 +154,13 @@ async function withTimeout<T>(ms: number, fn: (signal: AbortSignal) => Promise<T
   }
 }
 
+/** True when the URL points at this machine. Screenshots and window titles are only ever sent to such a URL. */
+export function isLocalUrl(url: string): boolean {
+  const host = /^[a-z][a-z0-9+.-]*:\/\/(\[[^\]]*\]|[^/:?#]*)/i.exec(url.trim())?.[1]?.toLowerCase();
+  if (!host) return false;
+  return host === 'localhost' || host === '[::1]' || /^127\.\d+\.\d+\.\d+$/.test(host);
+}
+
 export function createOllama(opts: OllamaOptions): OllamaClient {
   const fetchImpl: FetchLike = opts.fetchImpl ?? (globalThis.fetch as unknown as FetchLike);
   const streamImpl = opts.streamImpl ?? xhrStream;
@@ -172,6 +179,12 @@ export function createOllama(opts: OllamaOptions): OllamaClient {
     limitMs: number,
   ): Promise<ScreenVerdict | null> {
     const model = read(opts.model);
+    const baseUrl = read(opts.baseUrl);
+    // Checked per request, so an edited settings file can't send a screenshot or title off this machine.
+    if (!isLocalUrl(baseUrl)) {
+      log(`[ollama] ${model}${tag} → refused: the Ollama URL isn't on this machine`);
+      return null;
+    }
     const t0 = Date.now();
     let body: string | null = JSON.stringify({
       model,
@@ -184,7 +197,7 @@ export function createOllama(opts: OllamaOptions): OllamaClient {
     });
     try {
       const data = await withTimeout(limitMs, async (signal) => {
-        const res = await fetchImpl(`${trimSlash(read(opts.baseUrl))}/api/chat`, {
+        const res = await fetchImpl(`${trimSlash(baseUrl)}/api/chat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: body!,
