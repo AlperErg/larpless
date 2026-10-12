@@ -1,4 +1,4 @@
-import { matchDistractionSite, matchSite, matchStudySite, normalizeActivityCategory } from '../../src/core/sites';
+import { matchDistractionSite, matchSite, normalizeActivityCategory } from '../../src/core/sites';
 import { matchDistraction, matchStudyTool } from '../../src/core/rules';
 
 const logic = { id: 'lib_digital_logic', name: 'Digital Logic', color: 'yellow' as const, keywords: ['Vivado'] };
