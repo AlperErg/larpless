@@ -47,6 +47,17 @@ function Save-Png([string]$file, [int]$width, [int]$height, [int]$size) {
   $bmp.Dispose()
 }
 
+# Flat theme canvas (src/ui/theme.ts light bg). The launch animation is drawn in JS, so the
+# splash must not place the beige app tile on the old cream or the two frames fight.
+function Save-Solid([string]$file, [int]$width, [int]$height, [System.Drawing.Color]$color) {
+  $bmp = New-Object System.Drawing.Bitmap $width, $height
+  $g = [System.Drawing.Graphics]::FromImage($bmp)
+  $g.Clear($color)
+  $g.Dispose()
+  $bmp.Save($file, [System.Drawing.Imaging.ImageFormat]::Png)
+  $bmp.Dispose()
+}
+
 # Package assets. Tiles keep the ~66% safe area Windows recommends; taskbar/Start list icons fill the canvas.
 $images = Join-Path $root 'windows\LarpLess.Package\Images'
 Save-Png "$images\Square44x44Logo.scale-200.png" 88 88 88
@@ -55,7 +66,8 @@ foreach ($t in 16, 24, 32, 48, 256) {
 }
 Save-Png "$images\Square150x150Logo.scale-200.png" 300 300 198
 Save-Png "$images\Wide310x150Logo.scale-200.png" 620 300 198
-Save-Png "$images\SplashScreen.scale-200.png" 1240 600 300
+$paper = [System.Drawing.Color]::FromArgb(255, 0xF3, 0xF5, 0xF8)
+Save-Solid "$images\SplashScreen.scale-200.png" 1240 600 $paper
 Save-Png "$images\LockScreenLogo.scale-200.png" 48 48 48
 Save-Png "$images\StoreLogo.png" 50 50 50
 
