@@ -30,6 +30,21 @@
     [window setContentSize:NSMakeSize(1100, 720)];
     [window center];
   }
+  // Same canvases as src/ui/theme.ts, so the window matches the boot cover before JS paints.
+  [self fl_syncWindowBackground];
+}
+
+/// Light paper or the site's dark canvas, following the system appearance.
+- (void)fl_syncWindowBackground
+{
+  NSWindow *window = self.window;
+  if (window == nil) return;
+  NSAppearanceName match = [window.effectiveAppearance bestMatchFromAppearancesWithNames:@[
+    NSAppearanceNameDarkAqua, NSAppearanceNameAqua]];
+  BOOL dark = [match isEqualToString:NSAppearanceNameDarkAqua];
+  window.backgroundColor = dark
+    ? [NSColor colorWithSRGBRed:16.0 / 255.0 green:17.0 / 255.0 blue:15.0 / 255.0 alpha:1]
+    : [NSColor colorWithSRGBRed:243.0 / 255.0 green:245.0 / 255.0 blue:248.0 / 255.0 alpha:1];
 }
 
 // Keep running when the main window closes: the floating panel and the session live on.

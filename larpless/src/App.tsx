@@ -16,6 +16,7 @@ import type { Route } from './store/navStore';
 import { useOllamaStore } from './store/ollamaStore';
 import { useSessionStore } from './store/sessionStore';
 import { useSocialStore } from './store/socialStore';
+import { BootScreen } from './ui/components/BootScreen';
 import { CommandPalette } from './ui/layout/CommandPalette';
 import { AppLayout } from './ui/layout/AppLayout';
 import { ErrorBoundary } from './ui/layout/ErrorBoundary';
@@ -142,6 +143,8 @@ function App() {
   }, []);
   const route = useNavStore((s) => s.route);
   const emulate = useViewport((s) => s.emulate);
+  // Jest mounts the routed page directly. The cover is the real launch animation.
+  const [bootCover, setBootCover] = useState(process.env.JEST_WORKER_ID == null);
 
   return (
     <View
@@ -163,6 +166,7 @@ function App() {
         </View>
       ) : null}
       <CommandPalette />
+      {bootCover ? <BootScreen ready={booted} onDone={() => setBootCover(false)} /> : null}
     </View>
   );
 }
