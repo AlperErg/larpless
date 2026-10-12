@@ -39,6 +39,13 @@ describe('keychainAuthStorage', () => {
     expect(legacy.items.has(KEY)).toBe(false);
   });
 
+  it('treats an undefined Keychain read (the bridge’s nil) as missing and still migrates', async () => {
+    const keychain = { ...memory(), getItem: jest.fn(async () => undefined as unknown as string | null) };
+    const legacy = memory({ [KEY]: SESSION });
+    expect(await keychainAuthStorage(keychain, legacy).getItem(KEY)).toBe(SESSION);
+    expect(keychain.items.get(KEY)).toBe(SESSION);
+  });
+
   it('keeps the AsyncStorage copy when the Keychain write fails, and reads as signed out on a Keychain error', async () => {
     const legacy = memory({ [KEY]: SESSION });
     const failingSet = { ...memory(), setItem: jest.fn(async () => Promise.reject(new Error('denied'))) };

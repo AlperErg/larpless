@@ -23,9 +23,9 @@ export function keychainAuthStorage(keychain: AuthStorage, legacy: AuthStorage):
       } catch {
         return null;
       }
-      if (value !== null) return value;
+      if (value != null) return value;
       const old = await legacy.getItem(key).catch(() => null);
-      if (old === null) return null;
+      if (old == null) return null;
       try {
         await keychain.setItem(key, old);
         await legacy.removeItem(key);
