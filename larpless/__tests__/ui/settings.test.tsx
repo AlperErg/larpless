@@ -8,6 +8,7 @@ import { useNavStore } from '../../src/store/navStore';
 import { initialSessionState, useSessionStore } from '../../src/store/sessionStore';
 import { useSocialStore } from '../../src/store/socialStore';
 import { mockNowPlaying } from '../../src/native/mock/nowPlaying';
+import { setSupabaseCredentials } from '../../src/social/supabase';
 import { SettingsPage } from '../../src/ui/pages/SettingsPage';
 
 function render(): ReactTestRenderer {
@@ -77,6 +78,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   jest.useRealTimers();
+  setSupabaseCredentials('', '');
   act(() => {
     useSessionStore.setState({ ...actionsBackup.session, ...initialSessionState });
     useAppStore.setState({ ...actionsBackup.app, ...initialAppState });
@@ -195,6 +197,18 @@ describe('Settings page', () => {
     await type(r, 'settings-url', 'http://10.0.0.2:11434', 'onBlur');
     expect(settingsWrites()).toBe(writes);
     expect(settings()).toMatchObject({ model: 'llava:7b', ollamaUrl: 'http://10.0.0.2:11434' });
+    act(() => r.unmount());
+  });
+
+  it('saves the Supabase URL and anon key together', async () => {
+    const r = render();
+
+    await type(r, 'settings-supabase-url', ' https://example.supabase.co ', 'onBlur');
+    expect(settings()).toMatchObject({ supabaseUrl: 'https://example.supabase.co', supabaseAnonKey: '' });
+
+    await type(r, 'settings-supabase-key', ' anon-key ', 'onBlur');
+    expect(settings()).toMatchObject({ supabaseUrl: 'https://example.supabase.co', supabaseAnonKey: 'anon-key' });
+    expect(await stored()).toMatchObject({ supabaseUrl: 'https://example.supabase.co', supabaseAnonKey: 'anon-key' });
     act(() => r.unmount());
   });
 

@@ -6,7 +6,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { create } from 'zustand';
 import * as api from '../social/api';
 import type { FeedPost, FriendLists, Profile, PublishInput } from '../social/api';
-import { getSupabase, supabaseConfigured } from '../social/supabase';
+import { getSupabase, isSupabaseConfigured } from '../social/supabase';
 
 export type AuthStatus = 'unconfigured' | 'loading' | 'signedOut' | 'signedIn';
 
@@ -28,6 +28,8 @@ export interface SocialActions {
   signIn(username: string, password: string): Promise<void>;
   signUp(username: string, password: string): Promise<void>;
   signOut(): Promise<void>;
+  /** Drop the current session and listen on the client for the latest keys. */
+  reconfigure(): void;
   refresh(): Promise<void>;
   addFriend(username: string): Promise<'sent' | 'accepted'>;
   acceptRequest(friendshipId: string): Promise<void>;
@@ -57,8 +59,10 @@ export function isSessionPosted(s: SocialState, sessionId: string): boolean {
   );
 }
 
-export function createSocialStore(getClient: () => SupabaseClient, configured: boolean) {
+export function createSocialStore(getClient: () => SupabaseClient, configured: boolean | (() => boolean)) {
+  const isConfigured = typeof configured === 'function' ? configured : () => configured;
   let initialized = false;
+  let unsubscribe: (() => void) | null = null;
 
   return create<SocialStore>()((set, get) => {
     const requireUser = (): string => {
@@ -79,23 +83,34 @@ export function createSocialStore(getClient: () => SupabaseClient, configured: b
       await get().refresh();
     };
 
+    const listen = () => {
+      if (!isConfigured() || initialized) return;
+      initialized = true;
+      const { data } = getClient().auth.onAuthStateChange((_event, session) => {
+        // Supabase warns against awaiting client calls inside this callback; defer them.
+        setTimeout(() => {
+          if (session?.user) {
+            onSignedIn(session.user.id).catch(() => {});
+          } else {
+            set({ ...signedOutState, status: 'signedOut' });
+          }
+        }, 0);
+      });
+      unsubscribe = () => data.subscription.unsubscribe();
+    };
+
     return {
-      status: configured ? 'loading' : 'unconfigured',
+      status: isConfigured() ? 'loading' : 'unconfigured',
       ...signedOutState,
 
-      init: () => {
-        if (!configured || initialized) return;
-        initialized = true;
-        getClient().auth.onAuthStateChange((_event, session) => {
-          // Supabase warns against awaiting client calls inside this callback; defer them.
-          setTimeout(() => {
-            if (session?.user) {
-              onSignedIn(session.user.id).catch(() => {});
-            } else {
-              set({ ...signedOutState, status: 'signedOut' });
-            }
-          }, 0);
-        });
+      init: listen,
+
+      reconfigure: () => {
+        unsubscribe?.();
+        unsubscribe = null;
+        initialized = false;
+        set({ ...signedOutState, status: isConfigured() ? 'loading' : 'unconfigured' });
+        listen();
       },
 
       signIn: (username, password) => api.signIn(getClient(), username, password),
@@ -144,4 +159,4 @@ export function createSocialStore(getClient: () => SupabaseClient, configured: b
   });
 }
 
-export const useSocialStore = createSocialStore(getSupabase, supabaseConfigured);
+export const useSocialStore = createSocialStore(getSupabase, isSupabaseConfigured);

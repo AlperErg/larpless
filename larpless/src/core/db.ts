@@ -60,6 +60,8 @@ export function cleanSettings(raw: unknown): Settings {
   if (out.appearance !== 'system' && out.appearance !== 'light' && out.appearance !== 'dark') {
     out.appearance = DEFAULT_SETTINGS.appearance;
   }
+  out.supabaseUrl = typeof out.supabaseUrl === 'string' ? out.supabaseUrl.trim() : '';
+  out.supabaseAnonKey = typeof out.supabaseAnonKey === 'string' ? out.supabaseAnonKey.trim() : '';
   return out;
 }
 

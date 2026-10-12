@@ -91,4 +91,8 @@ export interface Settings {
   pomodoroDefault: PomodoroPreset | 'off';
   onboarded: boolean;
   appearance: Appearance;
+  /** Supabase project URL. Empty uses the keys bundled in src/social/env.ts. */
+  supabaseUrl: string;
+  /** Supabase anon key. Empty uses the keys bundled in src/social/env.ts. */
+  supabaseAnonKey: string;
 }

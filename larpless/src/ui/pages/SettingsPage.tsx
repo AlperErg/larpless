@@ -11,6 +11,7 @@ import { useOllamaStore } from '../../store/ollamaStore';
 import { useSessionStore } from '../../store/sessionStore';
 import { useSocialStore } from '../../store/socialStore';
 import { Button, CodeBlock, MacPressable, MacTextInput, ModelDownload, Segmented, Switch, Text } from '../components';
+import { TextField } from '../components/TextField';
 import { Page } from '../layout/Page';
 import { isLive } from '../lib/actions';
 import { APPEARANCE_OPTIONS, POMODORO_OPTIONS, POWER_OPTIONS, SOUNDS, SOUND_ICON, SOUND_LABEL, STRICTNESS_OPTIONS } from '../lib/labels';
@@ -39,8 +40,12 @@ export function SettingsPage() {
   const go = useNavStore((st) => st.go);
   const [model, setModel] = useState(s.model);
   const [url, setUrl] = useState(s.ollamaUrl);
+  const [supabaseUrl, setSupabaseUrl] = useState(s.supabaseUrl);
+  const [supabaseKey, setSupabaseKey] = useState(s.supabaseAnonKey);
   useEffect(() => setModel(s.model), [s.model]);
   useEffect(() => setUrl(s.ollamaUrl), [s.ollamaUrl]);
+  useEffect(() => setSupabaseUrl(s.supabaseUrl), [s.supabaseUrl]);
+  useEffect(() => setSupabaseKey(s.supabaseAnonKey), [s.supabaseAnonKey]);
   const [checking, setChecking] = useState(false);
   const host = useOllamaStore((st) => st.host);
   const starting = useOllamaStore((st) => st.starting);
@@ -71,6 +76,12 @@ export function SettingsPage() {
     const v = url.trim();
     if (v && v !== s.ollamaUrl) update({ ollamaUrl: v });
   };
+  const commitSupabase = () => {
+    const nextUrl = supabaseUrl.trim();
+    const nextKey = supabaseKey.trim();
+    if (nextUrl === s.supabaseUrl && nextKey === s.supabaseAnonKey) return;
+    update({ supabaseUrl: nextUrl, supabaseAnonKey: nextKey });
+  };
   const changeVolume = (v: number) => {
     const clamped = Math.max(0, Math.min(1, Math.round(v * 10) / 10));
     update({ volume: clamped });
@@ -87,6 +98,33 @@ export function SettingsPage() {
           options={APPEARANCE_OPTIONS}
           value={s.appearance}
           onChange={(v) => update({ appearance: v })}
+        />
+      </Row>
+      <SectionTitle>Friends</SectionTitle>
+      <Row label="Project URL" hint="Supabase → Project Settings → API. Filled in, these replace the bundled keys.">
+        <MacTextInput
+          testID="settings-supabase-url"
+          value={supabaseUrl}
+          onChangeText={setSupabaseUrl}
+          onBlur={commitSupabase}
+          onSubmitEditing={commitSupabase}
+          autoCapitalize="none"
+          autoCorrect={false}
+          placeholder="https://your-project.supabase.co"
+          enableFocusRing={false}
+          style={styles.input}
+        />
+      </Row>
+      <Row label="Anon key" hint="The anon public key. Both fields are saved together.">
+        <TextField
+          testID="settings-supabase-key"
+          value={supabaseKey}
+          onChangeText={setSupabaseKey}
+          onBlur={commitSupabase}
+          onSubmitEditing={commitSupabase}
+          secureTextEntry
+          placeholder="eyJ…"
+          style={styles.supabaseKey}
         />
       </Row>
       <AccountSection />
@@ -334,4 +372,5 @@ const styles = themed(() => StyleSheet.create({
   volPct: { marginLeft: space.sm, width: 36 },
   gapLeft: { marginLeft: space.md },
   code: { alignSelf: 'stretch', maxWidth: 420, marginTop: space.xs },
+  supabaseKey: { alignSelf: 'stretch', maxWidth: 420 },
 }));

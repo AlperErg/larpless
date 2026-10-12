@@ -152,14 +152,14 @@ This runs `npm ci` and then `pod install` with the UTF-8 locale CocoaPods needs.
 
 ### Supabase Setup
 
-The social layer reads `larpless/src/social/env.ts`, which is gitignored. Create it and fill it with your Supabase details. This is required for the app to run.
+The social layer reads `larpless/src/social/env.ts`, which is gitignored. The file has to exist so the app can build. Put the project URL and anon key there, or leave both empty and enter them in **Settings → Friends**. Settings override this file when both fields are filled in. If both are empty everywhere, the app skips Supabase and runs fully local.
 
 ```ts
 export const SUPABASE_URL = 'https://<project>.supabase.co';
 export const SUPABASE_ANON_KEY = '<anon key>';
 ```
 
-Then, in the Supabase dashboard, run [`larpless/supabase/schema.sql`](larpless/supabase/schema.sql) in the SQL editor and turn off **Authentication → Providers → Email → Confirm email** (accounts use a username + password; you can also sign in with the email of an account made outside the app). If both values are empty, the app skips Supabase entirely and runs fully local.
+Then, in the Supabase dashboard, run [`larpless/supabase/schema.sql`](larpless/supabase/schema.sql) in the SQL editor and turn off **Authentication → Providers → Email → Confirm email** (accounts use a username + password; you can also sign in with the email of an account made outside the app).
 
 ### Run
 

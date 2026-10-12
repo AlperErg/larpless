@@ -83,6 +83,23 @@ it('keeps the last feed and flags offline when a refresh fails', async () => {
   expect(store.getState().feed.map((p) => p.id)).toEqual(['p1']);
 });
 
+it('reconnects when configuration appears later', () => {
+  const f = fakeSupabase();
+  let configured = false;
+  const store = createSocialStore(() => f.client, () => configured);
+  store.getState().init();
+  expect(store.getState().status).toBe('unconfigured');
+  expect(f.auth.onAuthStateChange).not.toHaveBeenCalled();
+
+  configured = true;
+  store.getState().reconfigure();
+  expect(store.getState().status).toBe('loading');
+  expect(f.auth.onAuthStateChange).toHaveBeenCalledTimes(1);
+
+  store.getState().reconfigure();
+  expect(f.auth.onAuthStateChange).toHaveBeenCalledTimes(2);
+});
+
 it('publish marks the session as posted', async () => {
   const f = fakeSupabase({ profiles: [{ data: { id: 'u1', username: 'ada' } }] });
   const store = createSocialStore(() => f.client, true);

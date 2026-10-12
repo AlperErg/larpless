@@ -38,8 +38,9 @@ export function AuthGate() {
     return (
       <Page testID="page-login" header={{ icon: 'users', title: 'Friends' }}>
         <Callout icon="alert" tone="orange">
-          <Text>Supabase isn't configured. Add the project URL and anon key to src/social/env.ts.</Text>
+          <Text>Supabase isn't configured. Add the project URL and anon key in Settings.</Text>
         </Callout>
+        <Button testID="login-open-settings" title="Open Settings" variant="secondary" onPress={() => useNavStore.getState().go('settings')} style={styles.submit} />
       </Page>
     );
   }

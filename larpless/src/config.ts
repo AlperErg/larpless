@@ -27,4 +27,6 @@ export const DEFAULT_SETTINGS: Settings = {
   pomodoroDefault: 'off',
   onboarded: false,
   appearance: 'system',
+  supabaseUrl: '',
+  supabaseAnonKey: '',
 };
