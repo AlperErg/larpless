@@ -163,7 +163,7 @@ describe('classifier', () => {
     s.setWin({ appName: 'Safari', windowTitle: 'Instagram' });
     const r = await s.c.classifyCurrent(fixtureModules);
     expect(r.tookScreenshot).toBe(false);
-    expect(r.verdict).toEqual({ studying: false, moduleId: null, activity: 'Instagram', confidence: 1, source: 'rule' });
+    expect(r.verdict).toEqual({ studying: false, moduleId: null, activity: 'Social media', confidence: 1, source: 'rule' });
     expect(s.capture).not.toHaveBeenCalled();
     expect(s.classify).not.toHaveBeenCalled();
   });
@@ -185,12 +185,12 @@ describe('classifier', () => {
     expect(s.capture).toHaveBeenCalledTimes(1);
 
     const sure = guessStudy(
-      { studying: false, moduleId: null, activity: 'Playing a game', confidence: 0.93, source: 'vlm' },
+      { studying: false, moduleId: null, activity: 'Gaming', confidence: 0.93, source: 'vlm' },
       [...fixtureModules, arch],
       'Steam',
       'Library',
     );
-    expect(sure).toMatchObject({ studying: false, activity: 'Playing a game' });
+    expect(sure).toMatchObject({ studying: false, activity: 'Gaming' });
 
     const unsure = guessStudy(
       { studying: false, moduleId: null, activity: 'Browsing', confidence: 0.4, source: 'vlm' },
@@ -271,12 +271,12 @@ describe('classifier', () => {
     expect(exam).toMatchObject({ studying: true, moduleId: 'lib_discrete_maths', activity: '' });
 
     const shop = guessStudy(
-      { studying: false, moduleId: null, activity: 'Online shopping', confidence: 0.96, source: 'vlm' },
+      { studying: false, moduleId: null, activity: 'Shopping', confidence: 0.96, source: 'vlm' },
       modules,
       'Safari',
       'Amazon.com: Shopping Cart',
     );
-    expect(shop).toMatchObject({ studying: false, activity: 'Online shopping' });
+    expect(shop).toMatchObject({ studying: false, activity: 'Shopping' });
   });
 
   it('a virtual machine is a lab unless a game or feed runs inside it', () => {
@@ -300,12 +300,12 @@ describe('classifier', () => {
     expect(noOs).toMatchObject({ studying: true, moduleId: 'lib_coding' });
 
     const game = guessStudy(
-      { studying: false, moduleId: null, activity: 'Playing a game', confidence: 0.95, source: 'vlm' },
+      { studying: false, moduleId: null, activity: 'Gaming', confidence: 0.95, source: 'vlm' },
       modules,
       'Parallels Desktop',
       'Windows 11',
     );
-    expect(game).toMatchObject({ studying: false, activity: 'Playing a game' });
+    expect(game).toMatchObject({ studying: false, activity: 'Gaming' });
   });
 
   it('WhatsApp is looked at before it can be called distracted', async () => {
@@ -351,8 +351,31 @@ describe('classifier', () => {
     const r = await s.c.classifyCurrent([
       { id: 'lib_digital_logic', name: 'Digital Logic', color: 'yellow', keywords: ['Vivado'] },
     ]);
-    expect(r.verdict).toMatchObject({ studying: false, activity: 'Reddit', source: 'rule' });
+    expect(r.verdict).toMatchObject({ studying: false, activity: 'Social media', source: 'rule' });
     expect(s.capture).not.toHaveBeenCalled();
+  });
+
+  it('drops cache when the user switches away and back', async () => {
+    const s = setup();
+    await s.c.classifyCurrent(fixtureModules);
+    expect(s.capture).toHaveBeenCalledTimes(1);
+    s.setWin({ appName: 'Chrome', windowTitle: 'New Tab' });
+    await s.c.classifyCurrent(fixtureModules);
+    expect(s.capture).toHaveBeenCalledTimes(2);
+    s.setWin({ appName: 'Preview', windowTitle: 'BIO101 Lecture 4.pdf' });
+    await s.c.classifyCurrent(fixtureModules);
+    expect(s.capture).toHaveBeenCalledTimes(3);
+  });
+
+  it('re-checks a distracted window after 60s even within the cache TTL', async () => {
+    const s = setup({
+      verdict: { studying: false, moduleId: null, activity: 'Social media', confidence: 0.95, source: 'vlm' },
+    });
+    await s.c.classifyCurrent(fixtureModules);
+    expect(s.capture).toHaveBeenCalledTimes(1);
+    s.advance(61_000);
+    await s.c.classifyCurrent(fixtureModules);
+    expect(s.capture).toHaveBeenCalledTimes(2);
   });
 
   it('cache path: same app + title within the TTL reuses the VLM verdict without a screenshot', async () => {
@@ -467,10 +490,11 @@ describe('classifier', () => {
     await tick();
     s.setWin({ windowTitle: 'BIO101 Lecture 4.pdf' });
     const second = s.c.classifyCurrent(fixtureModules);
-    expect(await second).toMatchObject({ tookScreenshot: false, key: BIO_KEY, verdict: { source: 'cache' } });
+    await tick();
     release(BIO_VERDICT);
     await first;
-    expect(s.capture).toHaveBeenCalledTimes(2);
+    expect(await second).toMatchObject({ tookScreenshot: true, key: BIO_KEY });
+    expect(s.capture).toHaveBeenCalledTimes(3);
   });
 
   it('warmUp and unload delegate to Ollama, except with the mock classifier (tests never reach Ollama)', async () => {

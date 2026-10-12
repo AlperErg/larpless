@@ -63,11 +63,11 @@ describe('ollama', () => {
 
   it('classifyTitle sends no image and keeps a short distraction reason', async () => {
     const fetchImpl = jest.fn<ReturnType<FetchLike>, Parameters<FetchLike>>(() =>
-      chatRes(JSON.stringify({ studying: false, subject: 'Not study', activity: 'Checking email', confidence: 0.82 })),
+      chatRes(JSON.stringify({ studying: false, subject: 'Not study', activity: 'Browsing', confidence: 0.82 })),
     );
     const o = createOllama({ baseUrl: 'http://127.0.0.1:11434/', model: 'qwen3-vl:4b', fetchImpl, log });
     const v = await o.classifyTitle('Chrome', 'Inbox - Gmail', fixtureModules);
-    expect(v).toEqual({ studying: false, moduleId: null, activity: 'Checking email', confidence: 0.82, source: 'vlm' });
+    expect(v).toEqual({ studying: false, moduleId: null, activity: 'Browsing', confidence: 0.82, source: 'vlm' });
     const body = JSON.parse(fetchImpl.mock.calls[0][1]!.body!);
     expect(body.messages[0].content).toBe(buildSystem(fixtureModules));
     expect(body.messages[1].images).toBeUndefined();

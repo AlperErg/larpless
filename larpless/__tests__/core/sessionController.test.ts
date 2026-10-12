@@ -364,7 +364,7 @@ describe('sessionController', () => {
     // High profile: 10 s chunks. Mock screen: BIO ×2, MATH ×2, Instagram ×2, YouTube ×2 …
     await advance(60_000);
     const alerts = (h.native.notifications.post as jest.Mock).mock.calls.map((c) => c[0].title);
-    expect(alerts.some((t: string) => /You've been on Instagram for 20 s/.test(t))).toBe(true);
+    expect(alerts.some((t: string) => /You've been on Social media for 20 s/.test(t))).toBe(true);
     expect(h.native.sound.chime).toHaveBeenCalledWith('soft');
     await advance(60_000);
     expect(h.state.status).toBe('break');
@@ -571,15 +571,15 @@ describe('sessionController', () => {
 
       setTitle('Instagram');
       await advance(4_000);
-      expect(h.panelUpdates.at(-1)).toMatchObject({ status: 'distracted', title: 'Distracted', subtitle: 'Instagram', tint: 'red' });
+      expect(h.panelUpdates.at(-1)).toMatchObject({ status: 'distracted', title: 'Distracted', subtitle: 'Social media', tint: 'red' });
       expect(h.capture).toHaveBeenCalledTimes(2); // rules need no screenshot
 
       setTitle('MATH201 Problem set 3.pdf');
       await advance(18_000);
       expect(h.state.chunks).toHaveLength(1);
       expect(h.state.chunks[0]).toMatchObject({ kind: 'subject', moduleId: 'mod_maths', source: 'cache' });
-      expect(h.capture).toHaveBeenCalledTimes(2);
-      expect(h.state.privacy).toEqual({ framesAnalysed: 2, checksWithoutScreenshot: 1, framesStored: 0 });
+      expect(h.capture).toHaveBeenCalledTimes(3);
+      expect(h.state.privacy).toEqual({ framesAnalysed: 3, checksWithoutScreenshot: 1, framesStored: 0 });
       await h.ctrl.end();
     });
 
@@ -611,10 +611,10 @@ describe('sessionController', () => {
       await advance(4_000); // BIO check started, capture pending
       setTitle('Instagram');
       await advance(4_000);
-      expect(h.state.current).toMatchObject({ kind: 'distracted', activity: 'Instagram' });
+      expect(h.state.current).toMatchObject({ kind: 'distracted', activity: 'Social media' });
       release();
       await advance(0);
-      expect(h.state.current).toMatchObject({ kind: 'distracted', activity: 'Instagram' });
+      expect(h.state.current).toMatchObject({ kind: 'distracted', activity: 'Social media' });
       expect(h.state.privacy.framesAnalysed).toBe(1); // the screenshot still counts
       await h.ctrl.end();
     });

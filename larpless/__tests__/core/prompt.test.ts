@@ -17,8 +17,10 @@ describe('prompt', () => {
     const s = buildSchema(['Biology', 'Maths']);
     expect(s.properties.subject.enum).toEqual(['Biology', 'Maths', NOT_STUDY]);
     expect(s.required.sort()).toEqual(['confidence', 'studying', 'subject']);
-    expect(s.properties.activity.type).toBe('string');
-    expect(SYSTEM).toContain('Online shopping');
+    expect(s.properties.activity.enum).toContain('Social media');
+    expect(s.properties.activity.enum).toContain('');
+    expect(SYSTEM).toContain('category from the schema');
+    expect(SYSTEM).not.toContain('Planning a party');
     expect(SYSTEM).toContain('simulation');
     expect(SYSTEM).toContain('guess the closest module');
     expect(SYSTEM).not.toContain('Checking email');
@@ -99,20 +101,14 @@ describe('prompt', () => {
       expect(v?.moduleId).toBe('mod_maths');
     });
 
-    it('"Not study" → studying false, no module, short reason kept', () => {
-      const v = parseVerdict({ studying: true, subject: 'Not study', activity: 'Checking email', confidence: 0.95 }, fixtureModules);
-      expect(v).toEqual({ studying: false, moduleId: null, activity: 'Checking email', confidence: 0.95, source: 'vlm' });
+    it('"Not study" keeps a fixed category', () => {
+      const v = parseVerdict({ studying: true, subject: 'Not study', activity: 'Social media', confidence: 0.95 }, fixtureModules);
+      expect(v).toEqual({ studying: false, moduleId: null, activity: 'Social media', confidence: 0.95, source: 'vlm' });
     });
 
-    it('drops a reason that copies the window title and caps a long one', () => {
-      const title = 'Inbox (2) - user@gmail.com - Gmail';
-      expect(parseVerdict({ studying: false, subject: 'Not study', activity: title, confidence: 0.9 }, fixtureModules, title)?.activity).toBe('');
-      expect(
-        parseVerdict(
-          { studying: false, subject: 'Not study', activity: 'word '.repeat(20), confidence: 0.9 },
-          fixtureModules,
-        )?.activity.length,
-      ).toBeLessThanOrEqual(32);
+    it('drops invented activity text that is not a category', () => {
+      expect(parseVerdict({ studying: false, subject: 'Not study', activity: 'Planning a party', confidence: 0.9 }, fixtureModules)?.activity).toBe('');
+      expect(parseVerdict({ studying: false, subject: 'Not study', activity: 'Messaging', confidence: 0.9 }, fixtureModules)?.activity).toBe('Chatting');
     });
 
     it('buildTitleUserText has no image and still names the window', () => {
@@ -125,11 +121,8 @@ describe('prompt', () => {
     it('a chat app is told to judge the attachments', () => {
       const text = buildUserText('WhatsApp', 'info management project');
       expect(text).toContain('Read the messages');
-      expect(text).toContain('not the app');
-      const assistant = buildUserText('ChatGPT', 'ChatGPT');
-      expect(assistant).toContain('AI chat');
-      expect(assistant).toContain('Discrete Maths');
-      expect(buildUserText('Chrome', 'injective functions - ChatGPT')).toContain('Do not answer "Messaging"');
+      expect(buildUserText('ChatGPT', 'ChatGPT')).toContain('AI chat');
+      expect(buildUserText('Chrome', 'Feed | LinkedIn')).toContain('LinkedIn');
       expect(buildUserText('Preview', 'notes.pdf')).not.toContain('AI chat');
     });
 

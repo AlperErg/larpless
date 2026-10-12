@@ -4,19 +4,19 @@ import { DISTRACTION_RULES, matchDistraction, matchStudyTool } from '../../src/c
 describe('rules.matchDistraction', () => {
   it('matches the PLAN §7 list case-insensitively, with nicely cased labels', () => {
     const cases: [string | null, string | null, string][] = [
-      ['Safari', 'Instagram', 'Instagram'],
-      ['Google Chrome', 'TIKTOK - Make Your Day', 'TikTok'],
-      ['Safari', '(3) Facebook', 'Facebook'],
-      ['Firefox', 'r/memes - reddit', 'Reddit'],
-      ['Safari', 'Home / x.com', 'X'],
-      ['Safari', 'Twitter', 'Twitter'],
-      ['Safari', 'Netflix', 'Netflix'],
-      ['Safari', 'Twitch', 'Twitch'],
-      ['Discord', '#general', 'Discord'],
-      ['Messenger', 'Chats', 'Messenger'],
-      ['Steam', 'Library', 'Steam'],
-      ['Safari', 'Amazon.com: Shopping Cart', 'Amazon'],
-      ['Safari', 'YouTube Shorts', 'YouTube Shorts'],
+      ['Safari', 'Instagram', 'Social media'],
+      ['Google Chrome', 'TIKTOK - Make Your Day', 'Social media'],
+      ['Safari', '(3) Facebook', 'Social media'],
+      ['Firefox', 'r/memes - reddit', 'Social media'],
+      ['Safari', 'Home / x.com', 'Social media'],
+      ['Safari', 'Twitter', 'Social media'],
+      ['Safari', 'Netflix', 'Video'],
+      ['Safari', 'Twitch', 'Video'],
+      ['Discord', '#general', 'Chatting'],
+      ['Messenger', 'Chats', 'Chatting'],
+      ['Steam', 'Library', 'Gaming'],
+      ['Safari', 'Amazon.com: Shopping Cart', 'Shopping'],
+      ['Safari', 'YouTube Shorts', 'Video'],
     ];
     for (const [app, title, label] of cases) {
       expect(matchDistraction(app, title)).toEqual({ activity: label });
@@ -27,7 +27,7 @@ describe('rules.matchDistraction', () => {
     expect(matchDistraction('Safari', 'Integration by parts – YouTube')).toBeNull();
     expect(matchDistraction('Preview', 'BIO101 Lecture 4 – Cell division.pdf')).toBeNull();
     expect(matchDistraction('Safari', 'Mainstream economics – notes')).toBeNull();
-    expect(matchDistraction('Safari', 'netflix.com')).toEqual({ activity: 'Netflix' });
+    expect(matchDistraction('Safari', 'netflix.com')).toEqual({ activity: 'Video' });
     expect(matchDistraction('Safari', 'box.com files')).toBeNull();
     expect(matchDistraction('WhatsApp', 'Group project')).toBeNull();
     expect(matchDistraction(null, null)).toBeNull();

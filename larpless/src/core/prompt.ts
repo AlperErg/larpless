@@ -5,6 +5,8 @@
  * `import type` imports and erasable TypeScript: no enums, namespaces or parameter properties.
  */
 import type { ScreenVerdict, StudyModule } from '../contracts/domain';
+import { ACTIVITY_CATEGORIES } from '../contracts/domain';
+import { normalizeActivityCategory, siteLookHint } from './sites';
 
 export const NOT_STUDY = 'Not study';
 export const MAX_ACTIVITY_CHARS = 60;
@@ -33,9 +35,9 @@ export const SYSTEM = [
   '- The window title is a strong hint; if it conflicts with the screenshot, trust the screenshot.',
   '- "confidence": 0 to 1, how certain you are that the subject you chose is correct. It is NOT the probability of studying: a clear social feed is "Not study" with confidence 0.9 or more; use low values only when you are unsure which label fits.',
   '- Do not describe the screen. The subject is the whole answer.',
-  '- When the subject is "Not study", also set "activity" to a generic 2 to 4 word reason for what is actually visible, e.g. "Planning a party" or "Playing a game". Never use "Messaging" or "Online chatting": that only names the app. Say "Online shopping" only when a store, cart, or product page is visible. A chat about work or a course is studying: pick that module and leave "activity" empty. Say email only when a mail inbox or message is on screen. Never copy names, message text, subjects or the window title. When the subject is a module, leave "activity" empty.',
+  '- When the subject is "Not study", set "activity" to exactly one category from the schema list that matches what is on screen. Never invent a phrase. When the subject is a module, set "activity" to "".',
   '',
-  'Reply with JSON only, matching the schema: {"studying": true or false, "subject": one of the module names or "Not study", "confidence": 0.0 to 1.0, "activity": "" or a short reason}',
+  `Reply with JSON only, matching the schema: {"studying": true or false, "subject": one of the module names or "Not study", "confidence": 0.0 to 1.0, "activity": "" or one of ${ACTIVITY_CATEGORIES.map((c) => `"${c}"`).join(', ')}`,
 ].join('\n');
 
 /**
@@ -52,10 +54,12 @@ export interface VerdictSchema {
     subject: { type: 'string'; enum: string[] };
     confidence: { type: 'number' };
     /** Optional. Only kept for "Not study"; studying verdicts drop it. */
-    activity: { type: 'string' };
+    activity: { type: 'string'; enum?: string[] };
   };
   required: string[];
 }
+
+const ACTIVITY_ENUM = ['', ...ACTIVITY_CATEGORIES] as const;
 
 export function buildSchema(moduleNames: string[]): VerdictSchema {
   return {
@@ -64,38 +68,15 @@ export function buildSchema(moduleNames: string[]): VerdictSchema {
       studying: { type: 'boolean' },
       subject: { type: 'string', enum: [...moduleNames, NOT_STUDY] },
       confidence: { type: 'number' },
-      activity: { type: 'string' },
+      activity: { type: 'string', enum: [...ACTIVITY_ENUM] },
     },
     required: ['studying', 'subject', 'confidence'],
   };
 }
 
-/** A distraction reason for the panel. Empty when missing, too specific, or a copy of the window title. */
-export function sanitizeReason(raw: unknown, windowTitle?: string | null): string {
-  if (typeof raw !== 'string') return '';
-  let text = raw.replace(/\s+/g, ' ').trim();
-  if (!text) return '';
-  if (text.length > MAX_REASON_CHARS) {
-    const cut = text.slice(0, MAX_REASON_CHARS);
-    const space = cut.lastIndexOf(' ');
-    text = (space >= 12 ? cut.slice(0, space) : cut).trim();
-  }
-  if (looksLikeTitle(text, windowTitle)) return '';
-  return text;
-}
-
-function looksLikeTitle(reason: string, windowTitle?: string | null): boolean {
-  const title = (windowTitle ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
-  const low = reason.toLowerCase();
-  if (!title || !low) return false;
-  if (low === title) return true;
-  if (low.length >= 8 && title.includes(low)) return true;
-  if (title.length >= 12 && low.includes(title)) return true;
-  if (title.length >= 12) {
-    const slice = title.slice(0, 12);
-    if (low.includes(slice)) return true;
-  }
-  return false;
+/** Distraction category for the panel. Unknown or invented text becomes empty. */
+export function distractionCategory(raw: unknown, _windowTitle?: string | null): string {
+  return normalizeActivityCategory(raw) ?? '';
 }
 
 export interface ChatMessage {
@@ -135,19 +116,10 @@ export function buildSystem(modules: Pick<StudyModule, 'name' | 'keywords'>[]): 
   return lines.join('\n');
 }
 
-/** Frontmost apps that show a whole guest desktop. Shared with the classifier's guard. */
-export const VM_APP = /\b(utm|parallels|vmware|virtualbox|qemu|hyper-v|virtual machine connection)\b/i;
-
 export function buildUserText(appName: string | null, windowTitle: string | null): string {
   const lines = [`Frontmost app: ${appName ?? 'unknown'}`, `Window title: ${windowTitle ?? 'unknown'}`];
-  if (/\b(chatgpt|claude|gemini|copilot|perplexity)\b/i.test(`${appName ?? ''} ${windowTitle ?? ''}`)) {
-    lines.push('This is an AI chat. Read the messages and any PDF. An exam, a proof, or a course problem is studying. Pick the closest module, such as Discrete Maths for sets, functions, and proofs. Do not answer "Messaging".');
-  } else if (/\b(whatsapp|messenger|messages|imessage|telegram|signal)\b/i.test(appName ?? '')) {
-    lines.push('This is a chat. Read the messages, not the app. A conversation about code, a repository, a branch, a model, or how a project works is studying. Class diagrams, notes, PDFs, and project files are studying. Do not answer "Messaging".');
-  }
-  if (VM_APP.test(appName ?? '')) {
-    lines.push('This is a virtual machine. Judge what runs inside it, not the second desktop. A guest desktop, terminal, installer or settings is studying.');
-  }
+  const hint = siteLookHint(appName, windowTitle);
+  if (hint) lines.push(hint);
   return lines.join('\n');
 }
 
@@ -271,7 +243,7 @@ export function parseVerdict(
 
   if (candidates.some((s) => s.toLowerCase() === NOT_STUDY.toLowerCase())) {
     // Studying keeps the subject name. A distraction gets a short category, never the window title.
-    return { studying: false, moduleId: null, activity: sanitizeReason(r.activity, windowTitle), confidence, source: 'vlm' };
+    return { studying: false, moduleId: null, activity: distractionCategory(r.activity, windowTitle), confidence, source: 'vlm' };
   }
   const mod = candidates.map((s) => findModule(s, modules)).find((m) => m !== null) ?? null;
   if (!mod) return null;
@@ -280,7 +252,7 @@ export function parseVerdict(
   return {
     studying,
     moduleId: studying ? mod.id : null,
-    activity: studying ? '' : sanitizeReason(r.activity, windowTitle),
+    activity: studying ? '' : distractionCategory(r.activity, windowTitle),
     confidence,
     source: 'vlm',
   };

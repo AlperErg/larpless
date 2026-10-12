@@ -13,8 +13,18 @@ import type { CaptureOptions, NativeApis, ScreenSnapshot } from '../contracts/na
 import type { OllamaClient } from './ollama';
 import { BEHIND_WINDOWS } from './powerProfile';
 import type { PowerSpec } from './powerProfile';
-import { MAX_ACTIVITY_CHARS, VM_APP } from './prompt';
+import { MAX_ACTIVITY_CHARS } from './prompt';
 import { matchDistraction, matchStudyTool } from './rules';
+import {
+  isChatSite,
+  isStoreWindow,
+  isVirtualMachineApp,
+  normalizeActivityCategory,
+  vmShowsDistraction,
+} from './sites';
+
+/** Cached "Not study" verdicts expire sooner so a wrong label does not stick. */
+export const DISTRACTED_CACHE_MAX_MS = 60_000;
 
 export interface ClassifierConfig {
   USE_MOCK_CLASSIFIER: boolean;
@@ -97,27 +107,14 @@ export const SURE_NOT_STUDY = 0.8;
 
 /** Coursework the model keeps misreading as a distraction reason. */
 const WORK_ACTIVITY = /\b(simulat\w*|lab|homework|assignment|coursework|problem set|waveform)\b/i;
-/** A chat about schoolwork. The window title is only read here, never stored. */
-const CHAT_APP = /\b(whatsapp|messenger|messages|imessage|telegram|signal)\b/i;
-/** Assistants are often a browser tab, so the name can be in the window title. */
-const AI_CHAT = /\b(chatgpt|claude|gemini|copilot|perplexity)\b/i;
-
-function isChat(appName: string | null, windowTitle: string | null): boolean {
-  return CHAT_APP.test(appName ?? '') || AI_CHAT.test(`${appName ?? ''} ${windowTitle ?? ''}`);
-}
 const CHAT_WORK = /\b(group project|project|assignment|homework|coursework|lecture|exam|lab|diagram)\b/i;
-/** A generic chat label. Dropped when the chat is actually schoolwork, so the panel does not keep it. */
-const CHAT_LABEL = /\b(online chatting|chatting|messaging)\b/i;
-/** The small model copies "Online shopping" onto screens that are not a store. */
-const SHOPPING_ACTIVITY = /\b(shop(?:ping)?|cart|checkout)\b/i;
-const STORE_WINDOW = /\b(amazon|ebay|etsy|shop|store|cart|checkout)\b/i;
 
-/** A reason that is a real distraction even inside a virtual machine. */
-const VM_DISTRACTION = /\b(gam(?:e|es|ing)|social|feed|video|movie|stream\w*|shop(?:ping)?|netflix|youtube|tiktok|instagram|reddit)\b/i;
+function bogusShoppingCategory(activity: string, appName: string | null, windowTitle: string | null): boolean {
+  return normalizeActivityCategory(activity) === 'Shopping' && !isStoreWindow(appName, windowTitle);
+}
 
-function echoedShopping(activity: string, appName: string | null, windowTitle: string | null): boolean {
-  if (!SHOPPING_ACTIVITY.test(activity)) return false;
-  return !STORE_WINDOW.test(`${appName ?? ''} ${windowTitle ?? ''}`);
+function genericChatCategory(activity: string): boolean {
+  return normalizeActivityCategory(activity) === 'Chatting';
 }
 
 /**
@@ -133,12 +130,11 @@ export function guessStudy(
 ): ScreenVerdict {
   if (verdict.studying || verdict.source === 'rule' || modules.length === 0) return verdict;
   const blob = `${verdict.activity} ${appName ?? ''} ${windowTitle ?? ''}`;
-  const chat = isChat(appName, windowTitle);
+  const chat = isChatSite(appName, windowTitle);
   const chatWork = chat && CHAT_WORK.test(`${verdict.activity} ${windowTitle ?? ''}`);
-  const bogusShop = echoedShopping(verdict.activity, appName, windowTitle);
-  const vm = VM_APP.test(appName ?? '') && !VM_DISTRACTION.test(verdict.activity);
-  // "Messaging" names the app. It is not a reading of the messages, so it is not a sure distraction.
-  const unreadChat = chat && CHAT_LABEL.test(verdict.activity);
+  const bogusShop = bogusShoppingCategory(verdict.activity, appName, windowTitle);
+  const vm = isVirtualMachineApp(appName, windowTitle) && !vmShowsDistraction(verdict.activity);
+  const unreadChat = chat && genericChatCategory(verdict.activity);
   const work = WORK_ACTIVITY.test(blob) || chatWork || vm;
   if (!work && !bogusShop && !unreadChat && verdict.confidence >= SURE_NOT_STUDY) return verdict;
 
@@ -167,7 +163,7 @@ export function guessStudy(
     studying: true,
     moduleId: guessed.id,
     // A VM reason is about the box ("Using a virtual machine"), not the work; drop it like a chat label.
-    activity: bogusShop || vm || CHAT_LABEL.test(verdict.activity) ? '' : verdict.activity,
+    activity: bogusShop || vm || genericChatCategory(verdict.activity) ? '' : verdict.activity,
     confidence: Math.min(verdict.confidence, 0.55),
     source: verdict.source,
   };
@@ -217,6 +213,8 @@ export function createClassifier({ native, ollama, now, config, getPower }: Clas
   let previousApp: string | null = null;
   let previousKey: string | null = null;
   let cache: CacheEntry | null = null;
+  /** Frontmost window on the last decide(); used to drop cache when the user switches away. */
+  let lastDecideKey: string | null = null;
   let inFlight: Flight | null = null;
   let nextGen = 1;
   /** Bumped on reset so a call that started earlier cannot arm a hold for the next session. */
@@ -320,6 +318,12 @@ export function createClassifier({ native, ollama, now, config, getPower }: Clas
       };
     }
     const key = windowKey(appName, win.windowTitle);
+    if (cache && lastDecideKey !== null && lastDecideKey !== key) {
+      const cachedKey = windowKey(cache.appName, cache.windowTitle);
+      if (lastDecideKey === cachedKey) cache = null;
+    }
+    lastDecideKey = key;
+
     const rule = matchDistraction(win.appName, win.windowTitle);
     if (rule) {
       const verdict: ScreenVerdict = { studying: false, moduleId: null, activity: rule.activity, confidence: 1, source: 'rule' };
@@ -338,12 +342,14 @@ export function createClassifier({ native, ollama, now, config, getPower }: Clas
       return { kind: 'fast', result: { verdict: remember(verdict, appName, key), tookScreenshot: false, appName, key } };
     }
     const t = now();
+    const entryTtl = (v: ScreenVerdict) =>
+      !v.studying ? Math.min(cache!.ttlMs, DISTRACTED_CACHE_MAX_MS) : cache!.ttlMs;
     if (
       cache &&
       win.windowTitle !== null &&
       cache.appName === appName &&
       cache.windowTitle === win.windowTitle &&
-      t - cache.at < cache.ttlMs
+      t - cache.at < entryTtl(cache.verdict)
     ) {
       return {
         kind: 'fast',
@@ -401,6 +407,7 @@ export function createClassifier({ native, ollama, now, config, getPower }: Clas
       previousApp = null;
       previousKey = null;
       cache = null;
+      lastDecideKey = null;
       holdUntil = 0;
       epoch += 1;
     },
