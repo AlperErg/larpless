@@ -195,8 +195,11 @@ export interface ScreenModelInput {
   maxWidth: number;
   /** BCP-47 tag for Windows OCR; default 'en-US'. */
   ocrLanguage?: string;
-  /** Labels to score the screen text against (module descriptions, distraction descriptions). */
-  texts: { id: string; text: string }[];
+  /**
+   * Labels to score the screen text against (module descriptions, distraction descriptions). `keywords` are
+   * matched as whole words (case-insensitive) in the window title + screen text.
+   */
+  texts: { id: string; text: string; keywords?: string[] }[];
 }
 export interface ScreenModelScores extends ActiveWindow {
   width: number;
@@ -206,6 +209,8 @@ export interface ScreenModelScores extends ActiveWindow {
   image: Record<string, number>;
   /** Cosine between the title + screen text and each input text; null when there was no text at all. */
   text: Record<string, number> | null;
+  /** How many of each input's keywords appear as whole words; null when there was no text at all. */
+  keywords: Record<string, number> | null;
   /** Characters OCR found. The text itself never leaves native code. */
   ocrChars: number;
   timings: { captureMs: number; ocrMs: number; imageMs: number; textMs: number };

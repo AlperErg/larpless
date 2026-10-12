@@ -157,19 +157,30 @@ struct FLScreenModel {
     result.Resolve();
   }
 
-  // opts = { maxWidth, ocrLanguage?, texts: [{ id, text }] }. Resolves the window snapshot (appName, bundleId,
-  // windowTitle, isSelf) plus { width, height, capturedAt, image: {promptId: logit}, text: {id: cosine} | null,
-  // ocrChars, timings: { captureMs, ocrMs, imageMs, textMs } }. Rejects E_NOT_INSTALLED / E_MODEL / E_CAPTURE.
+  // opts = { maxWidth, ocrLanguage?, texts: [{ id, text, keywords? }] }. Resolves the window snapshot (appName,
+  // bundleId, windowTitle, isSelf) plus { width, height, capturedAt, image: {promptId: logit}, text: {id: cosine}
+  // | null, keywords: {id: whole-word hits} | null, ocrChars, timings: { captureMs, ocrMs, imageMs, textMs } }.
+  // Rejects E_NOT_INSTALLED / E_MODEL / E_CAPTURE.
   REACT_METHOD(Classify, L"classify")
   void Classify(JSValueObject &&opts, ReactPromise<JSValue> &&result) noexcept {
     const int maxWidth{static_cast<int>(Number(opts, "maxWidth", 1024))};
     std::wstring language{winrt::to_hstring(Text(opts, "ocrLanguage")).c_str()};
-    std::vector<std::pair<std::string, std::wstring>> texts;
+    std::vector<Label> texts;
     if (const auto it{opts.find("texts")}; it != opts.end()) {
       if (auto const *arr{it->second.TryGetArray()}) {
         for (auto const &t : *arr) {
           if (auto const *obj{t.TryGetObject()}) {
-            texts.emplace_back(Text(*obj, "id"), winrt::to_hstring(Text(*obj, "text")).c_str());
+            Label label{Text(*obj, "id"), winrt::to_hstring(Text(*obj, "text")).c_str(), {}};
+            if (const auto kws{obj->find("keywords")}; kws != obj->end()) {
+              if (auto const *list{kws->second.TryGetArray()}) {
+                for (auto const &k : *list) {
+                  if (auto const *kw{k.TryGetString()}; kw && !kw->empty()) {
+                    label.keywords.push_back(Lower(winrt::to_hstring(*kw).c_str()));
+                  }
+                }
+              }
+            }
+            texts.push_back(std::move(label));
           }
         }
       }
@@ -254,6 +265,13 @@ struct FLScreenModel {
   struct Prompt {
     std::string id;
     std::vector<float> embedding;
+  };
+
+  // A caller-supplied label: embedded text plus lowercase keywords matched as whole words.
+  struct Label {
+    std::string id;
+    std::wstring text;
+    std::vector<std::wstring> keywords;
   };
 
   std::atomic<int> m_listeners{0};
@@ -499,7 +517,7 @@ struct FLScreenModel {
   }
 
   std::string Run(int maxWidth, std::wstring const &language,
-                  std::vector<std::pair<std::string, std::wstring>> const &texts, JSValueObject &out) {
+                  std::vector<Label> const &texts, JSValueObject &out) {
     auto t0{std::chrono::steady_clock::now()};
     const auto window{FLScreenCapture::QueryActiveWindow()}; // snapshot first, like capture()
     std::vector<uint8_t> bgra;
@@ -535,18 +553,26 @@ struct FLScreenModel {
     if (input.size() > kMaxTextChars) {
       input.resize(kMaxTextChars);
     }
-    JSValue text{nullptr};
+    JSValue text{nullptr}, keywords{nullptr};
     if (!input.empty() && !texts.empty()) {
       const auto embedding{EmbedText(input)};
-      JSValueObject scores;
-      for (auto const &[id, label] : texts) {
-        auto cached{m_textCache.find(label)};
+      std::wstring lower{Lower(input)};
+      JSValueObject scores, hits;
+      for (auto const &label : texts) {
+        auto cached{m_textCache.find(label.text)};
         if (cached == m_textCache.end()) {
-          cached = m_textCache.emplace(label, EmbedText(label)).first;
+          cached = m_textCache.emplace(label.text, EmbedText(label.text)).first;
         }
-        scores[id] = static_cast<double>(Dot(embedding, cached->second));
+        scores[label.id] = static_cast<double>(Dot(embedding, cached->second));
+        int count{0};
+        for (auto const &kw : label.keywords) {
+          count += ContainsWord(lower, kw) ? 1 : 0;
+        }
+        hits[label.id] = count;
       }
+      lower.assign(lower.size(), L'\0');
       text = JSValue{std::move(scores)};
+      keywords = JSValue{std::move(hits)};
     }
     const double textMs{Ms(t0)};
     const size_t ocrChars{screenText.size()};
@@ -559,6 +585,7 @@ struct FLScreenModel {
     out["capturedAt"] = EpochMs();
     out["image"] = std::move(image);
     out["text"] = std::move(text);
+    out["keywords"] = std::move(keywords);
     out["ocrChars"] = static_cast<double>(ocrChars);
     out["timings"] = JSValueObject{{"captureMs", captureMs}, {"ocrMs", ocrMs}, {"imageMs", imageMs}, {"textMs", textMs}};
 
@@ -696,6 +723,28 @@ struct FLScreenModel {
     }
     std::fill(ids.begin(), ids.end(), 0);
     return Normalized(std::move(pooled));
+  }
+
+  static std::wstring Lower(std::wstring s) {
+    for (auto &c : s) {
+      c = static_cast<wchar_t>(towlower(c));
+    }
+    return s;
+  }
+
+  // Whole-word match on lowercase text: the neighbours may not be ASCII letters or digits (bench.py's
+  // (?<![a-z0-9])keyword(?![a-z0-9])).
+  static bool ContainsWord(std::wstring const &text, std::wstring const &word) {
+    auto isWordChar = [](wchar_t c) { return (c >= L'a' && c <= L'z') || (c >= L'0' && c <= L'9'); };
+    for (size_t at{text.find(word)}; at != std::wstring::npos; at = text.find(word, at + 1)) {
+      const bool before{at == 0 || !isWordChar(text[at - 1])};
+      const size_t end{at + word.size()};
+      const bool after{end >= text.size() || !isWordChar(text[end])};
+      if (before && after) {
+        return true;
+      }
+    }
+    return false;
   }
 
   static std::vector<float> Normalized(std::vector<float> v) {

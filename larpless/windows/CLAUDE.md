@@ -99,9 +99,63 @@ CPU-only PCs are much slower. On a Ryzen 5 7545U (Radeon 740M = gfx1103, no Vulk
 
 On the old CPU-only PC, LarpLess crashed twice in `hermes.dll` with `0xc0000005` at offset `0x1c59d0`, both while screenshot checks were timing out with the 4B model loaded and < 1 GB RAM free. A repro of "abort a fetch, the response arrives later" (local server answering after 5 s) did **not** crash, so that alone isn't the cause; memory pressure is the main suspect. Re-check once the classifier is fast enough not to time out.
 
+Seen again on 2026-10-12 (Ryzen 5 7545U, 15 GB, ~3 GB free) during the screen-model work: two crashes at the same offset in the first study sessions after launch with FLScreenModel installed, ~20–40 s after `start()` (Ollama warm-up and the first on-device check overlap there). A session with the screen model switched off at runtime ran 70 s without a crash, and a later session with it on ran 3+ min without one, so it's intermittent and not pinned to FLScreenModel yet. To narrow it down: several sessions each way, and watch free RAM while Ollama (2B) and FLScreenModel (~1 GB) are both loaded.
+
 ### Benchmarking the classifier
 
 Windows Defender (AMSI) blocks PowerShell scripts that capture the screen, base64 it and POST it, even to localhost. Don't try to evade it: benchmark with a **generated** test image (System.Drawing text on a bitmap, never a real screenshot) posted to `/api/chat` with the app's options (`think: false`, the empty `<think>` prefill, `num_ctx: 4096`), or measure through the app, where `[ollama] <model> <ms> → <verdict>` lines show up in `js-eval --console`.
+
+## On-device screen model (FLScreenModel)
+
+Branch `add-embeddings` (2026-10-12). Goal: stop needing Ollama for most screen checks on CPU-only PCs, where a qwen3-vl check takes 25–30 s.
+
+### The plan and why
+
+An LLM council compared the current generative VLM with a small "decision" model (one that scores fixed options instead of writing JSON). Decisions:
+
+- **laya-vision (thaitea/laya-vision) rejected.** Its weights are CC BY-NC-SA (not shippable in a distributed app), it runs only in PyTorch, and it was trained on game frames rather than screens. Copy the idea, not the artifact.
+- **Option 1, embeddings + OCR (built):** SigLIP 2 image embeddings answer "study or distraction" (zero-shot against text prompts), and Windows OCR + MiniLM text embeddings + keyword hits answer "which subject". No training needed, Apache-2.0 models. SigLIP was chosen over CLIP: its sigmoid gives each label an independent score (it can say "none of these"), it was more accurate on the bench, and SigLIP 2 is multilingual.
+- **Option 2, option scoring with a small VLM (to do):** SmolVLM-256M (Apache-2.0) used as a decision model: score each module name as an answer in one forward pass instead of generating. Meant as the backup if Option 1 isn't accurate enough.
+- Wherever the model is unsure, Ollama still answers, so nothing regresses.
+
+### What was built
+
+- `scripts/embed_bench/` (Python 3.12 venv; setup in `requirements.txt`): `bench.py` scores `larpless/bench/` screenshots with image / text / keyword / fused methods and reports accuracy, confidence curves and latency; `--courses` adds sidecar `"course"` names as custom courses; `--onnx` times the image tower in ONNX Runtime; `--dump-scores` + `parity.mjs` check that `src/core/screenModel.ts` gives identical answers to the bench. `export_prompts.py` builds `Assets/Models/FLScreenModelPrompts.json` (fixed SigLIP prompt embeddings) and checks the pinned ONNX files and the C++ resize against PyTorch.
+- `Native/FLScreenModel.h`: capture to BGRA (`FLScreenCapture::CaptureBgra`), `Windows.Media.Ocr`, SigLIP 2 vision tower (PIL-style tent resize to 224, cosine 0.9999 to the official processor) and all-MiniLM-L6-v2 (`FLWordPiece.h`, matches Hugging Face's tokenizer on the test cases in `wordpiece_cases.json`) through ONNX Runtime, plus whole-word keyword counts. Returns numbers only. Downloads the models (pinned HF commits, SHA-256 checked) into `LocalFolder\Models`.
+- JS: contract `ScreenModelApi` (`src/contracts/native.ts`), `src/core/screenModel.ts` (fusion, files, step), a step in `runVlm` in `src/core/classifier.ts` before the Ollama screenshot (source `'embed'`), `src/store/screenModelStore.ts`, `ScreenModelDownload` on onboarding's AI-model step (Windows only). macOS has a stub module reporting `supported: false`.
+- Privacy: frame, OCR text and embeddings stay in native memory; JS gets scores and the OCR character count; logs carry timings and labels. The bench writes no images or text and prints character counts only.
+
+### How well it works
+
+Real screenshots (12 study screens from 9 courses on PDF / VS Code / Blackboard, 2 more study, 4 distractions: Netflix, a TV show, 2 YouTube Shorts), no window titles (the app adds the title, so real use should do somewhat better):
+
+| | image only | text only | keywords only | fused, leave-one-out |
+| --- | --- | --- | --- | --- |
+| library subjects only | 61% | 61% | 50% | **94%** |
+| + 3 custom courses (names only, no keywords) | 44% | 56% | 39% | **72%** |
+| study vs distraction | 18/18 | | | 18/18 |
+
+- Shipped parameters (`FUSION` in `screenModel.ts` = `APP_PARAMS` in `bench.py`): alpha 0.25, tImg 1, tTxt 0.05, gImg 0.5, gTxt 0, beta 0.5, tKw 0.5. Leave-one-out picked beta 0.5 in every fold.
+- Confidence sits low because P(subject) is spread over 44+ subjects. `MIN_CONFIDENCE` 0.15 answers about half the checks at 89–100% accuracy; the rest go to Ollama. `FALLBACK_CONFIDENCE` 0.05 is used when Ollama can't answer.
+- Speed on the Ryzen 5 7545U: ~0.3–0.6 s per check once loaded (capture ~55 ms, OCR ~100 ms, image ~150 ms, text ~30 ms), ~1.5 s for the first check of a session (loading). About 1 GB RAM while loaded; unloaded at session end. Download ~460 MB.
+- Synthetic mock screens score 10/10; they're too clean to tune on.
+
+### To do (from the plan)
+
+1. **Option 2**: bench SmolVLM-256M option scoring (score each module name's log-likelihood after the screenshot + question) on the same `bench/` set and compare with Option 1; if better on subject choice, export to ONNX and add it as the step after Option 1.
+2. **Spanish** (`--lang es`): multilingual MiniLM (`paraphrase-multilingual-MiniLM-L12-v2`), `es-ES` OCR (installed), Spanish prompt templates; SigLIP 2 is already multilingual.
+3. **macOS**: replace the Swift stub with CoreML (SigLIP vision + MiniLM) + Vision OCR.
+4. A Settings entry for the download (only onboarding has it), and hosting/mirroring of the model files before a real release.
+5. Pin down the `hermes.dll` crash above.
+
+### How to keep improving Option 1
+
+- **More real screenshots** in `larpless/bench/` (`<subject-slug>__<desc>.png`, sidecar `{"accept": [...], "course": "...", "windowTitle": "..."}`), especially distractions (social feeds, chats, games) and ambiguous study screens; aim for 50+. Add `windowTitle` to sidecars where known. Own material only, chats and notifications closed.
+- **Keywords for custom courses**: every remaining custom-course miss is a near-miss to a library subject with keywords (Systems Programming → Coding, Computer Architecture → Digital Logic). Prompt users for 5–8 keywords when they add a course.
+- **Re-fit and re-check** after adding images: run `bench.py` (and `--courses`), update `APP_PARAMS` and `FUSION` together, then `--dump-scores` + `node scripts/embed_bench/parity.mjs <file>` must print `parity N/N identical`.
+- **Confidence**: the 0.15 threshold is from 18 images. With more data, fit a proper calibration (temperature on the fused score) so the cut-off means a target accuracy.
+- **Prompts**: change templates or distraction prompts in `scripts/embed_bench/prompts.py`, then rerun `export_prompts.py` to rebuild `FLScreenModelPrompts.json` (and rebuild the app).
+- int8 quantisation of the vision tower cut its size 4× (94 MB) and halved latency but dropped image-only accuracy on the synthetic set (10/10 → 8/10); re-test on real screenshots before using it.
 
 ## Tips for working from PowerShell
 

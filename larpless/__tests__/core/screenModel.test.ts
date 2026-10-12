@@ -4,6 +4,7 @@ import { createClassifier } from '../../src/core/classifier';
 import {
   FALLBACK_CONFIDENCE,
   fuseScores,
+  MIN_CONFIDENCE,
   MIN_OCR_CHARS,
   SCREEN_MODEL_FILES,
   createScreenModelStep,
@@ -29,6 +30,7 @@ function scores(over: Partial<ScreenModelScores> = {}): ScreenModelScores {
     capturedAt: 1,
     image: { lib_calculus: -2, lib_history: -9, 'study:0': -3, 'distract:0': -12, 'distract:1': -13 },
     text: { lib_calculus: 0.6, lib_history: 0.1, mod_econ214: 0.05, 'distract:0': 0.05 },
+    keywords: null,
     ocrChars: 400,
     timings: { captureMs: 30, ocrMs: 120, imageMs: 200, textMs: 25 },
     ...over,
@@ -50,12 +52,22 @@ describe('fuseScores', () => {
     expect(v).toMatchObject({ studying: false, moduleId: null, source: 'embed' });
   });
 
-  it('chooses a custom course from the screen text alone (it has no image prompt)', () => {
+  it('chooses a custom course from its text and keywords (it has no image prompt)', () => {
     const v = fuseScores(
-      scores({ text: { lib_calculus: 0.1, lib_history: 0.1, mod_econ214: 0.7, 'distract:0': 0.05 } }),
+      scores({
+        image: { lib_calculus: -2, lib_history: -2.2, 'study:0': -3, 'distract:0': -12 },
+        text: { lib_calculus: 0.1, lib_history: 0.1, mod_econ214: 0.7, 'distract:0': 0.05 },
+        keywords: { lib_calculus: 0, lib_history: 0, mod_econ214: 2 },
+      }),
       MODULES,
     )!;
     expect(v.moduleId).toBe('mod_econ214');
+  });
+
+  it('lets keyword hits overturn a close image and text call', () => {
+    const close = { image: { lib_calculus: -2, lib_history: -2.1, 'study:0': -3, 'distract:0': -12 }, text: { lib_calculus: 0.31, lib_history: 0.3, mod_econ214: 0, 'distract:0': 0 } };
+    expect(fuseScores(scores(close), MODULES)!.moduleId).toBe('lib_calculus');
+    expect(fuseScores(scores({ ...close, keywords: { lib_calculus: 0, lib_history: 3, mod_econ214: 0 } }), MODULES)!.moduleId).toBe('lib_history');
   });
 
   it('ignores thin OCR text and uses the image only', () => {
@@ -74,7 +86,7 @@ describe('fuseScores', () => {
 describe('screenModelTexts', () => {
   it('describes every module and the distractions, never anything from the screen', () => {
     const texts = screenModelTexts(MODULES);
-    expect(texts[0]).toEqual({ id: 'lib_calculus', text: 'Calculus: derivative, integral' });
+    expect(texts[0]).toEqual({ id: 'lib_calculus', text: 'Calculus: derivative, integral', keywords: ['derivative', 'integral', 'Calculus'] });
     expect(texts.filter((t) => t.id.startsWith('distract:')).length).toBeGreaterThan(0);
   });
 });
@@ -170,7 +182,7 @@ describe('classifier with the screen model', () => {
   });
 
   it('asks Ollama when the screen model is unsure', async () => {
-    const { c, classify } = setup({ verdict: embed(0.4) });
+    const { c, classify } = setup({ verdict: embed(MIN_CONFIDENCE - 0.05) });
     const r = await c.classifyCurrent(MODULES);
     expect(classify).toHaveBeenCalled();
     expect(r.verdict).toMatchObject({ moduleId: 'lib_history', source: 'vlm' });

@@ -46,6 +46,8 @@ p.add_argument("--jpeg-quality", type=int, default=60)
 p.add_argument("--only", default="", help="only files whose name contains this")
 p.add_argument("--onnx", action="store_true", help="export the image tower to ONNX and time fp32 + int8")
 p.add_argument("--offline", action="store_true", help="use cached weights only")
+p.add_argument("--dump-scores", metavar="PATH", help="write each image's numeric scores (no text, no pixels) as JSON, "
+               "for scripts/embed_bench/parity.mjs")
 p.add_argument("--courses", action="store_true", help='add sidecar "course" names as custom courses (text-only, like the app)')
 args = p.parse_args()
 sys.stdout.reconfigure(encoding="utf-8")  # Windows consoles default to cp1252; `-I` ignores PYTHONIOENCODING
@@ -225,8 +227,10 @@ def softmax(x: np.ndarray, t: float) -> np.ndarray:
 
 
 def fused_predict(item: dict, prm: dict) -> tuple[str, float]:
-    """Gate (study vs not) from image + text margins, then the subject from a weighted mix."""
-    gate = prm["g_img"] * item["img_margin"] + prm["bias"]
+    """Gate (study vs not) from image + text margins and keyword hits, then the subject from a weighted mix of
+    image, text and keyword probabilities. Mirrors src/core/screenModel.ts fuseScores."""
+    kw = item["kw"]
+    gate = prm["g_img"] * item["img_margin"] + prm["bias"] + prm.get("g_kw", 0.0) * min(float(kw.max()), 3.0)
     if item["has_text"]:
         gate += prm["g_txt"] * item["txt_margin"]
     p_study = 1 / (1 + np.exp(-gate))
@@ -234,28 +238,44 @@ def fused_predict(item: dict, prm: dict) -> tuple[str, float]:
         return NOT_STUDY, 1 - p_study
     img = item["img_subj"]
     known = np.isfinite(img)  # custom courses have no image prompt
-    probs = np.zeros(len(img))
-    probs[known] = softmax(img[known], prm["t_img"])
+    parts: list[tuple[float, np.ndarray]] = []
+    if known.any():
+        p_img = np.zeros(len(img))
+        p_img[known] = softmax(img[known], prm["t_img"])
+        parts.append((1 - prm["alpha"], p_img))
     if item["has_text"]:
-        txt = softmax(item["txt_subj"], prm["t_txt"])
-        probs = (1 - prm["alpha"]) * probs + prm["alpha"] * txt if known.any() else txt
-    k = int(probs.argmax())
+        parts.append((prm["alpha"], softmax(item["txt_subj"], prm["t_txt"])))
+    if kw.max() > 0 and prm.get("beta", 0.0) > 0:
+        parts.append((prm["beta"], softmax(kw, prm["t_kw"])))
+    total = sum(w for w, _ in parts)
+    if total <= 0:
+        parts, total = [(1.0, parts[0][1] if parts else np.full(len(img), 1 / len(img)))], 1.0
+    probs = sum(w * p for w, p in parts) / total
+    order = np.argsort(probs)[::-1]
+    k = int(order[0])
+    if prm.get("conf") == "margin":
+        # Top-1 against the runner-up only: similar subjects (Coding / Algorithms / OS) split the mass,
+        # which drags plain probabilities down even when the answer is right.
+        conf = probs[k] / (probs[k] + probs[order[1]]) if len(order) > 1 else 1.0
+        return MODULES[k]["name"], float(p_study * conf)
     return MODULES[k]["name"], float(p_study * probs[k])
 
 
-# The parameters the app ships with (src/core/screenModel.ts FUSION). Keep the two in sync. Chosen by hand
-# because on the synthetic bench every grid point ties at 100%, so the fit can't tell them apart: equal
-# weight to image and text for the subject, both margins in the gate.
-APP_PARAMS = dict(alpha=0.5, t_img=1.0, t_txt=0.05, g_img=1.0, g_txt=10.0, bias=0.0)
+# The parameters the app ships with (src/core/screenModel.ts FUSION). Keep the two in sync.
+# v1 (hand-picked, synthetic bench): alpha=0.5, t_img=1, t_txt=0.05, g_img=1, g_txt=10, bias=0, no keywords.
+# v2 (2026-10-12, 18 real screenshots): what leave-one-out picked in nearly every fold, with keywords.
+APP_PARAMS = dict(alpha=0.25, t_img=1.0, t_txt=0.05, g_img=0.5, g_txt=0.0, bias=0.0, beta=0.5, t_kw=0.5, g_kw=0.0)
 
 GRID = [
-    dict(alpha=a, t_img=ti, t_txt=tt, g_img=gi, g_txt=gt, bias=b)
-    for a in (0.0, 0.25, 0.5, 0.75, 1.0)
-    for ti in (0.5, 1.0, 2.0)
+    dict(alpha=a, t_img=ti, t_txt=tt, g_img=gi, g_txt=gt, bias=0.0, beta=be, t_kw=tk, g_kw=gk)
+    for a in (0.25, 0.5, 0.75)
+    for ti in (1.0, 2.0)
     for tt in (0.02, 0.05, 0.1)
-    for gi in (0.5, 1.0, 2.0)
-    for gt in (0.0, 10.0, 30.0)
-    for b in (-1.0, 0.0, 1.0)
+    for gi in (0.5, 1.0)
+    for gt in (0.0, 10.0)
+    for be in (0.0, 0.5, 1.0)
+    for tk in (0.5, 1.0)
+    for gk in (0.0, 1.0)
 ]
 
 
@@ -272,10 +292,12 @@ def fit(train: list[dict]) -> dict:
     return best
 
 
-def leave_one_out(items: list[dict]) -> list[tuple[str, float]]:
-    if len(items) < 3:
-        return [fused_predict(it, GRID[0]) for it in items]
-    return [fused_predict(it, fit(items[:i] + items[i + 1 :])) for i, it in enumerate(items)]
+def leave_one_out(items: list[dict]) -> tuple[list[tuple[str, float]], list[tuple[str, float]], list[dict]]:
+    """Predictions for each item with parameters fitted on the others: plain and margin confidence."""
+    folds = [GRID[0]] * len(items) if len(items) < 3 else [fit(items[:i] + items[i + 1 :]) for i in range(len(items))]
+    plain = [fused_predict(it, prm) for it, prm in zip(items, folds)]
+    margin = [fused_predict(it, {**prm, "conf": "margin"}) for it, prm in zip(items, folds)]
+    return plain, margin, folds
 
 
 def pct(xs: list[float], q: float) -> float:
@@ -419,9 +441,10 @@ def main() -> None:
             if has_text:
                 temb = txt.embed([text])
                 txt_subj = (temb @ subj_txt_emb.T)[0]
-                txt_margin = float(txt_subj.max() - (temb @ dist_txt_emb.T)[0].max())
+                txt_dist = (temb @ dist_txt_emb.T)[0]
+                txt_margin = float(txt_subj.max() - txt_dist.max())
             else:
-                txt_subj, txt_margin = np.zeros(len(MODULES)), 0.0
+                txt_subj, txt_margin, txt_dist = np.zeros(len(MODULES)), 0.0, None
             t4 = time.perf_counter()
             kw = keyword_scores(text)
             ocr_chars = len(screen_text)
@@ -436,11 +459,21 @@ def main() -> None:
         img_margin = float(max(logits[idx["study"]].max(), lib_subj.max()) - logits[idx["distract"]].max())
         img_subj = np.append(lib_subj, [np.nan] * (len(MODULES) - len(SUBJECTS)))
         item = dict(file=f.name, expected=expected, accept=accept, img_subj=img_subj, img_margin=img_margin,
-                    txt_subj=txt_subj, txt_margin=txt_margin, has_text=has_text,
+                    txt_subj=txt_subj, txt_margin=txt_margin, has_text=has_text, kw=kw,
                     img_pred=LABELS[int(img_scores.argmax())],
                     img_conf=float(1 / (1 + np.exp(-img_scores.max()))) if img.kind == "siglip" else float(softmax(img_scores, 1).max()),
                     txt_pred=(MODULES[int(txt_subj.argmax())]["name"] if txt_margin > 0 else NOT_STUDY) if has_text else None,
                     kw_pred=MODULES[int(kw.argmax())]["name"] if kw.max() > 0 else None)
+        # The same numbers FLScreenModel hands to JS (ScreenModelScores), for the TS parity check.
+        item["scores"] = {
+            "image": {**{s["id"]: float(v) for s, v in zip(SUBJECTS, lib_subj)},
+                      **{f"study:{i}": float(logits[ix]) for i, ix in enumerate(idx["study"])},
+                      **{f"distract:{i}": float(logits[ix]) for i, ix in enumerate(idx["distract"])}},
+            "text": None if txt_dist is None else {**{m["id"]: float(v) for m, v in zip(MODULES, txt_subj)},
+                                                   **{f"distract:{i}": float(v) for i, v in enumerate(txt_dist)}},
+            "keywords": {m["id"]: int(v) for m, v in zip(MODULES, kw)},
+            "ocrChars": ocr_chars,
+        }
         items.append(item)
         pixel_batches.append(pv)
         if n > 0:  # first image warms up the models
@@ -454,14 +487,18 @@ def main() -> None:
 
     if not items:
         sys.exit("no image could be scored")
-    fused = leave_one_out(items)
+    fused, fused_margin, folds = leave_one_out(items)
 
     print("\nRESULTS (fused = image gate + text/image subject, tuned leave-one-out)")
     report("image", [(it["img_pred"], it["img_conf"]) for it in items], items)
     report("text", [(it["txt_pred"], 1.0) for it in items], items)
     report("keyword", [(it["kw_pred"], 1.0) for it in items], items)
     report("fused", fused, items)
+    print("  fused, probability confidence:")
     coverage_curve(fused, items)
+    print("  fused, top-1 vs runner-up confidence:")
+    coverage_curve(fused_margin, items)
+    print(f"  keyword weight chosen per fold: {sorted(set(f['beta'] for f in folds))}")
     app_preds = [fused_predict(it, APP_PARAMS) for it in items]
     report("app", app_preds, items)
     print("  app confidences: right " + ", ".join(f"{c:.2f}" for (p_, c), it in zip(app_preds, items) if hit(p_, it))
@@ -478,6 +515,13 @@ def main() -> None:
     peak = getattr(mem, "peak_wset", mem.rss)
     print(f"\nmodels: load image {img.load_s:.1f} s, text {txt.load_s:.1f} s · on disk image {dir_size_mb(args.image_model):.0f} MB, "
           f"text {dir_size_mb(args.text_model):.0f} MB · peak RAM {peak / 1e6:.0f} MB")
+
+    if args.dump_scores:
+        dump = [{"file": it["file"], "accept": sorted(it["accept"]), "scores": it["scores"], "bench": list(pred)}
+                for it, pred in zip(items, app_preds)]
+        Path(args.dump_scores).write_text(json.dumps({"modules": [{"id": m["id"], "name": m["name"]} for m in MODULES],
+                                                      "items": dump}), encoding="utf-8")
+        print(f"\nwrote numeric scores for {len(dump)} images to {args.dump_scores}")
 
     if args.onnx:
         onnx_timing(img, pixel_batches, img_txt_emb, items, idx)

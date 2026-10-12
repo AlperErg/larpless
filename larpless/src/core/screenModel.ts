@@ -2,14 +2,18 @@
  * On-device screen model (Option 1 of the classifier plan): turns FLScreenModel's scores into a verdict.
  *
  * Native code captures the screen, reads its text with OCR, and returns only numbers: a SigLIP 2 logit per
- * fixed image prompt (one per library subject, plus generic "study" and "distraction" prompts) and a MiniLM
- * cosine between the window title + screen text and each module description. This file fuses them exactly
- * like scripts/embed_bench/bench.py `fused_predict`, with the parameters the bench validated (APP_PARAMS
- * there; keep the two in sync):
+ * fixed image prompt (one per library subject, plus generic "study" and "distraction" prompts), a MiniLM
+ * cosine between the window title + screen text and each module description, and how many of each module's
+ * keywords appear there as whole words. This file fuses them exactly like scripts/embed_bench/bench.py
+ * `fused_predict`, with the parameters the bench validated (APP_PARAMS there; keep the two in sync):
  *
- *   gate     = gImg * imageMargin + bias (+ gTxt * textMargin when OCR found text)   → P(study) = sigmoid
- *   subject  = argmax((1 - alpha) * softmax(image / tImg) + alpha * softmax(text / tTxt))
+ *   gate     = gImg * imageMargin + bias + gKw * min(maxHits, 3) (+ gTxt * textMargin with OCR text) → P(study)
+ *   subject  = argmax of the weighted mean of softmax(image / tImg) (weight 1 - alpha), softmax(text / tTxt)
+ *              (alpha, when OCR found text) and softmax(hits / tKw) (beta, when any keyword matched)
  *   confidence = P(study) * P(subject)   (or 1 - P(study) for "not study")
+ *
+ * v2 parameters come from 18 real screenshots (12 study screens across 9 courses + 4 distractions + 2 more
+ * study): leave-one-out top-1 94% with library subjects, 72% with custom courses that have no keywords.
  *
  * Custom courses have no image prompt (the SigLIP text tower isn't shipped), so they're chosen from the
  * screen text only. Pure: no React Native, no stores.
@@ -43,13 +47,16 @@ export const SCREEN_MODEL_FILES: ScreenModelFile[] = [
 
 export const SCREEN_MODEL_BYTES = SCREEN_MODEL_FILES.reduce((n, f) => n + f.size, 0);
 
-export const FUSION = { alpha: 0.5, tImg: 1.0, tTxt: 0.05, gImg: 1.0, gTxt: 10.0, bias: 0.0 };
+export const FUSION = { alpha: 0.25, tImg: 1.0, tTxt: 0.05, gImg: 0.5, gTxt: 0.0, bias: 0.0, beta: 0.5, tKw: 0.5, gKw: 0.0 };
 /** Below this many OCR characters the screen text is ignored (title-only text is too thin). */
 export const MIN_OCR_CHARS = 40;
-/** Use the verdict at or above this; below it, ask Ollama. */
-export const MIN_CONFIDENCE = 0.5;
+/**
+ * Use the verdict at or above this; below it, ask Ollama. P(subject) is spread over 44+ subjects, so real
+ * answers sit low: on the 18-screenshot bench >= 0.15 answered half the screens at 89-100% accuracy.
+ */
+export const MIN_CONFIDENCE = 0.15;
 /** If Ollama can't answer either, still use a verdict at or above this rather than `unknown`. */
-export const FALLBACK_CONFIDENCE = 0.3;
+export const FALLBACK_CONFIDENCE = 0.05;
 
 /** Text-side "not study" descriptions (same as bench.py TEXT_DISTRACTIONS). */
 export const TEXT_DISTRACTIONS = [
@@ -64,7 +71,11 @@ export const TEXT_DISTRACTIONS = [
 /** What native code embeds and scores the screen text against. */
 export function screenModelTexts(modules: Pick<StudyModule, 'id' | 'name' | 'keywords'>[]): { id: string; text: string }[] {
   return [
-    ...modules.map((m) => ({ id: m.id, text: m.keywords.length ? `${m.name}: ${m.keywords.join(', ')}` : m.name })),
+    ...modules.map((m) => ({
+      id: m.id,
+      text: m.keywords.length ? `${m.name}: ${m.keywords.join(', ')}` : m.name,
+      keywords: [...m.keywords, m.name],
+    })),
     ...TEXT_DISTRACTIONS.map((text, i) => ({ id: `distract:${i}`, text })),
   ];
 }
@@ -84,7 +95,7 @@ const sigmoid = (x: number) => 1 / (1 + Math.exp(-x));
 
 /** Scores → verdict, or null when nothing can be said (no module has an image prompt and there's no text). */
 export function fuseScores(
-  scores: Pick<ScreenModelScores, 'image' | 'text' | 'ocrChars'>,
+  scores: Pick<ScreenModelScores, 'image' | 'text' | 'ocrChars'> & Partial<Pick<ScreenModelScores, 'keywords'>>,
   modules: Pick<StudyModule, 'id'>[],
   p = FUSION,
 ): ScreenVerdict | null {
@@ -106,24 +117,28 @@ export function fuseScores(
     textMargin = maxOf(textSubj) - (Number.isFinite(textDistract) ? textDistract : 0);
   }
 
-  const pStudy = sigmoid(p.gImg * imageMargin + p.bias + (hasText ? p.gTxt * textMargin : 0));
+  const hits = modules.map((m) => scores.keywords?.[m.id] ?? 0);
+  const maxHits = Math.max(0, ...hits);
+  const pStudy = sigmoid(p.gImg * imageMargin + p.bias + p.gKw * Math.min(maxHits, 3) + (hasText ? p.gTxt * textMargin : 0));
   if (pStudy < 0.5) {
     return { studying: false, moduleId: null, activity: '', confidence: 1 - pStudy, source: 'embed' };
   }
 
-  // Image probabilities over the modules that have a prompt; custom courses get 0 on this side.
+  // Weighted mean of the signals that are present. Custom courses get 0 on the image side (no prompt).
+  const parts: { w: number; probs: number[] }[] = [];
   const knownIdx = imgSubj.map((v, i) => (typeof v === 'number' ? i : -1)).filter((i) => i >= 0);
-  const imgProbs = new Array<number>(modules.length).fill(0);
-  softmax(knownIdx.map((i) => imgSubj[i] as number), p.tImg).forEach((v, j) => {
-    imgProbs[knownIdx[j]] = v;
-  });
-  let probs = imgProbs;
-  if (hasText) {
-    const txtProbs = softmax(textSubj, p.tTxt);
-    probs = knownIdx.length ? imgProbs.map((v, i) => (1 - p.alpha) * v + p.alpha * txtProbs[i]) : txtProbs;
-  } else if (!knownIdx.length) {
-    return null;
+  if (knownIdx.length) {
+    const imgProbs = new Array<number>(modules.length).fill(0);
+    softmax(knownIdx.map((i) => imgSubj[i] as number), p.tImg).forEach((v, j) => {
+      imgProbs[knownIdx[j]] = v;
+    });
+    parts.push({ w: 1 - p.alpha, probs: imgProbs });
   }
+  if (hasText) parts.push({ w: p.alpha, probs: softmax(textSubj, p.tTxt) });
+  if (maxHits > 0 && p.beta > 0) parts.push({ w: p.beta, probs: softmax(hits, p.tKw) });
+  const total = parts.reduce((n, x) => n + x.w, 0);
+  if (!parts.length || total <= 0) return null;
+  const probs = modules.map((_, i) => parts.reduce((n, x) => n + x.w * x.probs[i], 0) / total);
   let best = 0;
   probs.forEach((v, i) => {
     if (v > probs[best]) best = i;
