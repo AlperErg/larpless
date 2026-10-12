@@ -153,6 +153,40 @@ export function buildMessages({ appName, windowTitle, modules, imageBase64, pref
 }
 
 /**
+ * The subject of a parsed reply when it names neither a module nor "Not study", else null.
+ * The model sometimes answers with the course name it reads on screen ("Information Management I");
+ * with the prefill, `format` no longer holds it to the enum.
+ */
+export function unknownSubject(raw: unknown, modules: Pick<StudyModule, 'id' | 'name'>[]): string | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const subject = (raw as Record<string, unknown>).subject;
+  if (typeof subject !== 'string' || !subject.trim()) return null;
+  const candidates = subjectCandidates(subject.trim());
+  if (candidates.some((s) => s.toLowerCase() === NOT_STUDY.toLowerCase())) return null;
+  return candidates.some((s) => findModule(s, modules)) ? null : subject.trim();
+}
+
+/**
+ * Continue the conversation after a reply with an unknown subject. The prefix up to the screenshot is
+ * unchanged, so Ollama reuses the processed image and this costs a fraction of the first call.
+ */
+export function buildRetryMessages(messages: ChatMessage[], reply: string, subject: string): ChatMessage[] {
+  const last = messages[messages.length - 1];
+  const prefill = last?.role === 'assistant' ? last.content : '';
+  const head = prefill ? messages.slice(0, -1) : messages;
+  const out: ChatMessage[] = [
+    ...head,
+    { role: 'assistant', content: prefill + reply },
+    {
+      role: 'user',
+      content: `"${subject}" is not one of the module names. Answer again with the closest module name from the list, or "Not study". Same JSON format.`,
+    },
+  ];
+  if (prefill) out.push({ role: 'assistant', content: prefill });
+  return out;
+}
+
+/**
  * Pull the first JSON object out of a model reply (tolerates code fences or stray text, which can
  * happen when `format` isn't enforced). Returns the parsed value or null.
  */

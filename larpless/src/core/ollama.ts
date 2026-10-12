@@ -6,7 +6,18 @@
 import type { ScreenVerdict, StudyModule } from '../contracts/domain';
 import type { ScreenSnapshot } from '../contracts/native';
 import type { OllamaStatus } from '../contracts/store';
-import { buildMessages, buildSchema, buildSystem, buildTitleUserText, extractJson, NO_THINK_PREFILL, NUM_CTX, parseVerdict } from './prompt';
+import {
+  buildMessages,
+  buildRetryMessages,
+  buildSchema,
+  buildSystem,
+  buildTitleUserText,
+  extractJson,
+  NO_THINK_PREFILL,
+  NUM_CTX,
+  parseVerdict,
+  unknownSubject,
+} from './prompt';
 import type { ChatMessage } from './prompt';
 
 export type OllamaHealth = Exclude<OllamaStatus, 'unknown'>;
@@ -186,33 +197,53 @@ export function createOllama(opts: OllamaOptions): OllamaClient {
       return null;
     }
     const t0 = Date.now();
-    let body: string | null = JSON.stringify({
-      model,
-      stream: false,
-      think: false,
-      keep_alive: call?.keepAlive ?? '30m',
-      options: { temperature: 0, num_ctx: NUM_CTX },
-      format: buildSchema(modules.map((m) => m.name)),
-      messages,
-    });
-    try {
-      const data = await withTimeout(limitMs, async (signal) => {
-        const res = await fetchImpl(`${trimSlash(baseUrl)}/api/chat`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: body!,
-          signal,
-        });
-        body = null;
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
+    const format = buildSchema(modules.map((m) => m.name));
+    // One request; the body (which may hold the screenshot) is dropped as soon as it is sent.
+    const send = async (msgs: ChatMessage[], ms: number): Promise<string> => {
+      let body: string | null = JSON.stringify({
+        model,
+        stream: false,
+        think: false,
+        keep_alive: call?.keepAlive ?? '30m',
+        options: { temperature: 0, num_ctx: NUM_CTX },
+        format,
+        messages: msgs,
       });
-      const content = (data as { message?: { content?: unknown } } | null)?.message?.content;
-      if (typeof content !== 'string') throw new Error('no content');
+      try {
+        const data = await withTimeout(ms, async (signal) => {
+          const res = await fetchImpl(`${trimSlash(baseUrl)}/api/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: body!,
+            signal,
+          });
+          body = null;
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return res.json();
+        });
+        const content = (data as { message?: { content?: unknown } } | null)?.message?.content;
+        if (typeof content !== 'string') throw new Error('no content');
+        return content;
+      } finally {
+        body = null;
+      }
+    };
+    try {
+      let content = await send(messages, limitMs);
       // With the prefill Ollama no longer enforces `format`, so tolerate fences / stray text.
-      const parsed = extractJson(content);
+      let parsed = extractJson(content);
       if (parsed === null) throw new Error('bad json');
-      const verdict = parseVerdict(parsed, modules, windowTitle);
+      let verdict = parseVerdict(parsed, modules, windowTitle);
+      // A subject that isn't a module (often a course name read off the screen): ask once more.
+      // The subject may quote the screen, so it is sent to Ollama only and never logged.
+      const unknown = verdict ? null : unknownSubject(parsed, modules);
+      const left = limitMs - (Date.now() - t0);
+      if (unknown && left > 0) {
+        content = await send(buildRetryMessages(messages, content, unknown), left);
+        parsed = extractJson(content);
+        verdict = parsed === null ? null : parseVerdict(parsed, modules, windowTitle);
+        if (verdict) tag += ' retry';
+      }
       const ms = Date.now() - t0;
       if (verdict) {
         const label = verdict.studying
@@ -220,7 +251,7 @@ export function createOllama(opts: OllamaOptions): OllamaClient {
           : 'Not study';
         log(`[ollama] ${model} ${ms} ms${tag} → ${label} (${verdict.confidence.toFixed(2)})`);
       } else {
-        log(`[ollama] ${model} ${ms} ms${tag} → unparseable verdict`);
+        log(`[ollama] ${model} ${ms} ms${tag} → ${unknown ? 'unknown subject' : 'unparseable verdict'}`);
       }
       return verdict;
     } catch (e) {
@@ -228,8 +259,6 @@ export function createOllama(opts: OllamaOptions): OllamaClient {
       const why = (e as { name?: string })?.name === 'AbortError' ? 'timeout' : 'error';
       log(`[ollama] ${model} ${ms} ms${tag} → ${why}`);
       return null;
-    } finally {
-      body = null;
     }
   }
 

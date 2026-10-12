@@ -165,6 +165,70 @@ describe('ollama', () => {
     }
   });
 
+  it('asks once more when the subject is not a module, reusing the conversation', async () => {
+    const replies = [
+      '{"studying":true,"subject":"BIO101 Cell Biology I","confidence":0.95,"activity":""}',
+      '{"studying":true,"subject":"Biology","confidence":0.8,"activity":""}',
+    ];
+    const fetchImpl = jest.fn<ReturnType<FetchLike>, Parameters<FetchLike>>(() => chatRes(replies.shift()!));
+    const o = createOllama({ baseUrl: 'http://localhost', model: 'm', fetchImpl, log });
+    const v = await o.classify(SNAP, fixtureModules);
+    expect(v).toMatchObject({ studying: true, moduleId: 'mod_biology', confidence: 0.8 });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+
+    const first = JSON.parse(fetchImpl.mock.calls[0][1]!.body!).messages;
+    const retry = JSON.parse(fetchImpl.mock.calls[1][1]!.body!).messages;
+    // Same prefix up to the screenshot, so Ollama reuses the processed image.
+    expect(retry.slice(0, 2)).toEqual(first.slice(0, 2));
+    expect(retry[2]).toEqual({ role: 'assistant', content: `<think>\n\n</think>\n\n${'{"studying":true,"subject":"BIO101 Cell Biology I","confidence":0.95,"activity":""}'}` });
+    expect(retry[3].role).toBe('user');
+    expect(retry[3].content).toContain('"BIO101 Cell Biology I" is not one of the module names');
+    expect(retry[4]).toEqual({ role: 'assistant', content: '<think>\n\n</think>\n\n' });
+
+    // The invented subject can quote the screen: it is never logged.
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toMatch(/ms retry → Biology \(0\.80\)/);
+    expect(logs[0]).not.toContain('BIO101');
+  });
+
+  it('gives up after one retry, and does not retry valid or unparseable replies', async () => {
+    const bad = '{"studying":true,"subject":"Chemistry","activity":"x","confidence":1}';
+    const twice = jest.fn<ReturnType<FetchLike>, Parameters<FetchLike>>(() => chatRes(bad));
+    const o = createOllama({ baseUrl: 'http://localhost', model: 'm', fetchImpl: twice, log });
+    await expect(o.classify(SNAP, fixtureModules)).resolves.toBeNull();
+    expect(twice).toHaveBeenCalledTimes(2);
+    expect(logs[0]).toMatch(/unknown subject/);
+    expect(logs[0]).not.toContain('Chemistry');
+
+    for (const reply of ['this is not json', '{"studying":false,"subject":"Not study: feed","confidence":0.9}', '{"confidence":0.9}']) {
+      const once = jest.fn<ReturnType<FetchLike>, Parameters<FetchLike>>(() => chatRes(reply));
+      await createOllama({ baseUrl: 'http://localhost', model: 'm', fetchImpl: once, log }).classify(SNAP, fixtureModules);
+      expect(once).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it('the retry shares the call timeout', async () => {
+    jest.useFakeTimers();
+    try {
+      let calls = 0;
+      const fetchImpl: FetchLike = () => {
+        calls += 1;
+        return calls === 1
+          ? new Promise((resolve) => setTimeout(() => resolve(chatRes('{"studying":true,"subject":"Chemistry","confidence":1}')), 700))
+          : new Promise(() => {});
+      };
+      const o = createOllama({ baseUrl: 'http://localhost', model: 'm', fetchImpl, timeoutMs: 1000, log });
+      const p = o.classify(SNAP, fixtureModules);
+      await jest.advanceTimersByTimeAsync(1000);
+      await expect(p).resolves.toBeNull();
+      expect(calls).toBe(2);
+      expect(logs[0]).toMatch(/timeout/);
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('returns null on bad JSON, HTTP errors, network errors and unknown subjects', async () => {
     const cases: FetchLike[] = [
       () => chatRes('this is not json'),

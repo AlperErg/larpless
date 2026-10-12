@@ -1,4 +1,14 @@
-import { buildMessages, buildSchema, buildSystem, buildTitleUserText, NOT_STUDY, parseVerdict, SYSTEM } from '../../src/core/prompt';
+import {
+  buildMessages,
+  buildRetryMessages,
+  buildSchema,
+  buildSystem,
+  buildTitleUserText,
+  NOT_STUDY,
+  parseVerdict,
+  SYSTEM,
+  unknownSubject,
+} from '../../src/core/prompt';
 import { fixtureModules } from '../../src/fixtures/data';
 
 describe('prompt', () => {
@@ -38,6 +48,40 @@ describe('prompt', () => {
     const other = buildMessages({ appName: 'Safari', windowTitle: 'Instagram', modules: fixtureModules, imageBase64: 'IMG2' });
     expect(other[0]).toEqual(msgs[0]);
     expect(buildSystem(fixtureModules)).toBe(msgs[0].content);
+  });
+
+  describe('unknownSubject', () => {
+    it('returns a subject that is neither a module nor "Not study"', () => {
+      expect(unknownSubject({ studying: true, subject: ' Information Management I ' }, fixtureModules)).toBe('Information Management I');
+      expect(unknownSubject({ studying: true, subject: 'Chemistry: acids' }, fixtureModules)).toBe('Chemistry: acids');
+    });
+
+    it('null for modules, "Not study" and unusable shapes', () => {
+      expect(unknownSubject({ subject: 'biology' }, fixtureModules)).toBeNull();
+      expect(unknownSubject({ subject: 'Maths: integral' }, fixtureModules)).toBeNull();
+      expect(unknownSubject({ subject: 'Not study: feed' }, fixtureModules)).toBeNull();
+      expect(unknownSubject({ subject: '  ' }, fixtureModules)).toBeNull();
+      expect(unknownSubject({ studying: true }, fixtureModules)).toBeNull();
+      expect(unknownSubject(null, fixtureModules)).toBeNull();
+      expect(unknownSubject(['Chemistry'], fixtureModules)).toBeNull();
+    });
+  });
+
+  it('buildRetryMessages keeps the prefix, completes the prefill and asks again', () => {
+    const msgs = buildMessages({ appName: 'Obsidian', windowTitle: 'x', modules: fixtureModules, imageBase64: 'IMG', prefillNoThink: true });
+    const retry = buildRetryMessages(msgs, '{"subject":"Chem"}', 'Chem');
+    expect(retry.slice(0, 2)).toEqual(msgs.slice(0, 2));
+    expect(retry[2]).toEqual({ role: 'assistant', content: `${msgs[2].content}{"subject":"Chem"}` });
+    expect(retry[3]).toMatchObject({ role: 'user' });
+    expect(retry[3].content).toContain('"Chem" is not one of the module names');
+    expect(retry[4]).toEqual(msgs[2]);
+    expect(retry).toHaveLength(5);
+
+    const plain = buildMessages({ appName: 'Obsidian', windowTitle: 'x', modules: fixtureModules, imageBase64: 'IMG' });
+    const noPrefill = buildRetryMessages(plain, 'r', 'Chem');
+    expect(noPrefill).toHaveLength(4);
+    expect(noPrefill[2]).toEqual({ role: 'assistant', content: 'r' });
+    expect(noPrefill[3].role).toBe('user');
   });
 
   describe('parseVerdict', () => {
