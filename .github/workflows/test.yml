@@ -1,0 +1,39 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: larpless
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: larpless/package-lock.json
+
+      - run: npm ci
+
+      # env.ts is gitignored but imported unconditionally; empty values run fully local.
+      - name: Create src/social/env.ts
+        run: |
+          cat > src/social/env.ts <<'EOF'
+          export const SUPABASE_URL = '';
+          export const SUPABASE_ANON_KEY = '';
+          EOF
+
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test -- --ci

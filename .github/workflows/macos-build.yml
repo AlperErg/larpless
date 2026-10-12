@@ -1,0 +1,56 @@
+name: macOS build
+
+# Compiles the Swift side and links it against the JS app. Jest can't cover this, and macOS
+# runners cost 10× Linux minutes, so it only runs on pull requests into main.
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: larpless
+    env:
+      # CocoaPods refuses to run without a UTF-8 locale.
+      LANG: en_US.UTF-8
+      LC_ALL: en_US.UTF-8
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: larpless/package-lock.json
+
+      - run: npm ci
+
+      # env.ts is gitignored but imported unconditionally; empty values run fully local.
+      - name: Create src/social/env.ts
+        run: |
+          cat > src/social/env.ts <<'EOF'
+          export const SUPABASE_URL = '';
+          export const SUPABASE_ANON_KEY = '';
+          EOF
+
+      - uses: actions/cache@v4
+        with:
+          path: larpless/macos/Pods
+          key: pods-${{ runner.os }}-${{ hashFiles('larpless/macos/Podfile.lock', 'larpless/package-lock.json') }}
+
+      - name: pod install
+        working-directory: larpless/macos
+        run: pod install
+
+      # Debug signs ad-hoc ("-"), so no certificates are needed.
+      - name: xcodebuild
+        run: |
+          xcodebuild -workspace macos/Focusline.xcworkspace -scheme Focusline-macOS -configuration Debug \
+            -derivedDataPath macos/build -destination 'platform=macOS' -quiet build
