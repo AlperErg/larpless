@@ -85,6 +85,7 @@ export const SUBJECT_GROUPS: SubjectGroup[] = [
       { name: 'Law', icon: 'scale', color: 'brown', keywords: ['case law', 'statute', 'contract', 'tort', 'constitution', 'judgment', 'legal', 'court', 'LAW'] },
       { name: 'Accounting', icon: 'receipt', color: 'yellow', keywords: ['balance sheet', 'income statement', 'debit', 'credit', 'ledger', 'IFRS', 'GAAP', 'cash flow', 'ACCT'] },
       { name: 'Finance', icon: 'banknote', color: 'green', keywords: ['NPV', 'interest rate', 'bond', 'equity', 'portfolio', 'valuation', 'derivatives', 'risk', 'FIN'] },
+      { name: 'Information Management', icon: 'library', color: 'blue', keywords: ['info management', 'class diagram', 'use case', 'UML', 'requirements', 'information system', 'ER diagram', 'information management'] },
       { name: 'Business', icon: 'briefcase', color: 'orange', keywords: ['strategy', 'marketing', 'management', 'case study', 'SWOT', 'operations', 'entrepreneurship', 'BUS'] },
     ],
   },

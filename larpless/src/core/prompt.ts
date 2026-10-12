@@ -26,12 +26,13 @@ export const SYSTEM = [
   '- Code in an editor or IDE (Cursor, VS Code, Xcode, a terminal) is Coding unless the code is clearly about a more specific module (e.g. pandas or a Jupyter notebook is Data Science).',
   '- Hardware design tools are studying too: Vivado, ModelSim, QuestaSim, Quartus, GTKWave, Logisim, XSIM and their waveform or simulation views. A gate-level or FPGA lab is Digital Logic. A processor, pipeline, datapath or instruction-set assignment is Computer Architecture. Do not call these a game or "Not study".',
   '- A simulation, lab, homework or assignment is studying. "simulation" is never a reason for "Not study".',
+  '- In a chat, judge the messages and attachments, not the app. Class diagrams, use case diagrams, notes, PDFs, shared documents, and a project named in the title are studying. "Online chatting" is only for a chat with no coursework in it.',
   '- Only a screen you are sure is social media, a game, shopping, entertainment video or unrelated news is "Not study". If you are not sure, guess the closest module and lower your confidence. Do not use "Not study" as the default.',
   '- Use the module keywords to pick the subject. The list covers many fields: pick the most specific module that fits (e.g. Calculus over Maths, Digital Logic over Coding). If it\'s clearly study content but matches no module, pick the closest one and lower your confidence.',
   '- The window title is a strong hint; if it conflicts with the screenshot, trust the screenshot.',
   '- "confidence": 0 to 1, how certain you are that the subject you chose is correct. It is NOT the probability of studying: a clear social feed is "Not study" with confidence 0.9 or more; use low values only when you are unsure which label fits.',
   '- Do not describe the screen. The subject is the whole answer.',
-  '- When the subject is "Not study", also set "activity" to a generic 2 to 4 word reason for what is actually visible, e.g. "Online shopping" or "Playing a game". Say email only when a mail inbox or message is on screen. Never copy names, message text, subjects or the window title. When the subject is a module, leave "activity" empty.',
+  '- When the subject is "Not study", also set "activity" to a generic 2 to 4 word reason for what is actually visible, e.g. "Messaging" or "Playing a game". Say "Online shopping" only when a store, cart, or product page is visible. A chat is never shopping. A chat about a group project, assignment, or class is studying: pick that module and leave "activity" empty. Say email only when a mail inbox or message is on screen. Never copy names, message text, subjects or the window title. When the subject is a module, leave "activity" empty.',
   '',
   'Reply with JSON only, matching the schema: {"studying": true or false, "subject": one of the module names or "Not study", "confidence": 0.0 to 1.0, "activity": "" or a short reason}',
 ].join('\n');
@@ -134,7 +135,11 @@ export function buildSystem(modules: Pick<StudyModule, 'name' | 'keywords'>[]): 
 }
 
 export function buildUserText(appName: string | null, windowTitle: string | null): string {
-  return [`Frontmost app: ${appName ?? 'unknown'}`, `Window title: ${windowTitle ?? 'unknown'}`].join('\n');
+  const lines = [`Frontmost app: ${appName ?? 'unknown'}`, `Window title: ${windowTitle ?? 'unknown'}`];
+  if (/\b(whatsapp|messenger|messages|imessage|telegram|signal)\b/i.test(appName ?? '')) {
+    lines.push('This is a chat. Judge the messages and attachments, not the app. Class diagrams, use case diagrams, notes, PDFs, and project files are studying.');
+  }
+  return lines.join('\n');
 }
 
 /** Same window line as the vision prompt, without an image, so Windows can answer before a screenshot. */
