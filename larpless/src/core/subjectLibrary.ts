@@ -39,7 +39,7 @@ export const SUBJECT_GROUPS: SubjectGroup[] = [
       { name: 'Linear Algebra', icon: 'grid', color: 'purple', keywords: ['matrix', 'vector', 'eigenvalue', 'eigenvector', 'determinant', 'linear transformation', 'basis', 'span', 'rank'] },
       { name: 'Statistics', icon: 'chart', color: 'orange', keywords: ['mean', 'variance', 'standard deviation', 'regression', 'hypothesis test', 'p-value', 'confidence interval', 'distribution', 'ANOVA', 'R', 'RStudio', 'SPSS', 'STAT'] },
       { name: 'Probability', icon: 'dices', color: 'orange', keywords: ['probability', 'random variable', 'Bayes', 'expectation', 'binomial', 'normal distribution', 'Markov', 'combinatorics'] },
-      { name: 'Discrete Maths', icon: 'hash', color: 'yellow', keywords: ['graph theory', 'set theory', 'logic', 'induction', 'combinatorics', 'relation', 'Boolean algebra', 'proof'] },
+      { name: 'Discrete Maths', icon: 'hash', color: 'yellow', keywords: ['injective', 'surjective', 'set theory', 'logic', 'proof', 'induction', 'graph theory', 'relation', 'bijective', 'combinatorics', 'Boolean algebra'] },
     ],
   },
   {

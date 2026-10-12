@@ -124,9 +124,13 @@ describe('prompt', () => {
 
     it('a chat app is told to judge the attachments', () => {
       const text = buildUserText('WhatsApp', 'info management project');
-      expect(text).toContain('Class diagrams');
+      expect(text).toContain('Read the messages');
       expect(text).toContain('not the app');
-      expect(buildUserText('Preview', 'notes.pdf')).not.toContain('Class diagrams');
+      const assistant = buildUserText('ChatGPT', 'ChatGPT');
+      expect(assistant).toContain('AI chat');
+      expect(assistant).toContain('Discrete Maths');
+      expect(buildUserText('Chrome', 'injective functions - ChatGPT')).toContain('Do not answer "Messaging"');
+      expect(buildUserText('Preview', 'notes.pdf')).not.toContain('AI chat');
     });
 
     it('a virtual machine is told to judge what runs inside it', () => {

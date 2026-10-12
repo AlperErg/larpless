@@ -232,13 +232,43 @@ describe('classifier', () => {
     );
     expect(diagrams).toMatchObject({ studying: true, moduleId: 'lib_information_management', activity: '' });
 
-    const social = guessStudy(
-      { studying: false, moduleId: null, activity: 'Online chatting', confidence: 0.96, source: 'vlm' },
+    const unread = guessStudy(
+      { studying: false, moduleId: null, activity: 'Messaging', confidence: 0.96, source: 'vlm' },
       modules,
       'WhatsApp',
       'Alex',
     );
-    expect(social).toMatchObject({ studying: false, activity: 'Online chatting' });
+    expect(unread).toMatchObject({ studying: true, moduleId: 'lib_coding', activity: '' });
+
+    const plans = guessStudy(
+      { studying: false, moduleId: null, activity: 'Planning dinner', confidence: 0.96, source: 'vlm' },
+      modules,
+      'WhatsApp',
+      'Alex',
+    );
+    expect(plans).toMatchObject({ studying: false, activity: 'Planning dinner' });
+
+    const assistant = guessStudy(
+      { studying: false, moduleId: null, activity: 'Messaging', confidence: 0.95, source: 'vlm' },
+      [
+        ...modules,
+        { id: 'lib_discrete_maths', name: 'Discrete Maths', color: 'yellow', keywords: ['injective', 'proof', 'set theory'] },
+      ],
+      'ChatGPT',
+      'ChatGPT',
+    );
+    expect(assistant).toMatchObject({ studying: true, activity: '' });
+
+    const exam = guessStudy(
+      { studying: false, moduleId: null, activity: 'Messaging', confidence: 0.95, source: 'vlm' },
+      [
+        ...modules,
+        { id: 'lib_discrete_maths', name: 'Discrete Maths', color: 'yellow', keywords: ['injective', 'proof', 'set theory'] },
+      ],
+      'Chrome',
+      'injective functions - ChatGPT',
+    );
+    expect(exam).toMatchObject({ studying: true, moduleId: 'lib_discrete_maths', activity: '' });
 
     const shop = guessStudy(
       { studying: false, moduleId: null, activity: 'Online shopping', confidence: 0.96, source: 'vlm' },

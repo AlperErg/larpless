@@ -99,6 +99,12 @@ export const SURE_NOT_STUDY = 0.8;
 const WORK_ACTIVITY = /\b(simulat\w*|lab|homework|assignment|coursework|problem set|waveform)\b/i;
 /** A chat about schoolwork. The window title is only read here, never stored. */
 const CHAT_APP = /\b(whatsapp|messenger|messages|imessage|telegram|signal)\b/i;
+/** Assistants are often a browser tab, so the name can be in the window title. */
+const AI_CHAT = /\b(chatgpt|claude|gemini|copilot|perplexity)\b/i;
+
+function isChat(appName: string | null, windowTitle: string | null): boolean {
+  return CHAT_APP.test(appName ?? '') || AI_CHAT.test(`${appName ?? ''} ${windowTitle ?? ''}`);
+}
 const CHAT_WORK = /\b(group project|project|assignment|homework|coursework|lecture|exam|lab|diagram)\b/i;
 /** A generic chat label. Dropped when the chat is actually schoolwork, so the panel does not keep it. */
 const CHAT_LABEL = /\b(online chatting|chatting|messaging)\b/i;
@@ -127,11 +133,14 @@ export function guessStudy(
 ): ScreenVerdict {
   if (verdict.studying || verdict.source === 'rule' || modules.length === 0) return verdict;
   const blob = `${verdict.activity} ${appName ?? ''} ${windowTitle ?? ''}`;
-  const chatWork = CHAT_APP.test(appName ?? '') && CHAT_WORK.test(`${verdict.activity} ${windowTitle ?? ''}`);
+  const chat = isChat(appName, windowTitle);
+  const chatWork = chat && CHAT_WORK.test(`${verdict.activity} ${windowTitle ?? ''}`);
   const bogusShop = echoedShopping(verdict.activity, appName, windowTitle);
   const vm = VM_APP.test(appName ?? '') && !VM_DISTRACTION.test(verdict.activity);
+  // "Messaging" names the app. It is not a reading of the messages, so it is not a sure distraction.
+  const unreadChat = chat && CHAT_LABEL.test(verdict.activity);
   const work = WORK_ACTIVITY.test(blob) || chatWork || vm;
-  if (!work && !bogusShop && verdict.confidence >= SURE_NOT_STUDY) return verdict;
+  if (!work && !bogusShop && !unreadChat && verdict.confidence >= SURE_NOT_STUDY) return verdict;
 
   const hay = lc(blob);
   // Longest keyword wins, so "info management" beats "management".

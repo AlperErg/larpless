@@ -22,18 +22,18 @@ export const NUM_CTX = 4096;
 export const SYSTEM = [
   'You label what a student is doing on their Mac for a study tracker. You get a screenshot of the main display, the frontmost app name, and its window title. Decide whether the visible content is studying for one of the student\'s modules.',
   '- Judge the content, not the app: a lecture on YouTube, slides in Preview, notes in Notion, a problem set in a browser or an IDE exercise all count as studying if they match a module.',
-  '- Looking things up is studying: search results, Wikipedia, documentation, Stack Overflow, papers, forums about a topic, or an AI assistant chat about coursework. Pick the module the search is about.',
+  '- Looking things up is studying: search results, Wikipedia, documentation, Stack Overflow, papers, forums about a topic, or an AI assistant chat about coursework. ChatGPT, Claude, Gemini and similar chats are not messaging. An exam, a proof, lecture notes, or a course PDF in that chat is studying. Pick the module the work is about.',
   '- Code in an editor or IDE (Cursor, VS Code, Xcode, a terminal) is Coding unless the code is clearly about a more specific module (e.g. pandas or a Jupyter notebook is Data Science).',
   '- Hardware design tools are studying too: Vivado, ModelSim, QuestaSim, Quartus, GTKWave, Logisim, XSIM and their waveform or simulation views. A gate-level or FPGA lab is Digital Logic. A processor, pipeline, datapath or instruction-set assignment is Computer Architecture. Do not call these a game or "Not study".',
   '- A simulation, lab, homework or assignment is studying. "simulation" is never a reason for "Not study".',
   '- A virtual machine (UTM, Parallels, VMware, VirtualBox, QEMU) is a coursework tool: an OS, networking or security lab. Judge what runs inside it. Another desktop, a terminal, an installer or settings inside it is studying; pick Operating Systems, Cybersecurity or Coding.',
-  '- In a chat, judge the messages and attachments, not the app. Class diagrams, use case diagrams, notes, PDFs, shared documents, and a project named in the title are studying. "Online chatting" is only for a chat with no coursework in it.',
+  '- In a chat, read the messages. A conversation about code, a repository, a branch, a model, an assignment, or how a project works is studying. Class diagrams, notes, PDFs, and project files are studying too. "Messaging" and "Online chatting" only name the app, so they are not a reason for "Not study". Use "Not study" only when the messages are clearly social and not about work or a course.',
   '- Only a screen you are sure is social media, a game, shopping, entertainment video or unrelated news is "Not study". If you are not sure, guess the closest module and lower your confidence. Do not use "Not study" as the default.',
   '- Use the module keywords to pick the subject. The list covers many fields: pick the most specific module that fits (e.g. Calculus over Maths, Digital Logic over Coding). If it\'s clearly study content but matches no module, pick the closest one and lower your confidence.',
   '- The window title is a strong hint; if it conflicts with the screenshot, trust the screenshot.',
   '- "confidence": 0 to 1, how certain you are that the subject you chose is correct. It is NOT the probability of studying: a clear social feed is "Not study" with confidence 0.9 or more; use low values only when you are unsure which label fits.',
   '- Do not describe the screen. The subject is the whole answer.',
-  '- When the subject is "Not study", also set "activity" to a generic 2 to 4 word reason for what is actually visible, e.g. "Messaging" or "Playing a game". Say "Online shopping" only when a store, cart, or product page is visible. A chat is never shopping. A chat about a group project, assignment, or class is studying: pick that module and leave "activity" empty. Say email only when a mail inbox or message is on screen. Never copy names, message text, subjects or the window title. When the subject is a module, leave "activity" empty.',
+  '- When the subject is "Not study", also set "activity" to a generic 2 to 4 word reason for what is actually visible, e.g. "Planning a party" or "Playing a game". Never use "Messaging" or "Online chatting": that only names the app. Say "Online shopping" only when a store, cart, or product page is visible. A chat about work or a course is studying: pick that module and leave "activity" empty. Say email only when a mail inbox or message is on screen. Never copy names, message text, subjects or the window title. When the subject is a module, leave "activity" empty.',
   '',
   'Reply with JSON only, matching the schema: {"studying": true or false, "subject": one of the module names or "Not study", "confidence": 0.0 to 1.0, "activity": "" or a short reason}',
 ].join('\n');
@@ -140,8 +140,10 @@ export const VM_APP = /\b(utm|parallels|vmware|virtualbox|qemu|hyper-v|virtual m
 
 export function buildUserText(appName: string | null, windowTitle: string | null): string {
   const lines = [`Frontmost app: ${appName ?? 'unknown'}`, `Window title: ${windowTitle ?? 'unknown'}`];
-  if (/\b(whatsapp|messenger|messages|imessage|telegram|signal)\b/i.test(appName ?? '')) {
-    lines.push('This is a chat. Judge the messages and attachments, not the app. Class diagrams, use case diagrams, notes, PDFs, and project files are studying.');
+  if (/\b(chatgpt|claude|gemini|copilot|perplexity)\b/i.test(`${appName ?? ''} ${windowTitle ?? ''}`)) {
+    lines.push('This is an AI chat. Read the messages and any PDF. An exam, a proof, or a course problem is studying. Pick the closest module, such as Discrete Maths for sets, functions, and proofs. Do not answer "Messaging".');
+  } else if (/\b(whatsapp|messenger|messages|imessage|telegram|signal)\b/i.test(appName ?? '')) {
+    lines.push('This is a chat. Read the messages, not the app. A conversation about code, a repository, a branch, a model, or how a project works is studying. Class diagrams, notes, PDFs, and project files are studying. Do not answer "Messaging".');
   }
   if (VM_APP.test(appName ?? '')) {
     lines.push('This is a virtual machine. Judge what runs inside it, not the second desktop. A guest desktop, terminal, installer or settings is studying.');
