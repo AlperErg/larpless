@@ -308,6 +308,37 @@ describe('Settings page', () => {
     act(() => signedOut.unmount());
   });
 
+  it('deletes the account only after a second, explicit click, and shows why it failed', async () => {
+    const deleteAccount = jest
+      .fn<Promise<void>, []>()
+      .mockRejectedValueOnce(new Error("This Supabase project can't delete accounts yet. Run the latest supabase/schema.sql."))
+      .mockResolvedValueOnce(undefined);
+    act(() => useSocialStore.setState({ status: 'signedIn', userId: 'u1', profile: { id: 'u1', username: 'ada' }, deleteAccount }));
+    const r = render();
+    expect(byID(r, 'settings-delete-confirm')).toBeUndefined();
+    await press(byTestID(r, 'settings-delete-account'));
+    await press(byTestID(r, 'settings-delete-cancel'));
+    expect(deleteAccount).not.toHaveBeenCalled();
+
+    await press(byTestID(r, 'settings-delete-account'));
+    await press(byTestID(r, 'settings-delete-confirm'));
+    expect(deleteAccount).toHaveBeenCalledTimes(1);
+    expect(textOf(byID(r, 'settings-delete-error'))).toContain("can't delete accounts yet");
+
+    await press(byTestID(r, 'settings-delete-account'));
+    await press(byTestID(r, 'settings-delete-confirm'));
+    expect(deleteAccount).toHaveBeenCalledTimes(2);
+    expect(byID(r, 'settings-delete-error')).toBeUndefined();
+    act(() => r.unmount());
+  });
+
+  it('opens the acknowledgements', async () => {
+    const r = render();
+    await press(byTestID(r, 'settings-acknowledgements'));
+    expect(useNavStore.getState().route).toBe('acknowledgements');
+    act(() => r.unmount());
+  });
+
   it('pins dark mode and follows the system again', async () => {
     const r = render();
     expect(isSelected(r, 'settings-appearance-system')).toBe(true);

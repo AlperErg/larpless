@@ -16,6 +16,7 @@ npm run typecheck                          # tsc --noEmit
 npm run lint                               # eslint (@react-native config)
 scripts/setup-worktree.sh                  # npm ci + pod install (sets the UTF-8 locale CocoaPods needs)
 scripts/run-mac.sh 8081                    # Metro on 8081 + Debug build with that port baked in + launch
+node scripts/acknowledgements.mjs          # regenerate src/legal/acknowledgements.json after dependency changes (needs pod install; CI runs --check)
 xcodebuild -workspace macos/Focusline.xcworkspace -scheme Focusline-macOS -configuration Debug build
 ```
 
@@ -43,6 +44,7 @@ Layering is strict: **`ui` → `store` → `core` → `native` facades → Swift
 - **`src/store/`** (zustand 5) is where the concrete dependencies are wired. `sessionStore.ts` lazily builds the one `SessionController` with real `native`, Ollama, `appDb` and `Date.now`; store actions just delegate to it, and the controller writes back via `setState`. `appStore.ts` injects AsyncStorage into `core/db`. `navStore.ts` is the router (no navigation library; `App.tsx` switches on `route` and auto-routes on session status changes). `socialStore.ts` wraps `src/social/api.ts`.
 - **`src/native/`** has one thin facade per Swift module (`NativeModules.FLx` + `NativeEventEmitter`) plus `mock/` implementations. `native/index.ts` picks the mock when `config.USE_MOCK_NATIVE` is true or the module is missing.
 - **`src/social/`**: every API helper takes the Supabase client as a parameter, so tests pass `test/fakeSupabase.ts`. Posts carry stats only.
+- **`src/legal/`**: `acknowledgements.json` is generated (never hand-edit it); licence texts npm and CocoaPods don't supply live in `licenses/`.
 - **`src/ui/`**: Notion-styled components (`theme.ts` tokens, Inter + Instrument Serif), pages, ⌘K `CommandPalette`. `ui/lib/actions.ts` holds shared UI actions (start/end session).
 - **Swift (`macos/Focusline-macOS/Native/`)**: `Capture/` (ScreenCaptureKit, webcam with Vision + bundled YOLO11n CoreML, permissions), `Shell/` (SwiftUI floating `NSPanel`, notifications, AVAudioEngine noise, menu/App Nap), `Ollama/` (`FLOllama`: finds, opens and restarts Ollama.app; reads the server's environment only for the cache variable), `Shared/` (`FLPing` smoke test, bridging header). Each module is a Swift `RCTEventEmitter` class plus a `.m` file with `RCT_EXTERN_MODULE`/`RCT_EXTERN_METHOD` (see `Shared/FLPing.*` for the minimal pattern), working through the RN interop layer.
   - `Native/` is an Xcode **synchronized folder**: new files join the target automatically, no `project.pbxproj` edits. Resources are flattened into the bundle, so prefix every type and file name (`FLCapture…`, `FLShell…`).

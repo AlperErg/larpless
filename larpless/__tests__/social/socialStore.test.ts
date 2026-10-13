@@ -111,9 +111,23 @@ it('publish marks the session as posted', async () => {
   expect(f.opsFor('posts', 1)[0][0]).toBe('insert');
 });
 
+it('deleting the account signs out and clears the friends data', async () => {
+  const f = fakeSupabase({ profiles: [{ data: { id: 'u1', username: 'ada' } }], posts: [{ data: [post('p1', 'u1', 's1')] }] });
+  const store = createSocialStore(() => f.client, true);
+  store.getState().init();
+  f.emitAuth({ user: { id: 'u1' } });
+  await flush();
+  expect(store.getState().feed).toHaveLength(1);
+  await store.getState().deleteAccount();
+  expect(f.rpc).toHaveBeenCalledWith('delete_account');
+  expect(store.getState()).toMatchObject({ status: 'signedOut', userId: null, profile: null, feed: [] });
+});
+
 it('actions need a signed-in user', async () => {
   const f = fakeSupabase();
   const store = createSocialStore(() => f.client, true);
+  await expect(store.getState().deleteAccount()).rejects.toThrow('Sign in first.');
+  expect(f.rpc).not.toHaveBeenCalled();
   await expect(store.getState().addFriend('bob')).rejects.toThrow('Sign in first.');
   await expect(store.getState().publish({ summary, breakdown: [], focusPct: 0, streak: 0, caption: '' })).rejects.toThrow('Sign in first.');
 });

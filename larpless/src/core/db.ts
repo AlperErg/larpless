@@ -29,6 +29,8 @@ export interface Db {
   listSessions(): Promise<SessionSummary[]>;
   /** Insert or replace by id; keeps the list newest first. */
   saveSession(s: SessionSummary): Promise<void>;
+  /** Remove a session summary and its chunks. */
+  deleteSession(sessionId: string): Promise<void>;
   /** Append (or replace by id) one chunk of a session. */
   appendChunk(c: Chunk): Promise<void>;
   getChunks(sessionId: string): Promise<Chunk[]>;
@@ -132,6 +134,12 @@ export function createDb(kv: KeyValue): Db {
         list.push(s);
         list.sort((a, b) => b.startedAt - a.startedAt);
         await writeJson(KEYS.sessions, list);
+      }),
+    deleteSession: (sessionId) =>
+      serial(async () => {
+        const list = (await readArray<SessionSummary>(KEYS.sessions)).filter((x) => x.id !== sessionId);
+        await writeJson(KEYS.sessions, list);
+        await kv.removeItem(KEYS.chunks(sessionId));
       }),
 
     appendChunk: (c) =>

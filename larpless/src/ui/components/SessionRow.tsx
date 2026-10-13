@@ -24,7 +24,17 @@ export function SessionRowHeader({ s, modules }: { s: SessionSummary; modules: S
   );
 }
 
-export function SessionRowBody({ s, modules, onOpen }: { s: SessionSummary; modules: StudyModule[]; onOpen?: () => void }) {
+export function SessionRowBody({
+  s,
+  modules,
+  onOpen,
+  onDelete,
+}: {
+  s: SessionSummary;
+  modules: StudyModule[];
+  onOpen?: () => void;
+  onDelete?: () => void;
+}) {
   return (
     <View>
       <BreakdownBar entries={relookBreakdown(s.breakdown, modules)} legend legendTime hideBar />
@@ -33,16 +43,31 @@ export function SessionRowBody({ s, modules, onOpen }: { s: SessionSummary; modu
           {`Focus ${formatDuration(s.focusS)} of ${formatDuration(s.totalS)} · ${s.pomodoros} pomodoro${s.pomodoros === 1 ? '' : 's'}`}
         </Text>
         {onOpen ? <Button title="Open summary" variant="ghost" onPress={onOpen} style={styles.open} /> : null}
+        {onDelete ? (
+          <Button testID={`delete-session-${s.id}`} title="Delete" variant="danger" onPress={onDelete} style={styles.open} />
+        ) : null}
       </View>
     </View>
   );
 }
 
-export function sessionToggleItem(s: SessionSummary, modules: StudyModule[], onOpen?: (id: string) => void): ToggleItem {
+export function sessionToggleItem(
+  s: SessionSummary,
+  modules: StudyModule[],
+  onOpen?: (id: string) => void,
+  onDelete?: (id: string) => void,
+): ToggleItem {
   return {
     key: s.id,
     header: <SessionRowHeader s={s} modules={modules} />,
-    body: () => <SessionRowBody s={s} modules={modules} onOpen={onOpen ? () => onOpen(s.id) : undefined} />,
+    body: () => (
+      <SessionRowBody
+        s={s}
+        modules={modules}
+        onOpen={onOpen ? () => onOpen(s.id) : undefined}
+        onDelete={onDelete ? () => onDelete(s.id) : undefined}
+      />
+    ),
   };
 }
 

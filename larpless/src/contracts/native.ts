@@ -102,7 +102,8 @@ export interface NowPlayingApi {
 }
 
 /* ---------- FLAppShell (WS-B) ---------- */
-export type MenuCommand = 'commandPalette' | 'startSession' | 'endSession';
+/** 'acknowledgements' is macOS only: LarpLess → Acknowledgements, under About LarpLess. */
+export type MenuCommand = 'commandPalette' | 'startSession' | 'endSession' | 'acknowledgements';
 export interface AppShellApi {
   beginSessionActivity(): void;   // prevents App Nap from throttling JS timers
   endSessionActivity(): void;

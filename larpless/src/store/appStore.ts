@@ -56,6 +56,11 @@ export const useAppStore = create<AppStore>()((set, get) => ({
   },
 
   getChunks: (sessionId) => appDb.getChunks(sessionId),
+
+  deleteSession: async (sessionId) => {
+    set({ sessions: get().sessions.filter((s) => s.id !== sessionId) });
+    await appDb.deleteSession(sessionId);
+  },
 }));
 
 /** Insert or replace a saved summary in the in-memory list (newest first). Used by the session store. */

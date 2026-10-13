@@ -4,7 +4,7 @@
  * Routing (WS-D brief):
  * - mount → appStore.load(); not onboarded → onboarding, else home
  * - session status idle/ended → running|paused|break → session; → ended → summary
- * - native menu: commandPalette / startSession / endSession
+ * - native menu: commandPalette / startSession / endSession / acknowledgements
  */
 import { useEffect, useState } from 'react';
 import { StyleSheet, useColorScheme, View } from 'react-native';
@@ -22,6 +22,7 @@ import { AppLayout } from './ui/layout/AppLayout';
 import { ErrorBoundary } from './ui/layout/ErrorBoundary';
 import { endSession, isLive, startSession } from './ui/lib/actions';
 import { useViewport } from './ui/lib/viewport';
+import { AcknowledgementsPage } from './ui/pages/AcknowledgementsPage';
 import { DevToolsPage, installUiIntrospection } from './ui/pages/DevToolsPage';
 import { FriendsPage } from './ui/pages/FriendsPage';
 import { HistoryPage } from './ui/pages/HistoryPage';
@@ -48,6 +49,8 @@ function renderPage(route: Route) {
       return <ModulesPage />;
     case 'settings':
       return <SettingsPage />;
+    case 'acknowledgements':
+      return <AcknowledgementsPage />;
     case 'feed':
     case 'profile':
       return <FriendsPage />;
@@ -116,6 +119,10 @@ function useMenuCommands(): void {
         if (c === 'commandPalette') useNavStore.getState().setPaletteOpen(true);
         else if (c === 'startSession') startSession();
         else if (c === 'endSession') endSession();
+        else if (c === 'acknowledgements') {
+          native.appShell.bringToFront();
+          useNavStore.getState().go('acknowledgements');
+        }
       }),
     [],
   );

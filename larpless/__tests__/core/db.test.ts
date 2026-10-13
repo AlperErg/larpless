@@ -34,6 +34,21 @@ describe('db', () => {
     expect([...kv.map.keys()].sort()).toEqual(['fl:chunks:ses_fixture', 'fl:modules', 'fl:sessions', 'fl:settings']);
   });
 
+  it('deleteSession removes the summary and its chunks, leaving the rest', async () => {
+    const kv = createMemoryKv();
+    const db = createDb(kv);
+    const [a, b] = fixtureSessions;
+    await db.saveSession(a);
+    await db.saveSession(b);
+    const chunks = fixtureChunks.slice(0, 3).map((ch) => ({ ...ch, sessionId: a.id }));
+    await Promise.all(chunks.map((ch) => db.appendChunk(ch)));
+
+    await db.deleteSession(a.id);
+    expect((await db.listSessions()).map((s) => s.id)).toEqual([b.id]);
+    expect(await db.getChunks(a.id)).toEqual([]);
+    expect(kv.map.has(KEYS.chunks(a.id))).toBe(false);
+  });
+
   it('updateChunk replaces by id; false when missing', async () => {
     const db = createDb(createMemoryKv());
     const ch = fixtureChunks[0];

@@ -35,6 +35,21 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
 
+-- Settings > Delete account. Removes the caller's auth user; the profile, friendships and posts
+-- cascade from it. Security definer because the API roles can't touch auth.users.
+create or replace function public.delete_account()
+returns void
+language sql
+volatile
+security definer
+set search_path = ''
+as $$
+  delete from auth.users where id = auth.uid();
+$$;
+
+revoke execute on function public.delete_account() from public, anon;
+grant execute on function public.delete_account() to authenticated;
+
 -- Friendships ----------------------------------------------------------------
 
 create table if not exists public.friendships (

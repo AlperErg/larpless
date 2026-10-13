@@ -131,6 +131,36 @@ describe('profiles', () => {
   });
 });
 
+describe('delete_account()', () => {
+  it('deletes only the caller, with their profile, friendships and posts', async () => {
+    const dave = await signUp('dave');
+    await db.query('insert into public.friendships (requester_id, addressee_id, status) values ($1, $2, $3)', [dave, ids.alice, 'accepted']);
+    await db.query('insert into public.friendships (requester_id, addressee_id, status) values ($1, $2, $3)', [ids.bob, ids.alice, 'accepted']);
+    await db.query(
+      'insert into public.posts (user_id, local_session_id, total_s, focus_pct, started_at) values ($1, $2, $3, $4, $5)',
+      Object.values({ ...postRow('alice'), user_id: dave }),
+    );
+    await seedPost('alice');
+
+    await db.as('authenticated', dave, 'select public.delete_account()');
+
+    const left = async (sql: string, params: unknown[] = []) => (await db.query(sql, params)).rows.length;
+    expect(await left('select 1 from auth.users where id = $1', [dave])).toBe(0);
+    expect(await left('select 1 from public.profiles where id = $1', [dave])).toBe(0);
+    expect(await left('select 1 from public.friendships where $1 in (requester_id, addressee_id)', [dave])).toBe(0);
+    expect(await left('select 1 from public.posts where user_id = $1', [dave])).toBe(0);
+    // Everyone else is untouched.
+    expect(await left('select 1 from public.profiles where id in ($1, $2, $3)', [ids.alice, ids.bob, ids.carol])).toBe(3);
+    expect(await left('select 1 from public.friendships')).toBe(1);
+    expect(await left('select 1 from public.posts where user_id = $1', [ids.alice])).toBe(1);
+  });
+
+  it('anonymous callers cannot run it', async () => {
+    await expect(as('anon', 'select public.delete_account()')).rejects.toMatchObject({ code: '42501' });
+    expect((await db.query('select 1 from public.profiles')).rows.length).toBe(3);
+  });
+});
+
 describe('friendships', () => {
   it('you can send a pending request as yourself', async () => {
     await insertAs('alice', 'friendships', { requester_id: ids.alice, addressee_id: ids.bob });

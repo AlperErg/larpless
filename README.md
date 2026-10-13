@@ -159,7 +159,7 @@ export const SUPABASE_URL = 'https://<project>.supabase.co';
 export const SUPABASE_ANON_KEY = '<anon key>';
 ```
 
-Then, in the Supabase dashboard, run [`larpless/supabase/schema.sql`](larpless/supabase/schema.sql) in the SQL editor and turn off **Authentication → Providers → Email → Confirm email** (accounts use a username + password; you can also sign in with the email of an account made outside the app).
+Then, in the Supabase dashboard, run [`larpless/supabase/schema.sql`](larpless/supabase/schema.sql) in the SQL editor and turn off **Authentication → Providers → Email → Confirm email** (accounts use a username + password; you can also sign in with the email of an account made outside the app). The script is safe to re-run; run it again whenever it changes (for example, **Settings → Account → Delete account** needs its `delete_account` function).
 
 ### Run
 
@@ -285,6 +285,14 @@ log show --last 5m --style compact --predicate 'subsystem == "com.larpless.app"'
 ```
 
 **Classifier bench.** `node scripts/bench-classifier.ts --model qwen3-vl:2b` scores the prompt against `bench/<expected>__<desc>.png`. If that folder is empty it renders 10 synthetic mock-ups instead and never captures the real screen. Add `--clean` to delete the images afterwards.
+
+**Acknowledgements.** The in-app Acknowledgements page (Settings → About, and LarpLess → Acknowledgements on macOS) shows the licences of everything third-party the app ships. After changing npm dependencies, pods, fonts, models or vendored code, run `pod install` and then:
+
+```bash
+node scripts/acknowledgements.mjs
+```
+
+It reads the packages Metro actually bundles for macOS and Windows, the notices CocoaPods generates, and the hand-kept texts in `licenses/`, and writes `src/legal/acknowledgements.json`. The macOS CI build runs it with `--check` and fails when the file is out of date. The Windows build's NuGet packages aren't covered yet.
 
 **Adding native code.** `macos/Focusline-macOS/Native/` is an Xcode *synchronized folder*: drop files in and they join the target, with no `project.pbxproj` edits. Resources are flattened into the bundle, so prefix every type and file name (`FLCapture…`, `FLShell…`). The one exception is the **Bundle MediaRemote adapter** run-script phase in `project.pbxproj`: it calls `macos/scripts/build-mediaremote-adapter.sh`, which builds `macos/vendor/mediaremote-adapter` with CMake and copies the framework and the perl launcher into the app's Resources.
 

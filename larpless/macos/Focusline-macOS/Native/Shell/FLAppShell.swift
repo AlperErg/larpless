@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 
-/// Target for the "Session" menu items; forwards to JS as `FLMenuCommand`.
+/// Target for the "Session" menu items and Acknowledgements; forwards to JS as `FLMenuCommand`.
 final class FLShellMenuTarget: NSObject {
   static let shared = FLShellMenuTarget()
 
@@ -21,13 +21,17 @@ enum FLShellMenu {
     ("End Session", ".", "endSession"),
   ]
 
-  /// Inserts a "Session" menu before Window (or Help). Idempotent across bridge reloads.
+  static let acknowledgementsTag = 0x464C_4143   // "FLAC"
+
+  /// Inserts a "Session" menu before Window (or Help), and Acknowledgements under About LarpLess.
+  /// Idempotent across bridge reloads.
   static func install() {
     guard let main = NSApp.mainMenu else {
       flShellLog("[FLAppShell] no main menu yet; retrying")
       DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { MainActor.assumeIsolated { install() } }
       return
     }
+    installAcknowledgements(in: main)
     if main.items.contains(where: { $0.tag == tag }) { return }
     let menu = NSMenu(title: "Session")
     for item in items {
@@ -45,6 +49,18 @@ enum FLShellMenu {
       ?? main.items.count
     main.insertItem(top, at: index)
     flShellLog("[FLAppShell] Session menu installed at index \(index)")
+  }
+
+  /// The open-source notices page lives in JS, so the item sends a menu command like the Session items.
+  private static func installAcknowledgements(in main: NSMenu) {
+    guard let appMenu = main.items.first?.submenu,
+          !appMenu.items.contains(where: { $0.tag == acknowledgementsTag }) else { return }
+    let item = NSMenuItem(title: "Acknowledgements", action: #selector(FLShellMenuTarget.fire(_:)), keyEquivalent: "")
+    item.target = FLShellMenuTarget.shared
+    item.representedObject = "acknowledgements"
+    item.tag = acknowledgementsTag
+    let about = appMenu.items.firstIndex { $0.action == #selector(NSApplication.orderFrontStandardAboutPanel(_:)) }
+    appMenu.insertItem(item, at: about.map { $0 + 1 } ?? 0)
   }
 
   static func describe() -> [[String: Any]] {
