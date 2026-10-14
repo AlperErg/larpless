@@ -6,6 +6,7 @@
 transformers==5.19.0
 sentence-transformers==6.1.0
 sentencepiece==0.2.2
+num2words==0.5.14         # SmolVLM processor (option_bench.py)
 numpy==2.5.4
 pillow==12.3.0
 scikit-learn==1.9.1

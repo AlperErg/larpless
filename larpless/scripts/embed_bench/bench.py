@@ -8,11 +8,11 @@ Run from larpless/ (Windows, after the venv setup in requirements.txt):
     ...bench.py --ocr none                                      # image only
     ...bench.py --onnx                                          # also time the image tower in ONNX Runtime
     ...bench.py --offline                                       # after the first model download
+    ...bench.py --courses                                       # sidecar "course" names as custom courses
+    ...bench.py --dir holdout                                   # the frozen holdout (score once, never tune)
 
-Reads bench/<subject-slug>__<desc>.png|jpg. The slug is the library id without "lib_" (calculus,
-signals_systems, ...) or "notstudy". An optional sidecar bench/<name>.json holds {appName, windowTitle},
-plus "accept": [subject names] that also count as correct, and "synthetic": true for generated scenes.
-Labels are the 44 library subjects from src/core/subjectLibrary.ts plus "Not study".
+Reads bench/<subject-slug>__<desc>.png|jpg; the file and sidecar format is in benchdata.py. Labels are the
+44 library subjects from src/core/subjectLibrary.ts plus "Not study".
 
 PRIVACY (CLAUDE.md "Privacy invariants"): images are resized, JPEG-encoded and OCR'd in memory only.
 Nothing is written to disk except model weights (HF_HOME = scripts/embed_bench/.models). Output shows
@@ -21,20 +21,14 @@ embedding vectors. Nothing is sent anywhere; the network is used only to downloa
 """
 
 import argparse
-import io
 import json
 import os
 import re
-import statistics
-import subprocess
 import sys
 import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-LARPLESS = HERE.parent.parent
-BENCH = LARPLESS / "bench"
-NOT_STUDY = "Not study"
 
 p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
 p.add_argument("--image-model", default="google/siglip2-base-patch16-224")
@@ -44,6 +38,7 @@ p.add_argument("--ocr-lang", default="en-US")
 p.add_argument("--width", type=int, default=1024, help="capture width, as the app's power profile (768/1024/1280)")
 p.add_argument("--jpeg-quality", type=int, default=60)
 p.add_argument("--only", default="", help="only files whose name contains this")
+p.add_argument("--dir", default="", help="a subfolder of bench/ to score instead, e.g. holdout (never tune on it)")
 p.add_argument("--onnx", action="store_true", help="export the image tower to ONNX and time fp32 + int8")
 p.add_argument("--offline", action="store_true", help="use cached weights only")
 p.add_argument("--dump-scores", metavar="PATH", help="write each image's numeric scores (no text, no pixels) as JSON, "
@@ -62,33 +57,18 @@ if args.offline:
 import numpy as np  # noqa: E402
 import psutil  # noqa: E402
 import torch  # noqa: E402
-from PIL import Image  # noqa: E402
+
+sys.path.insert(0, str(HERE))  # `python -I` leaves the script's folder off sys.path
+from benchdata import (  # noqa: E402
+    LABELS, NOT_STUDY, SUBJECTS, course_modules, coverage_curve, custom_courses, expectation, expected_label, hit,
+    list_images, load_like_capture, misses_by_kind, pct, report, sidecar, verdict_curves,
+)
+from prompts import DISTRACTION_PROMPTS, IMAGE_TEMPLATES, STUDY_PROMPTS  # noqa: E402
 
 MIN_OCR_CHARS = 40
 MAX_TEXT_CHARS = 1000
-
-# --------------------------------------------------------------------------------------------------
-# Labels and prompts
-# --------------------------------------------------------------------------------------------------
-
-
-def load_subjects() -> list[dict]:
-    out = subprocess.run(
-        ["node", str(HERE / "export_subjects.mjs")], cwd=LARPLESS, capture_output=True, text=True, check=True
-    )
-    return json.loads(out.stdout)
-
-
-SUBJECTS = load_subjects()
-NAMES = [s["name"] for s in SUBJECTS]
-LABELS = NAMES + [NOT_STUDY]
-SLUGS = {s["id"].removeprefix("lib_"): s["name"] for s in SUBJECTS}
-SLUGS["notstudy"] = NOT_STUDY
 # Library subjects plus, with --courses, custom courses (no image prompt, as in the app). Set in main().
 MODULES: list[dict] = list(SUBJECTS)
-
-sys.path.insert(0, str(HERE))  # `python -I` leaves the script's folder off sys.path
-from prompts import DISTRACTION_PROMPTS, IMAGE_TEMPLATES, STUDY_PROMPTS  # noqa: E402
 
 TEXT_DISTRACTIONS = [
     "social media feed: likes, followers, comments, stories, reels, posts",
@@ -102,41 +82,6 @@ TEXT_DISTRACTIONS = [
 
 def subject_text(s: dict) -> str:
     return f"{s['name']}: {', '.join(s['keywords'])}"
-
-
-# --------------------------------------------------------------------------------------------------
-# Bench images (in memory)
-# --------------------------------------------------------------------------------------------------
-
-
-def list_images() -> list[Path]:
-    if not BENCH.exists():
-        return []
-    files = [f for f in BENCH.iterdir() if f.suffix.lower() in (".png", ".jpg", ".jpeg")]
-    return sorted(f for f in files if args.only in f.name)
-
-
-def sidecar(f: Path) -> dict:
-    side = f.with_suffix(".json")
-    return json.loads(side.read_text(encoding="utf-8")) if side.exists() else {}
-
-
-def expected_label(f: Path) -> str | None:
-    return SLUGS.get(f.name.split("__")[0].lower())
-
-
-def load_like_capture(f: Path) -> Image.Image:
-    """What the app would hold: resized to the capture width and JPEG round-tripped, all in memory."""
-    with Image.open(f) as im:
-        im = im.convert("RGB")
-        if im.width > args.width:
-            im = im.resize((args.width, round(im.height * args.width / im.width)), Image.LANCZOS)
-        buf = io.BytesIO()
-        im.save(buf, format="JPEG", quality=args.jpeg_quality)
-    buf.seek(0)
-    out = Image.open(buf)
-    out.load()
-    return out
 
 
 # --------------------------------------------------------------------------------------------------
@@ -172,7 +117,7 @@ class ImageScorer:
         feats = as_tensor(self.model.get_text_features(**inputs))
         return torch.nn.functional.normalize(feats, dim=-1)
 
-    def pixels(self, image: Image.Image) -> torch.Tensor:
+    def pixels(self, image) -> torch.Tensor:
         return self.processor(images=image, return_tensors="pt")["pixel_values"]
 
     @torch.no_grad()
@@ -229,13 +174,30 @@ def softmax(x: np.ndarray, t: float) -> np.ndarray:
 def fused_predict(item: dict, prm: dict) -> tuple[str, float]:
     """Gate (study vs not) from image + text margins and keyword hits, then the subject from a weighted mix of
     image, text and keyword probabilities. Mirrors src/core/screenModel.ts fuseScores."""
+    p_study = study_probability(item, prm)
+    if p_study < 0.5:
+        return NOT_STUDY, 1 - p_study
+    probs = subject_probs(item, prm)
+    order = np.argsort(probs)[::-1]
+    k = int(order[0])
+    if prm.get("conf") == "margin":
+        # Top-1 against the runner-up only: similar subjects (Coding / Algorithms / OS) split the mass,
+        # which drags plain probabilities down even when the answer is right.
+        conf = probs[k] / (probs[k] + probs[order[1]]) if len(order) > 1 else 1.0
+        return MODULES[k]["name"], float(p_study * conf)
+    return MODULES[k]["name"], float(p_study * probs[k])
+
+
+def study_probability(item: dict, prm: dict) -> float:
     kw = item["kw"]
     gate = prm["g_img"] * item["img_margin"] + prm["bias"] + prm.get("g_kw", 0.0) * min(float(kw.max()), 3.0)
     if item["has_text"]:
         gate += prm["g_txt"] * item["txt_margin"]
-    p_study = 1 / (1 + np.exp(-gate))
-    if p_study < 0.5:
-        return NOT_STUDY, 1 - p_study
+    return float(1 / (1 + np.exp(-gate)))
+
+
+def subject_probs(item: dict, prm: dict) -> np.ndarray:
+    kw = item["kw"]
     img = item["img_subj"]
     known = np.isfinite(img)  # custom courses have no image prompt
     parts: list[tuple[float, np.ndarray]] = []
@@ -250,15 +212,14 @@ def fused_predict(item: dict, prm: dict) -> tuple[str, float]:
     total = sum(w for w, _ in parts)
     if total <= 0:
         parts, total = [(1.0, parts[0][1] if parts else np.full(len(img), 1 / len(img)))], 1.0
-    probs = sum(w * p for w, p in parts) / total
-    order = np.argsort(probs)[::-1]
-    k = int(order[0])
-    if prm.get("conf") == "margin":
-        # Top-1 against the runner-up only: similar subjects (Coding / Algorithms / OS) split the mass,
-        # which drags plain probabilities down even when the answer is right.
-        conf = probs[k] / (probs[k] + probs[order[1]]) if len(order) > 1 else 1.0
-        return MODULES[k]["name"], float(p_study * conf)
-    return MODULES[k]["name"], float(p_study * probs[k])
+    return sum(w * p for w, p in parts) / total
+
+
+def shortlist(item: dict, prm: dict, k: int = 8) -> dict:
+    """Option 1's top-k subjects and P(study), for option_bench.py --rerank-from."""
+    probs = subject_probs(item, prm)
+    order = np.argsort(probs)[::-1][:k]
+    return {"pStudy": study_probability(item, prm), "top": [[MODULES[i]["name"], float(probs[i])] for i in order]}
 
 
 # The parameters the app ships with (src/core/screenModel.ts FUSION). Keep the two in sync.
@@ -269,7 +230,7 @@ APP_PARAMS = dict(alpha=0.25, t_img=1.0, t_txt=0.05, g_img=0.5, g_txt=0.0, bias=
 GRID = [
     dict(alpha=a, t_img=ti, t_txt=tt, g_img=gi, g_txt=gt, bias=0.0, beta=be, t_kw=tk, g_kw=gk)
     for a in (0.25, 0.5, 0.75)
-    for ti in (1.0, 2.0)
+    for ti in (1.0,)  # 2.0 was never picked; fewer combinations overfit less on a few dozen images
     for tt in (0.02, 0.05, 0.1)
     for gi in (0.5, 1.0)
     for gt in (0.0, 10.0)
@@ -277,10 +238,6 @@ GRID = [
     for tk in (0.5, 1.0)
     for gk in (0.0, 1.0)
 ]
-
-
-def hit(pred: str | None, item: dict) -> bool:
-    return pred is not None and pred in item["accept"]
 
 
 def fit(train: list[dict]) -> dict:
@@ -298,35 +255,6 @@ def leave_one_out(items: list[dict]) -> tuple[list[tuple[str, float]], list[tupl
     plain = [fused_predict(it, prm) for it, prm in zip(items, folds)]
     margin = [fused_predict(it, {**prm, "conf": "margin"}) for it, prm in zip(items, folds)]
     return plain, margin, folds
-
-
-def pct(xs: list[float], q: float) -> float:
-    if not xs:
-        return 0.0
-    s = sorted(xs)
-    return s[min(len(s) - 1, max(0, int(round(q / 100 * len(s) + 0.5)) - 1))]
-
-
-def report(name: str, preds: list[tuple[str | None, float]], items: list[dict]) -> None:
-    n = len(items)
-    answered = [(p, c, it) for (p, c), it in zip(preds, items) if p is not None]
-    top1 = sum(hit(p, it) for p, _, it in answered)
-    gate = sum((p == NOT_STUDY) == (it["expected"] == NOT_STUDY) for p, _, it in answered)
-    misses: dict[str, int] = {}
-    for p, _, it in answered:
-        if not hit(p, it):
-            k = f"{it['expected']} -> {p}"
-            misses[k] = misses.get(k, 0) + 1
-    worst = ", ".join(f"{k} ({v})" for k, v in sorted(misses.items(), key=lambda kv: -kv[1])[:4]) or "-"
-    print(f"  {name:<9} top-1 {top1}/{n} ({100 * top1 / n:4.0f}%)  study/not {gate}/{len(answered)}  answered {len(answered)}/{n}  misses: {worst}")
-
-
-def coverage_curve(preds: list[tuple[str, float]], items: list[dict]) -> None:
-    print("  abstain threshold -> coverage / accuracy of answered (rest would be 'unknown'):")
-    for tau in (0.0, 0.05, 0.1, 0.15, 0.2, 0.3, 0.5, 0.7):
-        kept = [(p, it) for (p, c), it in zip(preds, items) if c >= tau]
-        acc = sum(hit(p, it) for p, it in kept) / len(kept) if kept else 0.0
-        print(f"    >= {tau:.2f}: {len(kept)}/{len(items)} answered, {100 * acc:3.0f}% correct")
 
 
 # --------------------------------------------------------------------------------------------------
@@ -377,18 +305,19 @@ def onnx_timing(scorer: ImageScorer, pixel_batches: list[torch.Tensor], txt_emb:
 
 
 def main() -> None:
-    files = list_images()
+    files = list_images(args.only, args.dir)
     if not files:
         sys.exit("bench/ has no images. Run: node scripts/bench-classifier.ts --generate-only")
     sides = {f: sidecar(f) for f in files}
     synthetic = all(s.get("synthetic") for s in sides.values())
     skipped = [f.name for f in files if expected_label(f) is None]
     files = [f for f in files if expected_label(f) is not None]
-    courses = sorted({sides[f]["course"] for f in files if args.courses and sides[f].get("course") and sides[f]["course"] not in NAMES})
+    courses = custom_courses(files, sides) if args.courses else []
     global MODULES
-    MODULES = list(SUBJECTS) + [{"id": "mod_" + c.lower().replace(" ", "_"), "name": c, "keywords": []} for c in courses]
+    MODULES = list(SUBJECTS) + course_modules(courses)
 
-    print(f"embed bench · {len(files)} images{' (all synthetic)' if synthetic else ''} · image {args.image_model} · "
+    print(f"embed bench · {len(files)} images{f' in bench/{args.dir}' if args.dir else ''}"
+          f"{' (all synthetic)' if synthetic else ''} · image {args.image_model} · "
           f"text {args.text_model} · OCR {args.ocr} · capture {args.width}px q{args.jpeg_quality} · {torch.get_num_threads()} threads")
     if courses:
         print(f"  custom courses (text only): {', '.join(courses)}")
@@ -422,13 +351,10 @@ def main() -> None:
     print(f"\n{'file':<34} {'expected':<15} {'image':<17} {'text':<17} {'keyword':<15} ocr-chars  ms(img/ocr/txt)")
     for n, f in enumerate(files):
         side = sides[f]
-        expected = expected_label(f)
-        accept = {expected, *side.get("accept", [])}
-        if side.get("course") in courses:
-            expected, accept = side["course"], {side["course"]}
+        expected, accept = expectation(f, side, courses)
         try:
             t0 = time.perf_counter()
-            capture = load_like_capture(f)
+            capture = load_like_capture(f, args.width, args.jpeg_quality)
             pv = img.pixels(capture)
             t1 = time.perf_counter()
             img_emb = img.embed_pixels(pv)
@@ -458,7 +384,7 @@ def main() -> None:
         img_scores = np.append(lib_subj, logits[idx["distract"]].max())
         img_margin = float(max(logits[idx["study"]].max(), lib_subj.max()) - logits[idx["distract"]].max())
         img_subj = np.append(lib_subj, [np.nan] * (len(MODULES) - len(SUBJECTS)))
-        item = dict(file=f.name, expected=expected, accept=accept, img_subj=img_subj, img_margin=img_margin,
+        item = dict(file=f.name, expected=expected, accept=accept, kind=side.get("kind"), img_subj=img_subj, img_margin=img_margin,
                     txt_subj=txt_subj, txt_margin=txt_margin, has_text=has_text, kw=kw,
                     img_pred=LABELS[int(img_scores.argmax())],
                     img_conf=float(1 / (1 + np.exp(-img_scores.max()))) if img.kind == "siglip" else float(softmax(img_scores, 1).max()),
@@ -504,6 +430,9 @@ def main() -> None:
     print("  app confidences: right " + ", ".join(f"{c:.2f}" for (p_, c), it in zip(app_preds, items) if hit(p_, it))
           + " | wrong " + ", ".join(f"{c:.2f}" for (p_, c), it in zip(app_preds, items) if not hit(p_, it)))
     coverage_curve(app_preds, items)
+    print("  app, per verdict (the app has one threshold for each):")
+    verdict_curves(app_preds, items)
+    misses_by_kind(app_preds, items)
     print(f"  params fitted on all images: {fit(items)} (app uses {APP_PARAMS})")
 
     print("\nLATENCY per image, ms (first image excluded as warm-up)")
@@ -517,7 +446,8 @@ def main() -> None:
           f"text {dir_size_mb(args.text_model):.0f} MB · peak RAM {peak / 1e6:.0f} MB")
 
     if args.dump_scores:
-        dump = [{"file": it["file"], "accept": sorted(it["accept"]), "scores": it["scores"], "bench": list(pred)}
+        dump = [{"file": it["file"], "accept": sorted(it["accept"]), "scores": it["scores"], "bench": list(pred),
+                 "shortlist": shortlist(it, APP_PARAMS)}
                 for it, pred in zip(items, app_preds)]
         Path(args.dump_scores).write_text(json.dumps({"modules": [{"id": m["id"], "name": m["name"]} for m in MODULES],
                                                       "items": dump}), encoding="utf-8")
