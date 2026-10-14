@@ -5,6 +5,7 @@ import {
   FALLBACK_CONFIDENCE,
   fuseScores,
   MIN_CONFIDENCE,
+  MIN_NOT_STUDY_CONFIDENCE,
   MIN_OCR_CHARS,
   SCREEN_MODEL_FILES,
   createScreenModelStep,
@@ -186,6 +187,24 @@ describe('classifier with the screen model', () => {
     const r = await c.classifyCurrent(MODULES);
     expect(classify).toHaveBeenCalled();
     expect(r.verdict).toMatchObject({ moduleId: 'lib_history', source: 'vlm' });
+  });
+
+  const notStudy = (confidence: number): ScreenVerdict => ({ studying: false, moduleId: null, activity: '', confidence, source: 'embed' });
+
+  it('has Ollama check a "not study" call that is not clearly sure', async () => {
+    // 1 - P(study) is never below 0.5, so the study bar alone would let every distraction call through.
+    const { c, classify } = setup({ verdict: notStudy(MIN_NOT_STUDY_CONFIDENCE - 0.1) });
+    const r = await c.classifyCurrent(MODULES);
+    expect(classify).toHaveBeenCalled();
+    expect(r.verdict).toMatchObject({ studying: true, source: 'vlm' });
+  });
+
+  it('trusts a clear "not study" call without Ollama', async () => {
+    const { c, capture, classify } = setup({ verdict: notStudy(MIN_NOT_STUDY_CONFIDENCE + 0.05) });
+    const r = await c.classifyCurrent(MODULES);
+    expect(r.verdict).toMatchObject({ studying: false, source: 'embed' });
+    expect(capture).not.toHaveBeenCalled();
+    expect(classify).not.toHaveBeenCalled();
   });
 
   it('keeps an unsure verdict when Ollama cannot answer either', async () => {

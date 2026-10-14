@@ -17,7 +17,7 @@ import { BEHIND_WINDOWS } from './powerProfile';
 import type { PowerSpec } from './powerProfile';
 import { MAX_ACTIVITY_CHARS } from './prompt';
 import { matchDistraction } from './rules';
-import { FALLBACK_CONFIDENCE, MIN_CONFIDENCE } from './screenModel';
+import { FALLBACK_CONFIDENCE, isConfident } from './screenModel';
 import type { ScreenModelStep } from './screenModel';
 
 export interface ClassifierConfig {
@@ -190,7 +190,7 @@ export function createClassifier({ native, ollama, now, config, getPower, screen
       const r = await Promise.race([screenModel.classify(modules, { maxWidth }), deadline]);
       const snapApp = r.window.appName ?? appName;
       const snapKey = windowKey(snapApp, r.window.windowTitle);
-      if (r.verdict && r.verdict.confidence >= MIN_CONFIDENCE) {
+      if (r.verdict && isConfident(r.verdict)) {
         if (r.window.windowTitle !== null) {
           cache = { appName: snapApp, windowTitle: r.window.windowTitle, verdict: r.verdict, at: now(), ttlMs: cacheTtl() };
         }

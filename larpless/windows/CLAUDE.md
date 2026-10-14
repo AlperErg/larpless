@@ -115,7 +115,7 @@ An LLM council compared the current generative VLM with a small "decision" model
 
 - **laya-vision (thaitea/laya-vision) rejected.** Its weights are CC BY-NC-SA (not shippable in a distributed app), it runs only in PyTorch, and it was trained on game frames rather than screens. Copy the idea, not the artifact.
 - **Option 1, embeddings + OCR (built):** SigLIP 2 image embeddings answer "study or distraction" (zero-shot against text prompts), and Windows OCR + MiniLM text embeddings + keyword hits answer "which subject". No training needed, Apache-2.0 models. SigLIP was chosen over CLIP: its sigmoid gives each label an independent score (it can say "none of these"), it was more accurate on the bench, and SigLIP 2 is multilingual.
-- **Option 2, option scoring with a small VLM (to do):** SmolVLM-256M (Apache-2.0) used as a decision model: score each module name as an answer in one forward pass instead of generating. Meant as the backup if Option 1 isn't accurate enough.
+- **Option 2, option scoring with a small VLM (benched, not adopted):** SmolVLM (Apache-2.0) used as a decision model: score each module name as an answer instead of generating. Meant as the backup if Option 1 isn't accurate enough; it lost clearly on the current set (see "Option 2 results").
 - Wherever the model is unsure, Ollama still answers, so nothing regresses.
 
 ### What was built
@@ -127,22 +127,44 @@ An LLM council compared the current generative VLM with a small "decision" model
 
 ### How well it works
 
-Real screenshots (12 study screens from 9 courses on PDF / VS Code / Blackboard, 2 more study, 4 distractions: Netflix, a TV show, 2 YouTube Shorts), no window titles (the app adds the title, so real use should do somewhat better):
+Real screenshots, 39 after batch 1 (2026-10-14): 20 study screens (CS courses on PDF / VS Code / Blackboard, plus calculus exercises, an economics book on Google Books, Desmos, IB physics notes, a YouTube probability lecture, Claude explaining C structs) and 19 distractions (Netflix, TV, 2 YouTube Shorts, YouTube home and a music video, TikTok, Twitch, Instagram, Reddit, Pinterest, Discord, chess.com, a Steam promo page, Amazon, Nike, BBC, a football report, Spotify). Batch 1 sidecars have `windowTitle` and `kind`; the first 18 have no titles.
 
 | | image only | text only | keywords only | fused, leave-one-out |
 | --- | --- | --- | --- | --- |
-| library subjects only | 61% | 61% | 50% | **94%** |
-| + 3 custom courses (names only, no keywords) | 44% | 56% | 39% | **72%** |
-| study vs distraction | 18/18 | | | 18/18 |
+| library subjects only | 77% | 62% | 36% | **95%** (95% CI 83–99) |
+| + 3 custom courses (names only, no keywords) | 67% | 59% | 31% | **85%** (70–93) |
+| study vs distraction | 39/39 | | | 39/39 |
 
-- Shipped parameters (`FUSION` in `screenModel.ts` = `APP_PARAMS` in `bench.py`): alpha 0.25, tImg 1, tTxt 0.05, gImg 0.5, gTxt 0, beta 0.5, tKw 0.5. Leave-one-out picked beta 0.5 in every fold.
-- Confidence sits low because P(subject) is spread over 44+ subjects. `MIN_CONFIDENCE` 0.15 answers about half the checks at 89–100% accuracy; the rest go to Ollama. `FALLBACK_CONFIDENCE` 0.05 is used when Ollama can't answer.
+- Shipped parameters (`FUSION` in `screenModel.ts` = `APP_PARAMS` in `bench.py`): alpha 0.25, tImg 1, tTxt 0.05, gImg 0.5, gTxt 0, beta 0.5, tKw 0.5. Still the best fit on all 39 with library subjects; with custom courses the fit prefers beta 1 and tTxt 0.02, a small gain not worth a split.
+- The gate separates cleanly: study screens have P(study) ≥ 0.6 and distractions ≤ 0.32, so no study screen (not even the YouTube lecture) is called a distraction.
+- Confidence sits low because P(subject) is spread over 44+ subjects. `MIN_CONFIDENCE` 0.2 answers 9 of 20 study screens, all right (the one wrong answer above 0.15 sat at 0.16); the rest go to Ollama. `FALLBACK_CONFIDENCE` 0.05 is used when Ollama can't answer.
+- "Not study" has its own bar, `MIN_NOT_STUDY_CONFIDENCE` 0.7 (`isConfident` in `screenModel.ts`). Its confidence is 1 − P(study), which never drops below 0.5, so under the study bar every distraction call skipped Ollama, and a wrong "distracted" fires alerts. At 0.7 it answers 17 of 19 distractions, all right; the two YouTube Shorts (0.68 / 0.69) get an Ollama check.
+- Keyword hits are noisy on distractions (7 of them hit Statistics, 2 Political Science), most likely from the Chrome tab strip, which shows the same study tabs in every screenshot. That's real for this user, and keywords only weigh in the subject choice, not the gate.
 - Speed on the Ryzen 5 7545U: ~0.3–0.6 s per check once loaded (capture ~55 ms, OCR ~100 ms, image ~150 ms, text ~30 ms), ~1.5 s for the first check of a session (loading). About 1 GB RAM while loaded; unloaded at session end. Download ~460 MB.
 - Synthetic mock screens score 10/10; they're too clean to tune on.
 
+### Option 2 results (2026-10-13)
+
+`scripts/embed_bench/option_bench.py` scores every option (" <name><end_of_utterance>", summed token log-probs) after the screenshot + question, prefix run once and options batched on copies of its KV cache. Flags: `--edge 0|1024` (one 512 px image = 64 image tokens, or 512 px tiles of a 1024 px screen ≈ 192–320), `--calibrate` (subtract each option's score on a blank grey screen: contextual calibration, removes the model's favourite answers), `--norm mean`, `--list-options`, `--courses`, `--rerank-from <bench.py --dump-scores file>` (only Option 1's top-5 + "Not study", and the simulated pipeline "Option 1 when sure, else Option 2"). Same 18 images, no window titles, Ryzen 5 7545U:
+
+| | top-1 | per check | peak RAM |
+| --- | --- | --- | --- |
+| Option 1 (fused, app params) | **17/18 (94%)** | ~0.5 s | ~1 GB in-app |
+| 256M, 512 px, raw / listed options / 1024 px tiles | 3/18 (17%) each | 1.7 / 2.4 / 5.3 s | 1.7–2.0 GB |
+| 256M, 512 px, calibrated (sum or mean) | 8/18 (44%) | 1.6–2.2 s | 1.7 GB |
+| 256M, 512 px, calibrated, rerank top-5 | 8/18 (44%) | 1.2 s | 1.6 GB |
+| 500M, 512 px, raw / calibrated | 5/18 / 6/18 | 3.1–3.2 s | 2.8 GB |
+| 500M, 512 px, calibrated, rerank top-5 | 10/18 (56%) | 2.1 s | 2.7 GB |
+
+- On the 11 screens Option 1 is unsure of (< 0.15, Ollama's share), Option 1's own guess is right 10/11; the best Option 2 gets 6/11. Every pipeline variant scores below Option 1 alone. Custom courses don't rescue it either (256M rerank with `--courses`: 6/18 vs Option 1's 12/18).
+- Raw option scores have strong priors (Algorithms, Chemistry, Psychology, Business win regardless of the screen); calibration roughly doubles accuracy but not enough. More image tokens (tiles) made it slower without helping.
+- Re-run on the 39 images after batch 1 (2026-10-14), it does worse: 256M calibrated 9/39 (23%), 500M calibrated rerank 14/39 (36%). It can't tell distractions apart (0 right on shopping, social, games, news, music; it picks Business, Web Development or Digital Logic for them), while Option 1 gets all 19. On the 16 screens Option 1 is unsure of, Option 1's guess is right 15/16 and Option 2's 7/16.
+- **Verdict: not adopted.** It misses the bar on accuracy (needed ≥ Option 1 + 10 points) and on RAM (≤ ~600 MB extra). Revisit only with a stronger small VLM, or after the larger bench if Option 1 drops a lot on non-CS subjects.
+- Side finding: Option 1's low-confidence answers are mostly right (10/11 below 0.15 on 18 images; 9/11 below 0.2 on 39). Ollama only adds value there if it beats that, which is worth measuring in the app (`[embed]` vs `[ollama]` lines) before lowering `MIN_CONFIDENCE`.
+
 ### To do (from the plan)
 
-1. **Option 2**: bench SmolVLM-256M option scoring (score each module name's log-likelihood after the screenshot + question) on the same `bench/` set and compare with Option 1; if better on subject choice, export to ONNX and add it as the step after Option 1.
+1. ~~**Option 2**~~: benched 2026-10-13, not adopted (above).
 2. **Spanish** (`--lang es`): multilingual MiniLM (`paraphrase-multilingual-MiniLM-L12-v2`), `es-ES` OCR (installed), Spanish prompt templates; SigLIP 2 is already multilingual.
 3. **macOS**: replace the Swift stub with CoreML (SigLIP vision + MiniLM) + Vision OCR.
 4. A Settings entry for the download (only onboarding has it), and hosting/mirroring of the model files before a real release.
@@ -150,10 +172,10 @@ Real screenshots (12 study screens from 9 courses on PDF / VS Code / Blackboard,
 
 ### How to keep improving Option 1
 
-- **More real screenshots** in `larpless/bench/` (`<subject-slug>__<desc>.png`, sidecar `{"accept": [...], "course": "...", "windowTitle": "..."}`), especially distractions (social feeds, chats, games) and ambiguous study screens; aim for 50+. Add `windowTitle` to sidecars where known. Own material only, chats and notifications closed.
+- **More real screenshots** in `larpless/bench/`, in batches: batch 1 = 16 distractions (feeds, chat, non-study video, games, shopping, news, 2–3 each) + 6 study (non-CS, plus hard cases like a YouTube lecture or ChatGPT); batch 2 = ~20 aimed at batch 1's misses; then a frozen 12-image holdout in `bench/holdout/`, scored once with `--dir holdout` and never tuned on. About 60/40 study/not. Name `<prefix>__<desc>.png` (prefix = correct answer); sidecar `{"windowTitle": "...", "kind": "social", "accept": [...], "course": "..."}` with `windowTitle` always, `accept` only for genuinely right alternatives, `course` only for the user's own courses. The format and report helpers live in `benchdata.py`; the report prints Wilson 95% intervals, per-verdict curves and misses by `kind`. Own material only, chats and notifications closed.
 - **Keywords for custom courses**: every remaining custom-course miss is a near-miss to a library subject with keywords (Systems Programming → Coding, Computer Architecture → Digital Logic). Prompt users for 5–8 keywords when they add a course.
 - **Re-fit and re-check** after adding images: run `bench.py` (and `--courses`), update `APP_PARAMS` and `FUSION` together, then `--dump-scores` + `node scripts/embed_bench/parity.mjs <file>` must print `parity N/N identical`.
-- **Confidence**: the 0.15 threshold is from 18 images. With more data, fit a proper calibration (temperature on the fused score) so the cut-off means a target accuracy.
+- **Confidence**: the 0.2 / 0.7 thresholds are from 39 images (batch 1). With more data, pick each from the per-verdict curve, compare with the top-1 vs runner-up confidence, or fit a temperature on the fused score so the cut-off means a target accuracy.
 - **Prompts**: change templates or distraction prompts in `scripts/embed_bench/prompts.py`, then rerun `export_prompts.py` to rebuild `FLScreenModelPrompts.json` (and rebuild the app).
 - int8 quantisation of the vision tower cut its size 4× (94 MB) and halved latency but dropped image-only accuracy on the synthetic set (10/10 → 8/10); re-test on real screenshots before using it.
 

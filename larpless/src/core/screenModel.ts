@@ -12,14 +12,15 @@
  *              (alpha, when OCR found text) and softmax(hits / tKw) (beta, when any keyword matched)
  *   confidence = P(study) * P(subject)   (or 1 - P(study) for "not study")
  *
- * v2 parameters come from 18 real screenshots (12 study screens across 9 courses + 4 distractions + 2 more
- * study): leave-one-out top-1 94% with library subjects, 72% with custom courses that have no keywords.
+ * v2 parameters come from 18 real screenshots and still win on 39 (20 study screens, 19 distractions of
+ * 8 kinds): leave-one-out top-1 95% with library subjects, 85% with custom courses that have no keywords,
+ * study vs distraction 39/39.
  *
  * Custom courses have no image prompt (the SigLIP text tower isn't shipped), so they're chosen from the
  * screen text only. Pure: no React Native, no stores.
  */
 import type { ScreenVerdict, StudyModule } from '../contracts/domain';
-import type { ActiveWindow, ScreenModelApi, ScreenModelFile, ScreenModelScores } from '../contracts/native';
+import type { ActiveWindow, ScreenModelApi, ScreenModelFile, ScreenModelInput, ScreenModelScores } from '../contracts/native';
 
 /** Pinned Hugging Face files (commit + SHA-256), downloaded once at onboarding into LocalFolder\Models. */
 export const SCREEN_MODEL_FILES: ScreenModelFile[] = [
@@ -51,10 +52,17 @@ export const FUSION = { alpha: 0.25, tImg: 1.0, tTxt: 0.05, gImg: 0.5, gTxt: 0.0
 /** Below this many OCR characters the screen text is ignored (title-only text is too thin). */
 export const MIN_OCR_CHARS = 40;
 /**
- * Use the verdict at or above this; below it, ask Ollama. P(subject) is spread over 44+ subjects, so real
- * answers sit low: on the 18-screenshot bench >= 0.15 answered half the screens at 89-100% accuracy.
+ * Use a "study" verdict at or above this; below it, ask Ollama. P(subject) is spread over 44+ subjects, so
+ * real answers sit low: on the 39-screenshot bench >= 0.2 answered 9 of 20 study screens, all right (a wrong
+ * one sat at 0.16).
  */
-export const MIN_CONFIDENCE = 0.15;
+export const MIN_CONFIDENCE = 0.2;
+/**
+ * "Not study" is held to a much higher bar: its confidence is 1 - P(study), which is never below 0.5, and a
+ * wrong "distracted" fires alerts. Below this, Ollama checks it (the verdict stays the fallback). On the
+ * bench, distractions reached P(study) <= 0.32 and study screens >= 0.6; 0.7 answered 17 of 19, all right.
+ */
+export const MIN_NOT_STUDY_CONFIDENCE = 0.7;
 /** If Ollama can't answer either, still use a verdict at or above this rather than `unknown`. */
 export const FALLBACK_CONFIDENCE = 0.05;
 
@@ -68,8 +76,13 @@ export const TEXT_DISTRACTIONS = [
   'streaming: watch now, episode, season, continue watching',
 ];
 
+/** Sure enough to skip Ollama (separate bars for "study" and "not study"). */
+export function isConfident(v: ScreenVerdict): boolean {
+  return v.confidence >= (v.studying ? MIN_CONFIDENCE : MIN_NOT_STUDY_CONFIDENCE);
+}
+
 /** What native code embeds and scores the screen text against. */
-export function screenModelTexts(modules: Pick<StudyModule, 'id' | 'name' | 'keywords'>[]): { id: string; text: string }[] {
+export function screenModelTexts(modules: Pick<StudyModule, 'id' | 'name' | 'keywords'>[]): ScreenModelInput['texts'] {
   return [
     ...modules.map((m) => ({
       id: m.id,
