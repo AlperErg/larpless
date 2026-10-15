@@ -1,7 +1,7 @@
 /**
  * Screen classifier: PLAN.md §6 steps 2–5 (isSelf → rules → cache → single-flight VLM). On the screenshot
  * path the on-device screen model (core/screenModel.ts, Windows) answers first when it's confident; Ollama
- * takes the rest.
+ * takes the rest. With SCREEN_MODEL_ONLY the screen model's verdict is final and Ollama is never used.
  *
  * Single flight: one screenshot at a time. A call for the same window shares that result.
  * A call for another window waits, and when the running call finishes exactly one follow-up
@@ -30,6 +30,8 @@ export interface ClassifierConfig {
    * title can't show what's on the page. Off by default; meant for CPU-only Ollama.
    */
   TITLE_CHECK?: boolean;
+  /** Only the on-device screen model classifies: any verdict it gives is final and Ollama is never called. */
+  SCREEN_MODEL_ONLY?: boolean;
 }
 
 /** Use a title-only verdict at or above this. Below it, take a screenshot. */
@@ -190,7 +192,7 @@ export function createClassifier({ native, ollama, now, config, getPower, screen
       const r = await Promise.race([screenModel.classify(modules, { maxWidth }), deadline]);
       const snapApp = r.window.appName ?? appName;
       const snapKey = windowKey(snapApp, r.window.windowTitle);
-      if (r.verdict && isConfident(r.verdict)) {
+      if (r.verdict && (config.SCREEN_MODEL_ONLY || isConfident(r.verdict))) {
         if (r.window.windowTitle !== null) {
           cache = { appName: snapApp, windowTitle: r.window.windowTitle, verdict: r.verdict, at: now(), ttlMs: cacheTtl() };
         }
@@ -222,6 +224,10 @@ export function createClassifier({ native, ollama, now, config, getPower, screen
     if (!(ctx.mockClassifier ?? config.USE_MOCK_CLASSIFIER)) {
       const embedded = await runScreenModel(modules, appName, started, budget, capture.maxWidth);
       if ('done' in embedded) return embedded.done;
+      // Screen model only: no verdict (not installed, error, timeout) means `unknown`, not Ollama.
+      if (config.SCREEN_MODEL_ONLY) {
+        return { verdict: null, tookScreenshot: false, appName, key, tookMs: Math.max(0, now() - started), error: 'vlm' };
+      }
       embedFallback = embedded.fallback;
     }
     try {
@@ -311,7 +317,7 @@ export function createClassifier({ native, ollama, now, config, getPower, screen
       };
     }
     const useMock = ctx.mockClassifier ?? config.USE_MOCK_CLASSIFIER;
-    if (config.TITLE_CHECK && !useMock && ollama.classifyTitle && win.windowTitle) {
+    if (config.TITLE_CHECK && !config.SCREEN_MODEL_ONLY && !useMock && ollama.classifyTitle && win.windowTitle) {
       const titleVerdict = await ollama.classifyTitle(appName, win.windowTitle, modules, {
         timeoutMs: Math.min(8_000, ceilingMs()),
         keepAlive: power()?.keepAlive,
@@ -366,7 +372,7 @@ export function createClassifier({ native, ollama, now, config, getPower, screen
     },
 
     async warmUp(modules) {
-      if (config.USE_MOCK_CLASSIFIER) return;
+      if (config.USE_MOCK_CLASSIFIER || config.SCREEN_MODEL_ONLY) return;
       const keepAlive = power()?.keepAlive;
       if (keepAlive) await ollama.warmUp(modules, { keepAlive });
       else await ollama.warmUp(modules);
@@ -374,7 +380,7 @@ export function createClassifier({ native, ollama, now, config, getPower, screen
 
     async unload() {
       if (config.USE_MOCK_CLASSIFIER) return;
-      await Promise.all([ollama.unload(), screenModel?.unload()]);
+      await Promise.all([config.SCREEN_MODEL_ONLY ? undefined : ollama.unload(), screenModel?.unload()]);
     },
 
     async classifyCurrent(modules, ctx = {}) {

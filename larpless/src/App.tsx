@@ -75,10 +75,12 @@ function useBootRouting(): boolean {
           .refreshOllama()
           .catch((e: unknown) => console.warn('[ui] refreshOllama failed:', e instanceof Error ? e.message : String(e)));
         // Restart an idle Ollama without its 8 GB prompt cache now rather than at session start. Never opens it.
-        useOllamaStore
-          .getState()
-          .prepare({ launch: false })
-          .catch(() => {});
+        if (!config.SCREEN_MODEL_ONLY) {
+          useOllamaStore
+            .getState()
+            .prepare({ launch: false })
+            .catch(() => {});
+        }
         if (!alive) return;
         const { settings } = useAppStore.getState();
         const nav = useNavStore.getState();

@@ -59,7 +59,7 @@ export function getSessionController(): SessionController {
       ollama,
       now: Date.now,
       config,
-      prepareOllama: () => useOllamaStore.getState().prepare({ launch: true }),
+      prepareOllama: config.SCREEN_MODEL_ONLY ? undefined : () => useOllamaStore.getState().prepare({ launch: true }),
       onSessionSaved: upsertSessionSummary,
       demoChunks: fixtureChunks,
     });
