@@ -304,7 +304,8 @@ class Window {
         {"created", m_hwnd != nullptr}, {"visible", Visible()},       {"x", r.left},
         {"y", r.top},                   {"w", r.right - r.left},      {"h", r.bottom - r.top},
         {"scale", m_scale},             {"zoom", m_zoom},             {"hover", m_hover},           {"fontsLoaded", m_fonts != nullptr},
-        {"status", m_state.status},     {"tint", m_state.tint},       {"userMoved", m_userMoved}};
+        {"status", m_state.status},     {"tint", m_state.tint},       {"userMoved", m_userMoved},
+        {"endDrawHr", static_cast<int64_t>(static_cast<uint32_t>(m_lastEndDraw))}};
   }
 
  private:
@@ -520,8 +521,7 @@ class Window {
     int top{anchor.y - static_cast<int>(std::lround((anchor.y - r.top) * ratio))};
     EnsureOnWorkArea(left, top, w, h);
     SetWindowPos(m_hwnd, HWND_TOPMOST, left, top, w, h, SWP_NOACTIVATE);
-    m_rt.Reset(); // the render target's DPI is fixed at creation
-    m_surfaceW = m_surfaceH = 0;
+    ReleaseTarget(); // the render target's DPI is fixed at creation
     m_userMoved = true;
     SaveZoom(m_zoom);
     Render();
@@ -569,11 +569,19 @@ class Window {
 
   // --- drawing ---
   // One brush recoloured per use (every draw call consumes it before the next Brush() call).
+  // Drops the render target and everything created on it. The brush must go too: a new target can reuse the old one's
+  // address, and drawing with a brush from another target makes EndDraw fail, which blanked the panel after a zoom.
+  void ReleaseTarget() {
+    m_rt.Reset();
+    m_brush.Reset();
+    m_artBitmap.Reset();
+    m_artDrawn.reset();
+    m_surfaceW = m_surfaceH = 0;
+  }
+
   ComPtr<ID2D1SolidColorBrush> Brush(Rgb c, float a = 1) {
-    if (!m_brush || m_brushTarget != m_rt.Get()) {
-      m_brush.Reset();
+    if (!m_brush) {
       m_rt->CreateSolidColorBrush(D2D1::ColorF(c.r, c.g, c.b, a), &m_brush);
-      m_brushTarget = m_rt.Get();
     } else {
       m_brush->SetColor(D2D1::ColorF(c.r, c.g, c.b, a));
     }
@@ -658,7 +666,17 @@ class Window {
       Text(L"Back on track \u2713", Format(false, DWRITE_FONT_WEIGHT_SEMI_BOLD, 18, DWRITE_TEXT_ALIGNMENT_CENTER).Get(), card,
            green.text, flash);
     }
-    m_rt->EndDraw();
+    m_lastEndDraw = m_rt->EndDraw();
+    if (FAILED(m_lastEndDraw)) {
+      // Keep the last good frame on screen (pushing this DIB would blank the panel) and rebuild the target.
+      ReleaseTarget();
+      if (!m_retryingRender) {
+        m_retryingRender = true;
+        Render();
+        m_retryingRender = false;
+      }
+      return;
+    }
 
     RECT window{};
     GetWindowRect(m_hwnd, &window);
@@ -675,15 +693,16 @@ class Window {
 
   bool EnsureSurface(int w, int h) {
     if (m_rt && w == m_surfaceW && h == m_surfaceH) return true;
-    if (m_dib) DeleteObject(m_dib);
     if (!m_memDC) m_memDC = CreateCompatibleDC(nullptr);
     BITMAPINFO bi{};
     bi.bmiHeader = {sizeof(BITMAPINFOHEADER), w, -h, 1, 32, BI_RGB};
     void *bits{nullptr};
-    m_dib = CreateDIBSection(m_memDC, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
-    if (!m_dib) return false;
-    SelectObject(m_memDC, m_dib);
-    m_rt.Reset();
+    HBITMAP const dib{CreateDIBSection(m_memDC, &bi, DIB_RGB_COLORS, &bits, nullptr, 0)};
+    if (!dib) return false;
+    SelectObject(m_memDC, dib);
+    if (m_dib) DeleteObject(m_dib); // only after it's deselected; a selected bitmap can't be deleted
+    m_dib = dib;
+    ReleaseTarget();
     const D2D1_RENDER_TARGET_PROPERTIES props{D2D1::RenderTargetProperties(
         D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED),
         96 * m_scale, 96 * m_scale)};
@@ -694,8 +713,6 @@ class Window {
     m_rt = rt;
     m_surfaceW = w;
     m_surfaceH = h;
-    m_artBitmap.Reset();
-    m_artDrawn.reset();
     return true;
   }
 
@@ -969,7 +986,7 @@ class Window {
         SetDpiScale(HIWORD(wParam) / 96.0f);
         SetWindowPos(m_hwnd, HWND_TOPMOST, suggested->left, suggested->top, suggested->right - suggested->left,
                      suggested->bottom - suggested->top, SWP_NOACTIVATE);
-        m_rt.Reset();
+        ReleaseTarget();
         FitMediaHeight();
         Render();
         return 0;
@@ -1003,7 +1020,8 @@ class Window {
   HWND m_hwnd{nullptr};
   bool m_capturable{false}, m_fastTimer{false};
   ComPtr<ID2D1SolidColorBrush> m_brush;
-  ID2D1RenderTarget *m_brushTarget{nullptr};
+  HRESULT m_lastEndDraw{S_OK};
+  bool m_retryingRender{false};
   std::map<std::tuple<bool, int, float, int, std::wstring>, ComPtr<IDWriteTextFormat>> m_formats;
   ComPtr<ID2D1StrokeStyle> m_roundCap;
   Sink m_sink;
