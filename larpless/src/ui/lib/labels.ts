@@ -1,4 +1,4 @@
-import type { Appearance, PomodoroPhase, PomodoroPreset, PowerProfile, SoundId, Strictness } from '../../contracts/domain';
+import type { Appearance, ClassifierMode, PomodoroPhase, PomodoroPreset, PowerProfile, SoundId, Strictness } from '../../contracts/domain';
 import type { IconName } from '../components/Icon';
 
 export const SOUNDS: SoundId[] = ['off', 'white', 'pink', 'brown', 'rain', 'cafe'];
@@ -41,6 +41,11 @@ export const POWER_OPTIONS: { value: PowerProfile; label: string }[] = [
   { value: 'eco', label: 'Eco' },
   { value: 'medium', label: 'Medium' },
   { value: 'high', label: 'High' },
+];
+
+export const CLASSIFIER_OPTIONS: { value: ClassifierMode; label: string }[] = [
+  { value: 'hybrid', label: 'On-device + Ollama' },
+  { value: 'embed', label: 'On-device only' },
 ];
 
 export const STRICTNESS_OPTIONS: { value: Strictness; label: string }[] = [

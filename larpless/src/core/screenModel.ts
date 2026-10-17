@@ -76,9 +76,25 @@ export const TEXT_DISTRACTIONS = [
   'streaming: watch now, episode, season, continue watching',
 ];
 
+/**
+ * 'embed' classifier mode (no Ollama): a "not study" call below this (P(study) between 0.4 and 0.5) is `unknown`
+ * instead, so a borderline screen doesn't fire distraction alerts. On the 39-screenshot bench distractions reach
+ * P(study) <= 0.317 (confidence >= 0.68) and study screens >= 0.605, so 0.6 still flags all 19 distractions and
+ * leaves a margin on both sides. Study calls have no bar in this mode.
+ */
+export const EMBED_NOT_STUDY_CONFIDENCE = 0.6;
+
 /** Sure enough to skip Ollama (separate bars for "study" and "not study"). */
 export function isConfident(v: ScreenVerdict): boolean {
   return v.confidence >= (v.studying ? MIN_CONFIDENCE : MIN_NOT_STUDY_CONFIDENCE);
+}
+
+/**
+ * Good enough to use with no Ollama behind it ('embed' mode). Every study call counts, whatever its confidence:
+ * the subject guess is mostly right even when unsure. "Not study" needs EMBED_NOT_STUDY_CONFIDENCE.
+ */
+export function isFinalAlone(v: ScreenVerdict): boolean {
+  return v.studying || v.confidence >= EMBED_NOT_STUDY_CONFIDENCE;
 }
 
 /** What native code embeds and scores the screen text against. */

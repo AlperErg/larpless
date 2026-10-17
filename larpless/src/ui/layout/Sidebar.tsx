@@ -1,13 +1,15 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { StyleSheet, Text as RNText, View } from 'react-native';
 import { config } from '../../config';
+import type { ScreenModelStatus } from '../../contracts/native';
 import type { ModelPull, OllamaStatus, SessionStatus } from '../../contracts/store';
 import { useAppStore } from '../../store/appStore';
 import { useNavStore } from '../../store/navStore';
 import type { Route } from '../../store/navStore';
 import { useOllamaStore } from '../../store/ollamaStore';
-import { useSessionStore } from '../../store/sessionStore';
+import { useScreenModelStore } from '../../store/screenModelStore';
+import { isEmbedOnly, useSessionStore } from '../../store/sessionStore';
 import { Icon } from '../components/Icon';
 import type { IconName } from '../components/Icon';
 import { Segmented } from '../components/Segmented';
@@ -66,6 +68,13 @@ export function ollamaLine(status: OllamaStatus, model: string, pull?: ModelPull
   }
 }
 
+/** Status line for the 'embed' classifier mode, where Ollama isn't used. */
+export function screenModelLine(status: ScreenModelStatus | null, downloading: boolean): { color: TagColor; text: string } {
+  if (downloading) return { color: 'blue', text: 'Downloading on-device classifier' };
+  if (!status) return { color: 'gray', text: 'Checking on-device classifier…' };
+  return status.installed ? { color: 'green', text: 'On-device classifier ready' } : { color: 'orange', text: 'On-device classifier not downloaded' };
+}
+
 export function Sidebar() {
   const route = useNavStore((s) => s.route);
   const go = useNavStore((s) => s.go);
@@ -76,7 +85,14 @@ export function Sidebar() {
   const pull = useOllamaStore((s) => s.pull);
   const dot = sessionDot(status);
   const items = config.SHOW_DEV_TOOLS ? [...ITEMS, DEV_ITEM] : ITEMS;
-  const ol = ollamaLine(ollama.status, ollama.model, pull);
+  const embedOnly = useAppStore((s) => isEmbedOnly(s.settings));
+  const screenModel = useScreenModelStore((s) => s.status);
+  const screenModelPulling = useScreenModelStore((s) => s.download.status === 'pulling');
+  const refreshScreenModel = useScreenModelStore((s) => s.refresh);
+  useEffect(() => {
+    if (embedOnly) refreshScreenModel().catch(() => {});
+  }, [embedOnly, refreshScreenModel]);
+  const ol = embedOnly ? screenModelLine(screenModel, screenModelPulling) : ollamaLine(ollama.status, ollama.model, pull);
   const appearance = useAppStore((s) => s.settings.appearance);
   const updateSettings = useAppStore((s) => s.updateSettings);
 
@@ -124,10 +140,10 @@ export function Sidebar() {
 
       <MacPressable
         testID="ollama-status"
-        tooltip="Click to re-check Ollama"
+        tooltip={embedOnly ? 'Click to re-check the on-device classifier' : 'Click to re-check Ollama'}
         enableFocusRing={false}
         onPress={() => {
-          refreshOllama().catch(() => {});
+          (embedOnly ? refreshScreenModel() : refreshOllama()).catch(() => {});
         }}
         style={styles.ollama}>
         <RNText style={styles.ollamaText} numberOfLines={1}>

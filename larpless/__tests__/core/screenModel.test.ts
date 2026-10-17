@@ -2,6 +2,7 @@ import type { ScreenVerdict, StudyModule } from '../../src/contracts/domain';
 import type { ActiveWindow, ScreenModelApi, ScreenModelScores } from '../../src/contracts/native';
 import { createClassifier } from '../../src/core/classifier';
 import {
+  EMBED_NOT_STUDY_CONFIDENCE,
   FALLBACK_CONFIDENCE,
   fuseScores,
   MIN_CONFIDENCE,
@@ -142,7 +143,10 @@ describe('classifier with the screen model', () => {
   const VLM: ScreenVerdict = { studying: true, moduleId: 'lib_history', activity: '', confidence: 0.9, source: 'vlm' };
   const win: ActiveWindow = { appName: 'Edge', bundleId: 'msedge.exe', windowTitle: 'Integration by parts', isSelf: false };
 
-  function setup(result: Partial<ScreenModelResult> | Error, opts: { ready?: boolean; vlm?: ScreenVerdict | null; only?: boolean } = {}) {
+  function setup(
+    result: Partial<ScreenModelResult> | Error,
+    opts: { ready?: boolean; vlm?: ScreenVerdict | null; only?: boolean | (() => boolean) } = {},
+  ) {
     const capture = jest.fn(async () => ({ ...win, jpegBase64: 'IMG', width: 1, height: 1, capturedAt: 0 }));
     const classify = jest.fn(async () => (opts.vlm === undefined ? VLM : opts.vlm));
     const step: ScreenModelStep = {
@@ -158,13 +162,9 @@ describe('classifier with the screen model', () => {
       native: { screen: { getActiveWindow: async () => win, capture } },
       ollama,
       now: () => 0,
-      config: {
-        USE_MOCK_CLASSIFIER: false,
-        CACHE_TTL_MS: 120_000,
-        CAPTURE: { maxWidth: 1024, jpegQuality: 0.6 },
-        SCREEN_MODEL_ONLY: opts.only ?? false,
-      },
+      config: { USE_MOCK_CLASSIFIER: false, CACHE_TTL_MS: 120_000, CAPTURE: { maxWidth: 1024, jpegQuality: 0.6 } },
       screenModel: step,
+      screenModelOnly: typeof opts.only === 'function' ? opts.only : () => opts.only === true,
     });
     return { c, capture, classify, step, ollama };
   }
@@ -235,13 +235,39 @@ describe('classifier with the screen model', () => {
     expect(step.unload).toHaveBeenCalled();
   });
 
-  describe('SCREEN_MODEL_ONLY', () => {
-    it('uses an unsure verdict as final: no JPEG, no Ollama', async () => {
-      const { c, capture, classify } = setup({ verdict: notStudy(0.55) }, { only: true });
+  describe("'embed' mode (screen model only)", () => {
+    it('uses an unsure study verdict as final: no JPEG, no Ollama', async () => {
+      const { c, capture, classify } = setup({ verdict: embed(MIN_CONFIDENCE - 0.15) }, { only: true });
       const r = await c.classifyCurrent(MODULES);
-      expect(r.verdict).toMatchObject({ studying: false, source: 'embed' });
+      expect(r.verdict).toMatchObject({ studying: true, moduleId: 'lib_calculus', source: 'embed' });
       expect(capture).not.toHaveBeenCalled();
       expect(classify).not.toHaveBeenCalled();
+    });
+
+    it(`trusts "not study" from ${EMBED_NOT_STUDY_CONFIDENCE}, below the hybrid bar`, async () => {
+      expect(EMBED_NOT_STUDY_CONFIDENCE).toBeLessThan(MIN_NOT_STUDY_CONFIDENCE);
+      const { c, classify } = setup({ verdict: notStudy(EMBED_NOT_STUDY_CONFIDENCE + 0.02) }, { only: true });
+      expect((await c.classifyCurrent(MODULES)).verdict).toMatchObject({ studying: false, source: 'embed' });
+      expect(classify).not.toHaveBeenCalled();
+    });
+
+    it('turns a borderline "not study" into unknown (no alert, not an error), still without Ollama', async () => {
+      const { c, capture, classify } = setup({ verdict: notStudy(EMBED_NOT_STUDY_CONFIDENCE - 0.05) }, { only: true });
+      const r = await c.classifyCurrent(MODULES);
+      expect(r.verdict).toBeNull();
+      expect(r.error).toBeUndefined();
+      expect(capture).not.toHaveBeenCalled();
+      expect(classify).not.toHaveBeenCalled();
+    });
+
+    it('reads the mode on every call, so a settings change applies to the next check', async () => {
+      let only = true;
+      const { c, classify } = setup({ verdict: embed(MIN_CONFIDENCE - 0.1) }, { only: () => only });
+      expect((await c.classifyCurrent(MODULES)).verdict?.source).toBe('embed');
+      expect(classify).not.toHaveBeenCalled();
+      c.reset();
+      only = false;
+      expect((await c.classifyCurrent(MODULES)).verdict?.source).toBe('vlm');
     });
 
     it('gives `unknown` instead of asking Ollama when the model is missing or fails', async () => {
@@ -256,12 +282,12 @@ describe('classifier with the screen model', () => {
       expect(failing.classify).not.toHaveBeenCalled();
     });
 
-    it('never warms up or unloads Ollama', async () => {
+    it('never warms up Ollama, but still unloads both (the mode may have changed mid-session)', async () => {
       const { c, ollama, step } = setup({ verdict: embed(0.8) }, { only: true });
       await c.warmUp(MODULES);
       await c.unload();
       expect(ollama.warmUp).not.toHaveBeenCalled();
-      expect(ollama.unload).not.toHaveBeenCalled();
+      expect(ollama.unload).toHaveBeenCalled();
       expect(step.unload).toHaveBeenCalled();
     });
   });

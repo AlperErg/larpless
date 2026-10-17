@@ -105,6 +105,10 @@ describe('db', () => {
       await db.saveSettings({ ...DEFAULT_SETTINGS, powerProfile: junk } as unknown as typeof DEFAULT_SETTINGS);
       expect((await db.loadSettings()).powerProfile).toBe('medium');
     }
+    await kv.setItem(KEYS.settings, JSON.stringify({ classifierMode: 'embed' }));
+    expect((await db.loadSettings()).classifierMode).toBe('embed');
+    await kv.setItem(KEYS.settings, JSON.stringify({ classifierMode: 'vlm-only' }));
+    expect((await db.loadSettings()).classifierMode).toBe('hybrid');
     await kv.setItem(KEYS.settings, JSON.stringify({ appearance: 'neon', supabaseUrl: 12, supabaseAnonKey: { k: 1 } }));
     expect((await db.loadSettings()).appearance).toBe('system');
     expect((await db.loadSettings()).supabaseUrl).toBe('');

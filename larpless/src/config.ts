@@ -8,11 +8,6 @@ export const config = {
   CACHE_TTL_MS: 120_000,
   /** Ask the model about the window title before taking a screenshot. Only worth it when vision checks are slow (CPU-only Ollama). */
   TITLE_CHECK: false,
-  /**
-   * Classify with the on-device screen model only (Windows, Option 1): every verdict it gives is used, whatever
-   * its confidence, and Ollama is never started, warmed up or asked. Without the model installed, chunks are `unknown`.
-   */
-  SCREEN_MODEL_ONLY: true,
   WEBCAM_FPS: 1,
   SHOW_DEV_TOOLS: __DEV__,
   OLLAMA_DOWNLOAD_URL: 'https://ollama.com/download/Ollama.dmg',
@@ -32,6 +27,7 @@ export const DEFAULT_SETTINGS: Settings = {
   ollamaUrl: 'http://127.0.0.1:11434',
   strictness: 2,
   powerProfile: 'medium',
+  classifierMode: 'hybrid',
   demoFast: false,
   webcamEnabled: true,
   nowPlayingEnabled: true,

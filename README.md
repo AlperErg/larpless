@@ -47,8 +47,9 @@ flowchart LR
     SD[FLSound]
   end
   F[src/native facades] --> CTRL[core/sessionController]
-  CTRL --> CLS[core/classifier: rules → cache → VLM]
-  CLS -->|POST /api/chat| OL[Ollama 127.0.0.1:11434]
+  CTRL --> CLS[core/classifier: rules → cache → screen model → VLM]
+  CLS -->|Windows: scores only| SM[FLScreenModel: SigLIP 2 + OCR + MiniLM]
+  CLS -->|POST /api/chat, hybrid mode| OL[Ollama 127.0.0.1:11434]
   CTRL --> FU[core/chunkFuser] --> ST[zustand stores]
   CTRL --> AL[core/alerts] --> NT
   CTRL --> PN
@@ -67,7 +68,21 @@ The classifier stops at the cheapest step that gives an answer:
 1. **LarpLess in front:** reuse the previous verdict.
 2. **Rules:** a distraction keyword in the app or window title → `distracted`. No screenshot.
 3. **Cache:** same app and title as a verdict less than 2 min old → reuse it. No screenshot.
-4. **VLM:** take a screenshot and classify it with the vision model in Ollama (about 3 s on a fast Mac). Only one vision call runs at a time, and it is allowed to finish. A check for the same window shares its result. If you switched windows meanwhile, one follow-up reads whatever is in front when the call returns, so windows you only passed through are never captured.
+4. **On-device screen model (Windows):** when it's downloaded, SigLIP 2 image embeddings, Windows OCR and MiniLM text embeddings score the screen in about 0.5 s, with no Ollama involved. What happens next depends on the [screen check mode](#screen-check-modes).
+5. **VLM:** take a screenshot and classify it with the vision model in Ollama (about 3 s on a fast Mac). Only one vision call runs at a time, and it is allowed to finish. A check for the same window shares its result. If you switched windows meanwhile, one follow-up reads whatever is in front when the call returns, so windows you only passed through are never captured.
+
+### Screen check modes
+
+On Windows, **Settings → Local AI → Screen check** chooses who reads the screen. The change applies from the next check, with no restart.
+
+| | **On-device + Ollama** (default) | **On-device only** |
+| --- | --- | --- |
+| Study verdict | used at confidence ≥ 0.2, otherwise Ollama checks it | always used |
+| "Not study" verdict | used at confidence ≥ 0.7, otherwise Ollama checks it | used at ≥ 0.6; below that the chunk is `unknown` (no alert) |
+| Ollama | opened at session start, model warmed up | never opened, warmed up or asked |
+| Model not downloaded | Ollama does every check | every chunk is `unknown` |
+
+On-device only is for PCs where Ollama is too slow or uses too much memory. On the 39-screenshot bench the on-device model gets 95% of subjects right and tells study from distraction 39/39. The Mac has no on-device model yet, so it always uses Ollama and the setting is hidden there.
 
 ### Live: what the panel shows
 
@@ -110,7 +125,7 @@ Starting a session opens Ollama in the background if it isn't running, then warm
 - **State / storage:** zustand 5, AsyncStorage 2.2.0 (pinned), date-fns 4.
 - **Native (Swift 5, macOS 14+):** ScreenCaptureKit, AVFoundation, Vision, CoreML, UserNotifications, AppKit, SwiftUI.
 - **Now playing:** a vendored [mediaremote-adapter](https://github.com/ungive/mediaremote-adapter) (BSD-3-Clause) run through `/usr/bin/perl`. Since macOS 15.4, a Developer ID app can't read MediaRemote itself.
-- **Models:** Ollama `qwen3-vl:2b` and YOLO11n (`nms=True`, bundled; presence and phone). CoreML on Mac, ONNX Runtime on Windows.
+- **Models:** Ollama `qwen3-vl:2b` and YOLO11n (`nms=True`, bundled; presence and phone). CoreML on Mac, ONNX Runtime on Windows. On Windows also SigLIP 2 base/16 (vision tower) and all-MiniLM-L6-v2 in ONNX Runtime for the on-device screen model.
 - **Social:** `@supabase/supabase-js` + `react-native-url-polyfill`.
 - **Website:** Vite + TypeScript in `site/`.
 - **Windows:** react-native-windows 0.81 (C++ app, Fabric, WinAppSDK 1.8). Native modules in C++/WinRT: Direct2D + DirectWrite, XAudio2, MediaCapture, ONNX Runtime, WIC, toast notifications.
@@ -211,7 +226,7 @@ The Windows build uses the same TypeScript and the same JS ↔ native contract; 
 - **Visual Studio 2026** (Community is fine) with the *Desktop development with C++* and *WinUI application development* workloads, the *MSIX Packaging Tools* component and the **Windows 11 SDK 10.0.22621**.
 - **.NET SDK 10**, **Node 22** or above.
 - **Developer Mode** on and **long paths** enabled (Settings → System → For developers).
-- **[Ollama for Windows](https://ollama.com)** with `qwen3-vl:2b` pulled, as on the Mac.
+- **[Ollama for Windows](https://ollama.com)** with `qwen3-vl:2b` pulled, as on the Mac. Not needed in the **On-device only** [screen check mode](#screen-check-modes), which only needs the on-device classifier (a one-time download of about 460 MB from onboarding or Settings → Local AI).
 
 **Install and run.** From `larpless/`, run `npm ci`, create `src/social/env.ts` as in [Supabase Setup](#supabase-setup), then:
 
@@ -221,9 +236,12 @@ powershell -ExecutionPolicy Bypass -File scripts\run-windows.ps1
 
 This starts Metro on port 8081 if it isn't already running (log in `.logs/metro-8081.log`), restores the local PowerShell 7 tool the deploy step needs, then builds, deploys and launches the Debug app. The first build takes several minutes. No admin terminal is needed. Allow the camera when Windows asks; there is no Screen Recording permission on Windows. The first launch is mostly the same apart from those.
 
+The script uninstalls the old app package first, and that deletes the app's local data, including the downloaded on-device classifier. After a JS-only change, don't rebuild: start Metro and relaunch the installed app (see `larpless/windows/CLAUDE.md`).
+
 **Differences from the Mac app**
 
 - Shortcuts use **Ctrl** instead of ⌘ (Ctrl+K palette, Ctrl+Enter start, Ctrl+. end).
+- The on-device screen model and the [screen check modes](#screen-check-modes) exist only on Windows for now.
 - The webcam uses the same YOLO11n rules as Mac (`person` above 0.5, `cell phone` above 0.4), through ONNX Runtime instead of CoreML. Samples start once the model has loaded.
 - The main window uses Segoe UI, Georgia and Consolas, because react-native-windows can't load bundled fonts yet. The floating panel draws its own text and keeps Inter + Instrument Serif.
 - Page transitions and other `Animated` effects are off on Windows (`ANIMATE` in `src/ui/platform.ts`): react-native-windows drops the content of a re-rendered `Animated.View`. The floating panel's tint, pulse and flash animations are native and unaffected.

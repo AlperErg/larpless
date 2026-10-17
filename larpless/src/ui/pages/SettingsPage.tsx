@@ -11,12 +11,13 @@ import { useOllamaStore } from '../../store/ollamaStore';
 import { useSessionStore } from '../../store/sessionStore';
 import { normalizeSupabaseProjectUrl } from '../../social/supabase';
 import { useSocialStore } from '../../store/socialStore';
-import { Button, CodeBlock, MacPressable, MacTextInput, ModelDownload, Segmented, Switch, Text } from '../components';
+import { Button, CodeBlock, MacPressable, MacTextInput, ModelDownload, ScreenModelDownload, Segmented, Switch, Text } from '../components';
 import { TextField } from '../components/TextField';
 import { Page } from '../layout/Page';
 import { isLive } from '../lib/actions';
-import { APPEARANCE_OPTIONS, POMODORO_OPTIONS, POWER_OPTIONS, SOUNDS, SOUND_ICON, SOUND_LABEL, STRICTNESS_OPTIONS } from '../lib/labels';
+import { APPEARANCE_OPTIONS, CLASSIFIER_OPTIONS, POMODORO_OPTIONS, POWER_OPTIONS, SOUNDS, SOUND_ICON, SOUND_LABEL, STRICTNESS_OPTIONS } from '../lib/labels';
 import { ollamaLine } from '../layout/Sidebar';
+import { IS_WINDOWS } from '../platform';
 import { colors, fonts, layout, radius, space, tag, themed } from '../theme';
 
 /** Local mirror of settings so controls respond instantly; every change also goes to updateSettings. */
@@ -139,6 +140,25 @@ export function SettingsPage() {
       </Row>
       <AccountSection />
       <SectionTitle>Local AI</SectionTitle>
+      {IS_WINDOWS ? (
+        <Row
+          label="Screen check"
+          hint={
+            s.classifierMode === 'embed'
+              ? 'Only the on-device classifier reads the screen. Ollama is never opened; unsure screens count as unknown.'
+              : 'The on-device classifier answers when it’s sure; Ollama checks the rest.'
+          }>
+          <Segmented
+            testID="settings-classifier"
+            options={CLASSIFIER_OPTIONS}
+            value={s.classifierMode}
+            onChange={(v) => update({ classifierMode: v })}
+          />
+          <View style={styles.screenModel}>
+            <ScreenModelDownload testID="settings-screen-model" />
+          </View>
+        </Row>
+      ) : null}
       <Row label="Model" hint="Ollama vision model used to read the screen.">
         <MacTextInput
           testID="settings-model"
@@ -387,5 +407,6 @@ const styles = themed(() => StyleSheet.create({
   volPct: { marginLeft: space.sm, width: 36 },
   gapLeft: { marginLeft: space.md },
   code: { alignSelf: 'stretch', maxWidth: 420, marginTop: space.xs },
+  screenModel: { alignSelf: 'stretch', maxWidth: 420, marginTop: space.sm },
   supabaseKey: { alignSelf: 'stretch', maxWidth: 420 },
 }));

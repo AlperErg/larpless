@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { create } from 'zustand';
 import { config, DEFAULT_SETTINGS } from '../config';
 import type { SessionStore, SessionStoreState } from '../contracts/store';
@@ -31,6 +32,14 @@ export const initialSessionState: SessionStoreState = {
 
 const settings = () => useAppStore.getState().settings;
 
+/**
+ * The 'embed' classifier mode is in effect: the on-device screen model alone, no Ollama. Windows only, the one
+ * platform with the screen model; elsewhere the setting is ignored and the mode stays hybrid.
+ */
+export function isEmbedOnly(s = settings()): boolean {
+  return Platform.OS === 'windows' && s.classifierMode === 'embed';
+}
+
 let controller: SessionController | null = null;
 
 /** The session controller behind the store actions (created on first use). */
@@ -48,6 +57,7 @@ export function getSessionController(): SessionController {
       config,
       getPower: () => effectiveProfile(settings().powerProfile),
       screenModel: createScreenModelStep({ api: native.screenModel, now: Date.now }),
+      screenModelOnly: () => isEmbedOnly(),
     });
     controller = createSessionController({
       native,
@@ -59,7 +69,8 @@ export function getSessionController(): SessionController {
       ollama,
       now: Date.now,
       config,
-      prepareOllama: config.SCREEN_MODEL_ONLY ? undefined : () => useOllamaStore.getState().prepare({ launch: true }),
+      // 'embed' mode never opens Ollama.
+      prepareOllama: () => (isEmbedOnly() ? Promise.resolve() : useOllamaStore.getState().prepare({ launch: true })),
       onSessionSaved: upsertSessionSummary,
       demoChunks: fixtureChunks,
     });

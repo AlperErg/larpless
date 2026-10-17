@@ -63,6 +63,11 @@ export interface ScreenVerdict {
 
 export type Strictness = 2 | 5 | 10;               // minutes until the first notification
 export type PowerProfile = 'eco' | 'medium' | 'high';
+/**
+ * Who reads the screen. 'hybrid': the on-device screen model answers when it's sure, Ollama the rest.
+ * 'embed': the screen model alone (Windows only); Ollama is never started or asked.
+ */
+export type ClassifierMode = 'hybrid' | 'embed';
 export type PomodoroPreset = '25/5' | '50/10' | 'demo';
 export type PomodoroPhase = 'focus' | 'break' | 'longBreak';
 
@@ -84,7 +89,9 @@ export interface Settings {
   strictness: Strictness;
   /** How often the screen is read. A session may step down from this; that step is not saved. */
   powerProfile: PowerProfile;
-  demoFast: boolean;                    // shorter alerts; check rate comes from powerProfile
+  /** Hybrid (screen model + Ollama) or the on-device screen model alone. Ignored where the screen model is unsupported. */
+  classifierMode: ClassifierMode;
+  demoFast: boolean;                   // shorter alerts; check rate comes from powerProfile
   webcamEnabled: boolean;
   /** System now-playing strip on the floating panel. The track title is never stored. */
   nowPlayingEnabled: boolean;

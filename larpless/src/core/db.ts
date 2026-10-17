@@ -58,6 +58,7 @@ export function cleanSettings(raw: unknown): Settings {
     if (src[key] !== undefined) (out as unknown as Record<string, unknown>)[key] = src[key];
   }
   if (!isPowerProfile(out.powerProfile)) out.powerProfile = DEFAULT_SETTINGS.powerProfile;
+  if (out.classifierMode !== 'hybrid' && out.classifierMode !== 'embed') out.classifierMode = DEFAULT_SETTINGS.classifierMode;
   // Rev 1 shipped qwen3-vl:4b. Move a saved copy of that default forward once; a later explicit choice stays.
   const savedRev = typeof src.modelDefaultRev === 'number' ? src.modelDefaultRev : 1;
   if (savedRev < MODEL_DEFAULT_REV && out.model === 'qwen3-vl:4b') out.model = DEFAULT_SETTINGS.model;

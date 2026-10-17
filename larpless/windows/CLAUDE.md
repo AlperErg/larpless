@@ -21,6 +21,7 @@ Get-Process LarpLess -EA SilentlyContinue | Stop-Process; npx @react-native-comm
 ```
 
 - Stop the running app before rebuilding. A first build takes several minutes; incremental ones about one.
+- **`run-windows.ps1` deletes the downloaded screen model.** It removes the installed package, and that deletes its `LocalState` (`%LOCALAPPDATA%\Packages\LarpLess_96wyba02c09cm\LocalState\Models`, ~460 MB). For JS-only changes don't rebuild: start Metro (`npx react-native start --port 8081`) and relaunch the installed build (command below). For native changes use the rebuild-only command, which keeps the package.
 - Debug builds set `UseDeveloperSupport(false)` so RNW does not paint its green Metro **Loading** bar (that is not `BootScreen`). Themed launch is `BootScreen.tsx` after JS loads. `LarpLess.cpp` also sets the Win32 window canvas to match `theme.ts` before React paints.
 - Compile errors: the newest `windows\msbuild_*.err`. The build log written with `*>` is UTF-16 — read it with `Get-Content`.
 - Relaunch the installed build without rebuilding: `Start-Process "shell:AppsFolder\$((Get-AppxPackage *LarpLess*).PackageFamilyName)!App"`.
@@ -116,13 +117,27 @@ An LLM council compared the current generative VLM with a small "decision" model
 - **laya-vision (thaitea/laya-vision) rejected.** Its weights are CC BY-NC-SA (not shippable in a distributed app), it runs only in PyTorch, and it was trained on game frames rather than screens. Copy the idea, not the artifact.
 - **Option 1, embeddings + OCR (built):** SigLIP 2 image embeddings answer "study or distraction" (zero-shot against text prompts), and Windows OCR + MiniLM text embeddings + keyword hits answer "which subject". No training needed, Apache-2.0 models. SigLIP was chosen over CLIP: its sigmoid gives each label an independent score (it can say "none of these"), it was more accurate on the bench, and SigLIP 2 is multilingual.
 - **Option 2, option scoring with a small VLM (benched, not adopted):** SmolVLM (Apache-2.0) used as a decision model: score each module name as an answer instead of generating. Meant as the backup if Option 1 isn't accurate enough; it lost clearly on the current set (see "Option 2 results").
-- Wherever the model is unsure, Ollama still answers, so nothing regresses.
+- Wherever the model is unsure, Ollama still answers, so nothing regresses (the default `'hybrid'` mode). The `'embed'` mode drops Ollama entirely (see "Classifier modes").
 
 ### What was built
 
 - `scripts/embed_bench/` (Python 3.12 venv; setup in `requirements.txt`): `bench.py` scores `larpless/bench/` screenshots with image / text / keyword / fused methods and reports accuracy, confidence curves and latency; `--courses` adds sidecar `"course"` names as custom courses; `--onnx` times the image tower in ONNX Runtime; `--dump-scores` + `parity.mjs` check that `src/core/screenModel.ts` gives identical answers to the bench. `export_prompts.py` builds `Assets/Models/FLScreenModelPrompts.json` (fixed SigLIP prompt embeddings) and checks the pinned ONNX files and the C++ resize against PyTorch.
 - `Native/FLScreenModel.h`: capture to BGRA (`FLScreenCapture::CaptureBgra`), `Windows.Media.Ocr`, SigLIP 2 vision tower (PIL-style tent resize to 224, cosine 0.9999 to the official processor) and all-MiniLM-L6-v2 (`FLWordPiece.h`, matches Hugging Face's tokenizer on the test cases in `wordpiece_cases.json`) through ONNX Runtime, plus whole-word keyword counts. Returns numbers only. Downloads the models (pinned HF commits, SHA-256 checked) into `LocalFolder\Models`.
-- JS: contract `ScreenModelApi` (`src/contracts/native.ts`), `src/core/screenModel.ts` (fusion, files, step), a step in `runVlm` in `src/core/classifier.ts` before the Ollama screenshot (source `'embed'`), `src/store/screenModelStore.ts`, `ScreenModelDownload` on onboarding's AI-model step (Windows only). macOS has a stub module reporting `supported: false`.
+- JS: contract `ScreenModelApi` (`src/contracts/native.ts`), `src/core/screenModel.ts` (fusion, files, step), a step in `runVlm` in `src/core/classifier.ts` before the Ollama screenshot (source `'embed'`), `src/store/screenModelStore.ts`, `ScreenModelDownload` on onboarding's AI-model step and in Settings → Local AI (Windows only). macOS has a stub module reporting `supported: false`.
+
+### Classifier modes
+
+`Settings.classifierMode`, picked in Settings → Local AI → **Screen check** (Windows only; `isEmbedOnly()` in `sessionStore.ts` is false on other platforms whatever is saved). The classifier reads it through its `screenModelOnly()` dep on every check, so a change applies from the next check without a restart.
+
+| | `'hybrid'` (default, "On-device + Ollama") | `'embed'` ("On-device only") |
+| --- | --- | --- |
+| Study verdict | final at ≥ `MIN_CONFIDENCE` 0.2, else Ollama | always final (`isFinalAlone`) |
+| "Not study" verdict | final at ≥ `MIN_NOT_STUDY_CONFIDENCE` 0.7, else Ollama | final at ≥ `EMBED_NOT_STUDY_CONFIDENCE` 0.6, else `unknown` with no error |
+| No verdict (not installed, error, timeout) | Ollama; an unsure verdict ≥ `FALLBACK_CONFIDENCE` if Ollama can't answer | `unknown` (`error: 'vlm'`) |
+| Ollama | opened at boot/session start (`prepare`), warmed up, asked | never opened, warmed up or asked; still unloaded at session end in case the mode changed mid-session |
+| Sidebar status | Ollama / qwen status | `screenModelLine()`: on-device classifier ready / not downloaded |
+
+Why the two bars differ: in hybrid mode a threshold means "answer here or ask Ollama"; in embed mode there's no one to ask, so it means "worth an alert". Study calls have no bar because the subject guess is right 15/16 even when unsure. The 0.6 "not study" cutoff comes from P(study) on the 39-screenshot bench (2026-10-17, `bench.py --dump-scores` + a gate replay): distractions reach P(study) ≤ 0.317 (confidence ≥ 0.683), study screens ≥ 0.605, so 0.6 still flags 19/19 distractions and turns only P(study) 0.4–0.5 into `unknown`. Re-pick it with the other thresholds when the bench grows. The fusion weights (`FUSION`) are shared by both modes: they were already fitted for top-1 over every screen, which is what embed mode needs.
 - Privacy: frame, OCR text and embeddings stay in native memory; JS gets scores and the OCR character count; logs carry timings and labels. The bench writes no images or text and prints character counts only.
 
 ### How well it works
@@ -167,7 +182,7 @@ Real screenshots, 39 after batch 1 (2026-10-14): 20 study screens (CS courses on
 1. ~~**Option 2**~~: benched 2026-10-13, not adopted (above).
 2. **Spanish** (`--lang es`): multilingual MiniLM (`paraphrase-multilingual-MiniLM-L12-v2`), `es-ES` OCR (installed), Spanish prompt templates; SigLIP 2 is already multilingual.
 3. **macOS**: replace the Swift stub with CoreML (SigLIP vision + MiniLM) + Vision OCR.
-4. A Settings entry for the download (only onboarding has it), and hosting/mirroring of the model files before a real release.
+4. ~~A Settings entry for the download~~ (Settings → Local AI, with the classifier mode). Still to do: hosting/mirroring of the model files before a real release.
 5. Pin down the `hermes.dll` crash above.
 
 ### How to keep improving Option 1
