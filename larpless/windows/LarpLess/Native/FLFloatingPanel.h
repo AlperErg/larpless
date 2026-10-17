@@ -48,6 +48,9 @@ using JSValueObject = winrt::Microsoft::ReactNative::JSValueObject;
 using Microsoft::WRL::ComPtr;
 
 constexpr float kWidth{300}, kHeight{170}, kMediaStrip{56}, kMargin{14}, kRadius{10}, kPad{14};
+// User zoom (Ctrl + mouse wheel over the panel), on top of the monitor DPI. Saved under HKCU\Software\LarpLess.
+constexpr float kMinZoom{0.7f}, kMaxZoom{1.6f}, kZoomStep{0.1f};
+constexpr wchar_t kZoomKey[]{L"Software\\LarpLess"}, kZoomValue[]{L"PanelZoomPercent"};
 constexpr UINT kMediaMessage{WM_APP + 41};
 
 struct Rgb {
@@ -300,7 +303,7 @@ class Window {
     return JSValueObject{
         {"created", m_hwnd != nullptr}, {"visible", Visible()},       {"x", r.left},
         {"y", r.top},                   {"w", r.right - r.left},      {"h", r.bottom - r.top},
-        {"scale", m_scale},             {"hover", m_hover},           {"fontsLoaded", m_fonts != nullptr},
+        {"scale", m_scale},             {"zoom", m_zoom},             {"hover", m_hover},           {"fontsLoaded", m_fonts != nullptr},
         {"status", m_state.status},     {"tint", m_state.tint},       {"userMoved", m_userMoved}};
   }
 
@@ -324,7 +327,8 @@ class Window {
       if (HWND hwnd = Window::Instance().Hwnd()) PostMessageW(hwnd, kMediaMessage, 0, 0);
     });
     SetWindowDisplayAffinity(m_hwnd, m_capturable ? WDA_NONE : WDA_EXCLUDEFROMCAPTURE); // never in LarpLess's own captures
-    m_scale = GetDpiForWindow(m_hwnd) / 96.0f;
+    m_zoom = LoadZoom();
+    SetDpiScale(GetDpiForWindow(m_hwnd) / 96.0f);
     return true;
   }
 
@@ -406,8 +410,7 @@ class Window {
     GetMonitorInfoW(mon, &mi);
     UINT dpiX{96}, dpiY{96};
     GetDpiForMonitor(mon, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
-    if (dpiX < 96) dpiX = 96;
-    m_scale = dpiX / 96.0f;
+    SetDpiScale(dpiX / 96.0f);
     const int w{Px(kWidth + 2 * kMargin)}, h{Px(PanelDipHeight() + 2 * kMargin)};
     const int x{mi.rcWork.right - Px(16) - Px(kWidth + kMargin)};
     const int y{mi.rcWork.top + Px(16) - Px(kMargin)};
@@ -480,6 +483,48 @@ class Window {
 
   int Px(float dip) const {
     return static_cast<int>(std::lround(dip * m_scale));
+  }
+
+  // m_scale (DIP -> pixels) is the monitor DPI times the user zoom, so drawing, window size and hit-testing all follow it.
+  void SetDpiScale(float dpiScale) {
+    m_dpiScale = (std::max)(dpiScale, 1.0f);
+    m_scale = m_dpiScale * m_zoom;
+  }
+
+  static float ClampZoom(float zoom) {
+    return (std::clamp)(std::round(zoom * 10) / 10, kMinZoom, kMaxZoom);
+  }
+  static float LoadZoom() {
+    DWORD percent{0}, bytes{sizeof(percent)};
+    if (RegGetValueW(HKEY_CURRENT_USER, kZoomKey, kZoomValue, RRF_RT_REG_DWORD, nullptr, &percent, &bytes) != ERROR_SUCCESS) {
+      return 1;
+    }
+    return ClampZoom(percent / 100.0f);
+  }
+  static void SaveZoom(float zoom) {
+    const DWORD percent{static_cast<DWORD>(std::lround(zoom * 100))};
+    RegSetKeyValueW(HKEY_CURRENT_USER, kZoomKey, kZoomValue, REG_DWORD, &percent, sizeof(percent));
+  }
+
+  // Grows or shrinks around the cursor (screen pixels), then stays inside the work area.
+  void SetZoom(float zoom, POINT anchor) {
+    zoom = ClampZoom(zoom);
+    if (!m_hwnd || zoom == m_zoom) return;
+    RECT r{};
+    GetWindowRect(m_hwnd, &r);
+    const float ratio{zoom / m_zoom};
+    m_zoom = zoom;
+    m_scale = m_dpiScale * m_zoom;
+    const int w{Px(kWidth + 2 * kMargin)}, h{Px(PanelDipHeight() + 2 * kMargin)};
+    int left{anchor.x - static_cast<int>(std::lround((anchor.x - r.left) * ratio))};
+    int top{anchor.y - static_cast<int>(std::lround((anchor.y - r.top) * ratio))};
+    EnsureOnWorkArea(left, top, w, h);
+    SetWindowPos(m_hwnd, HWND_TOPMOST, left, top, w, h, SWP_NOACTIVATE);
+    m_rt.Reset(); // the render target's DPI is fixed at creation
+    m_surfaceW = m_surfaceH = 0;
+    m_userMoved = true;
+    SaveZoom(m_zoom);
+    Render();
   }
 
   // --- animation state ---
@@ -567,9 +612,7 @@ class Window {
 
   void Render() {
     if (!m_hwnd) return;
-    const UINT dpi{GetDpiForWindow(m_hwnd)};
-    if (dpi >= 96) m_scale = dpi / 96.0f;
-    if (m_scale < 1.0f) m_scale = 1.0f;
+    SetDpiScale(GetDpiForWindow(m_hwnd) / 96.0f);
     // One snapshot for this paint: the window height and the strip both follow it.
     auto const snap{FLNowPlayingState::Instance().Snapshot()};
     if (snap.active != m_mediaShown) {
@@ -895,6 +938,17 @@ class Window {
         ReleaseCapture();
         Render();
         return 0;
+      case WM_MOUSEWHEEL: {
+        // GetAsyncKeyState too: WinAppSDK input doesn't always update the thread key state.
+        if (!(GET_KEYSTATE_WPARAM(wParam) & MK_CONTROL) && !(GetAsyncKeyState(VK_CONTROL) & 0x8000)) return 0;
+        // Precision touchpads send fractions of a notch: one zoom step per full notch.
+        m_wheelAccum += GET_WHEEL_DELTA_WPARAM(wParam);
+        const int steps{m_wheelAccum / WHEEL_DELTA};
+        if (steps == 0) return 0;
+        m_wheelAccum -= steps * WHEEL_DELTA;
+        SetZoom(m_zoom + steps * kZoomStep, {GET_X_LPARAM_(lParam), GET_Y_LPARAM_(lParam)});
+        return 0;
+      }
       case kMediaMessage:
         // Spotify starting or quitting changes the strip height. That must not leave the timer hidden.
         if (!m_wantsVisible) return 0;
@@ -912,7 +966,7 @@ class Window {
         return 0;
       case WM_DPICHANGED: {
         auto const *suggested{reinterpret_cast<RECT const *>(lParam)};
-        m_scale = HIWORD(wParam) / 96.0f;
+        SetDpiScale(HIWORD(wParam) / 96.0f);
         SetWindowPos(m_hwnd, HWND_TOPMOST, suggested->left, suggested->top, suggested->right - suggested->left,
                      suggested->bottom - suggested->top, SWP_NOACTIVATE);
         m_rt.Reset();
@@ -956,7 +1010,8 @@ class Window {
   State m_state;
   std::string m_prevTint{"gray"};
   double m_tintChangeS{0}, m_flashStartS{0}, m_phaseLengthMs{25 * 60 * 1000}, m_lastStepS{0};
-  float m_scale{1}, m_hubAlpha{0}, m_hubTarget{0}, m_sentVolume{0.5f};
+  float m_scale{1}, m_dpiScale{1}, m_zoom{1}, m_hubAlpha{0}, m_hubTarget{0}, m_sentVolume{0.5f};
+  int m_wheelAccum{0};
   bool m_hover{false}, m_dragging{false}, m_sliderDragging{false}, m_userMoved{false}, m_wantsVisible{false};
   POINT m_dragOffset{};
   D2D1_POINT_2F m_mouse{};
