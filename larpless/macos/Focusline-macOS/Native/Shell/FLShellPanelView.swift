@@ -354,10 +354,11 @@ private struct FLShellHubView: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 9) {
-      // Row 1: Pomodoro controls + mini timer
+      // Row 1: Pomodoro controls + mini timer. The toggle is a timer, tinted while Pomodoro is on: a pause/play
+      // glyph here read as "pause the session" and switched Pomodoro off instead.
       HStack(spacing: 5) {
         FLShellIconButton(id: "pomodoroToggle",
-                          systemName: state.pomodoro == nil ? "play.fill" : "pause.fill",
+                          systemName: "timer",
                           active: state.pomodoro != nil, tag: tag) {
           model.perform(["type": "pomodoroToggle"])
         }

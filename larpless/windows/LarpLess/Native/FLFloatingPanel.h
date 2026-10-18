@@ -795,14 +795,15 @@ class Window {
     m_controls.push_back({r, std::move(action)});
   }
 
-  void DrawHub(Tint const &, float a) {
+  void DrawHub(Tint const &tint, float a) {
     auto const &s{m_state};
     auto action = [](char const *type) {
       return [type] { return JSValueObject{{"type", std::string{type}}}; };
     };
-    // Row 1: Pomodoro toggle / skip / presets, small elapsed timer.
+    // Row 1: Pomodoro toggle / skip / presets, small elapsed timer. The toggle is a stopwatch, tinted while
+    // Pomodoro is on: a pause/play glyph here read as "pause the session" and switched Pomodoro off instead.
     float x{kPad - 4};
-    Button({x, 12, x + 26, 36}, s.pomodoro ? L"\uE769" : L"\uE768", action("pomodoroToggle"), a, false, std::nullopt, true);
+    Button({x, 12, x + 26, 36}, L"\uE916", action("pomodoroToggle"), a, s.pomodoro.has_value(), tint, true);
     x += 28;
     Button({x, 12, x + 26, 36}, L"\uE893", action("pomodoroSkip"), a, false, std::nullopt, true);
     x += 32;
