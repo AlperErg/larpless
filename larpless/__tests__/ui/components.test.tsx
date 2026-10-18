@@ -19,7 +19,7 @@ import {
   heatLevel,
 } from '../../src/ui/components';
 import { fixtureSessions, fixtureSummary } from '../../src/fixtures/data';
-import { formatClock, formatDuration, timeAgo } from '../../src/ui/lib/format';
+import { formatClock, formatDuration, formatLegendDuration, timeAgo } from '../../src/ui/lib/format';
 import { builtInNames, courseNameProblem, draftsFromModules, modulesFromDrafts } from '../../src/ui/lib/modules';
 import { fixtureModules } from '../../src/fixtures/data';
 
@@ -54,6 +54,10 @@ describe('UI primitives', () => {
     expect(formatDuration(45)).toBe('45s');
     expect(formatDuration(24 * 60)).toBe('24m');
     expect(formatDuration(72 * 60)).toBe('1h 12m');
+    expect(formatLegendDuration(30)).toBe('30s');
+    expect(formatLegendDuration(90)).toBe('1m 30s');
+    expect(formatLegendDuration(6 * 60)).toBe('6m');
+    expect(formatLegendDuration(10 * 60 + 30)).toBe(formatDuration(10 * 60 + 30));
     expect(timeAgo(1000, 13_000)).toBe('12 s ago');
     expect(heatLevel(0)).toBe(0);
     expect(heatLevel(14)).toBe(1);

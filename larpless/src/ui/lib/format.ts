@@ -29,6 +29,16 @@ export function formatDuration(totalS: number): string {
   return m === 0 ? `${h}h` : `${h}h ${m}m`;
 }
 
+/**
+ * Like formatDuration, but keeps the seconds under 10 minutes ("1m 30s"). Breakdown legends list many short
+ * entries, and rounding each of them to whole minutes made the legend add up to more than the session.
+ */
+export function formatLegendDuration(totalS: number): string {
+  const s = Math.max(0, Math.round(totalS));
+  if (s < 60 || s >= 600 || s % 60 === 0) return formatDuration(s);
+  return `${Math.floor(s / 60)}m ${s % 60}s`;
+}
+
 /** Hours with one decimal: "3.5 h". */
 export function formatHours(totalS: number): string {
   const h = totalS / 3600;
