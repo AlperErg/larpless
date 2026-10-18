@@ -4,7 +4,7 @@ import type { StyleProp, ViewStyle } from 'react-native';
 import type { BreakdownEntry } from '../../contracts/domain';
 import { colors, space, tag, themed } from '../theme';
 import { ANIMATE, MotionView } from '../platform';
-import { formatDuration } from '../lib/format';
+import { formatLegendDuration } from '../lib/format';
 import { Tag } from './Tag';
 
 export interface BreakdownBarProps {
@@ -38,7 +38,7 @@ export function BreakdownBar({ entries, legend, legendTime, height = 10, hideBar
             <Tag
               key={e.key}
               color={e.color}
-              label={`${e.label} ${Math.round(e.pct)}%${legendTime ? ` · ${formatDuration(e.seconds)}` : ''}`}
+              label={`${e.label} ${Math.round(e.pct)}%${legendTime ? ` · ${formatLegendDuration(e.seconds)}` : ''}`}
               style={styles.legendTag}
             />
           ))}
