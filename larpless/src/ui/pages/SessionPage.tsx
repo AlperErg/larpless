@@ -25,6 +25,7 @@ import { Page } from '../layout/Page';
 import { endSession, startSession, togglePause } from '../lib/actions';
 import { breakdownFromChunks, lookModule } from '../lib/derive';
 import { formatCountdown, formatDuration, formatTime, timeAgo } from '../lib/format';
+import { remainingMs } from '../../core/pomodoro';
 import { useNow } from '../lib/hooks';
 import { POMODORO_OPTIONS, SOUND_ICON, SOUND_LABEL, nextSound } from '../lib/labels';
 import { space } from '../theme';
@@ -147,7 +148,7 @@ function LiveSession({ status }: { status: SessionStatus }) {
 
 function PomodoroChip({ p }: { p: PomodoroState }) {
   const now = useNow(1000);
-  const left = (p.phaseEndsAtMs - now) / 1000;
+  const left = remainingMs(p, now) / 1000; // frozen while paused
   const label =
     p.phase === 'focus'
       ? `Round ${p.round} of ${p.roundsBeforeLong} · ${formatCountdown(left)} left`

@@ -87,6 +87,8 @@ export interface PomodoroState {
   roundsBeforeLong: number;   // 4
   phaseEndsAtMs: number;      // epoch ms; never count ticks
   completed: number;          // finished focus rounds
+  /** Set only while the session is paused: the phase time left, frozen. Resume moves phaseEndsAtMs and clears it. */
+  pausedRemainingMs?: number;
 }
 
 export interface Settings {

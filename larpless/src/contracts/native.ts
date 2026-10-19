@@ -58,7 +58,8 @@ export interface PanelState {
   tint: PanelTint;
   /** elapsedS = baseS + (now - runningSinceMs)/1000 while running; baseS when runningSinceMs is null. The panel ticks itself. */
   timer: { baseS: number; runningSinceMs: number | null };
-  pomodoro: { phase: PomodoroPhase; round: number; rounds: number; phaseEndsAtMs: number } | null;
+  /** `pausedRemainingMs` is set while paused: show it frozen instead of counting down to `phaseEndsAtMs`. */
+  pomodoro: { phase: PomodoroPhase; round: number; rounds: number; phaseEndsAtMs: number; pausedRemainingMs: number | null } | null;
   sound: { id: SoundId; volume: number };
   pulse: boolean;             // alert level 3
   flash: 'backOnTrack' | null; // shown once whenever the value changes to 'backOnTrack' (1.2 s)

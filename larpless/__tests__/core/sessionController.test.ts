@@ -147,7 +147,7 @@ describe('toPanelState', () => {
     expect(toPanelState({ ...base, current: cur('away') }, mods)).toMatchObject({ status: 'away', title: 'Away', tint: 'gray' });
     expect(toPanelState({ ...base, current: cur('unknown') }, mods)).toMatchObject({ status: 'studying', tint: 'gray' });
     expect(toPanelState({ ...base, current: cur('starting') }, mods)).toMatchObject({ status: 'studying', subtitle: 'Starting…' });
-    expect(toPanelState(running, mods).pomodoro).toEqual({ phase: 'focus', round: 1, rounds: 4, phaseEndsAtMs: running.pomodoro!.phaseEndsAtMs });
+    expect(toPanelState(running, mods).pomodoro).toEqual({ phase: 'focus', round: 1, rounds: 4, phaseEndsAtMs: running.pomodoro!.phaseEndsAtMs, pausedRemainingMs: null });
     expect(toPanelState(running, mods, 'backOnTrack').flash).toBe('backOnTrack');
   });
 
@@ -287,6 +287,25 @@ describe('sessionController', () => {
     const h = setup({ settings: { demoFast: true } });
     await h.ctrl.start({ pomodoro: '25/5' });
     expect(h.state.pomodoro).toMatchObject({ preset: '25/5', phase: 'focus', phaseEndsAtMs: T0 + 25 * 60_000 });
+    await h.ctrl.end();
+  });
+
+  it('pausing freezes the pomodoro countdown in the state and on the panel; resume picks it up', async () => {
+    const h = setup();
+    await h.ctrl.start({ pomodoro: '25/5' });
+    await advance(60_000);
+    h.ctrl.pause();
+    expect(h.state.pomodoro).toMatchObject({ pausedRemainingMs: 24 * 60_000, phaseEndsAtMs: T0 + 25 * 60_000 });
+    expect(h.panelUpdates.at(-1)?.pomodoro).toMatchObject({ pausedRemainingMs: 24 * 60_000 });
+
+    await advance(10 * 60_000);
+    expect(h.state.pomodoro?.pausedRemainingMs).toBe(24 * 60_000);
+    expect(h.panelUpdates.at(-1)?.pomodoro?.pausedRemainingMs).toBe(24 * 60_000);
+
+    h.ctrl.resume();
+    expect(h.state.pomodoro?.pausedRemainingMs).toBeUndefined();
+    expect(h.state.pomodoro?.phaseEndsAtMs).toBe(T0 + 11 * 60_000 + 24 * 60_000);
+    expect(h.panelUpdates.at(-1)?.pomodoro?.pausedRemainingMs).toBeNull();
     await h.ctrl.end();
   });
 

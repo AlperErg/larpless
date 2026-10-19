@@ -148,6 +148,7 @@ function demoState(
           round: 2,
           rounds: 4,
           phaseEndsAtMs: now + 5 * 60_000,
+          pausedRemainingMs: null,
         },
       };
       break;
