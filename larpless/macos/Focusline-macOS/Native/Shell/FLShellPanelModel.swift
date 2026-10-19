@@ -85,7 +85,7 @@ final class FLShellPanelModel: ObservableObject {
     guard let p = state.pomodoro, let start = phaseStartMs else { return nil }
     let total = p.phaseEndsAtMs - start
     guard total > 0 else { return 0 }
-    return min(1, max(0, (p.phaseEndsAtMs - date.timeIntervalSince1970 * 1000) / total))
+    return min(1, max(0, p.remainingMs(at: date.timeIntervalSince1970 * 1000) / total))
   }
 
   func triggerFlash() {

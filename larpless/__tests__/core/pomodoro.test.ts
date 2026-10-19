@@ -1,4 +1,4 @@
-import { initPomodoro, remainingMs, resumeWith, skip, tick, toggle } from '../../src/core/pomodoro';
+import { freeze, initPomodoro, remainingMs, skip, thaw, tick, toggle } from '../../src/core/pomodoro';
 
 const MIN = 60_000;
 
@@ -81,8 +81,13 @@ describe('pomodoro', () => {
 
   it('pause/resume helpers keep the remaining time', () => {
     const s = initPomodoro('25/5', 0);
-    const left = remainingMs(s, 10 * MIN);
-    expect(left).toBe(15 * MIN);
-    expect(resumeWith(s, 50 * MIN, left).phaseEndsAtMs).toBe(65 * MIN);
+    expect(remainingMs(s, 10 * MIN)).toBe(15 * MIN);
+    const frozen = freeze(s, 10 * MIN);
+    expect(frozen.pausedRemainingMs).toBe(15 * MIN);
+    expect(remainingMs(frozen, 40 * MIN)).toBe(15 * MIN); // no countdown while paused
+    const thawed = thaw(frozen, 50 * MIN);
+    expect(thawed.phaseEndsAtMs).toBe(65 * MIN);
+    expect(thawed).not.toHaveProperty('pausedRemainingMs');
+    expect(thaw(s, 50 * MIN)).toBe(s); // nothing to thaw
   });
 });

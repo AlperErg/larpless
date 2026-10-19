@@ -102,6 +102,11 @@ struct Pomodoro {
   std::string phase{"focus"};
   int round{1}, rounds{4};
   double phaseEndsAtMs{0};
+  std::optional<double> pausedRemainingMs; // set while paused: the countdown is frozen at this value
+  // Phase time left at `nowMs`.
+  double RemainingMs(double nowMs) const {
+    return pausedRemainingMs ? *pausedRemainingMs : phaseEndsAtMs - nowMs;
+  }
 };
 
 struct State {
@@ -255,6 +260,10 @@ class Window {
         if (auto it{obj->find("round")}; it != obj->end() && Num(it->second, n)) p.round = (std::max)(1, static_cast<int>(n));
         if (auto it{obj->find("rounds")}; it != obj->end() && Num(it->second, n)) p.rounds = (std::clamp)(static_cast<int>(n), 1, 12);
         if (auto it{obj->find("phaseEndsAtMs")}; it != obj->end() && Num(it->second, n)) p.phaseEndsAtMs = n;
+        if (auto it{obj->find("pausedRemainingMs")}; it != obj->end()) {
+          if (it->second.IsNull()) p.pausedRemainingMs.reset();
+          else if (Num(it->second, n)) p.pausedRemainingMs = (std::max)(0.0, n);
+        }
         // Infer the phase start for the ring: a new phase/round starts now; an end-time shift keeps the length.
         const double now{NowMs()};
         if (!m_state.pomodoro || p.phase != before.phase || p.round != before.round) {
@@ -611,7 +620,7 @@ class Window {
     if (s.status == "away") return L"Away";
     if (s.status == "break") {
       std::wstring text{s.pomodoro && s.pomodoro->phase == "longBreak" ? L"Long break" : L"Break"};
-      if (s.pomodoro) text += L" \u00B7 " + Countdown((s.pomodoro->phaseEndsAtMs - NowMs()) / 1000.0) + L" left";
+      if (s.pomodoro) text += L" \u00B7 " + Countdown(s.pomodoro->RemainingMs(NowMs()) / 1000.0) + L" left";
       return text;
     }
     if (s.status == "paused") return L"Paused";
@@ -724,7 +733,7 @@ class Window {
     if (s.pomodoro) {
       const D2D1_POINT_2F c{right - 10, 34};
       m_rt->DrawEllipse(D2D1::Ellipse(c, 9, 9), Brush(tint.text, 0.18f * a).Get(), 2.5f);
-      const double remaining{(std::clamp)((s.pomodoro->phaseEndsAtMs - NowMs()) / m_phaseLengthMs, 0.0, 1.0)};
+      const double remaining{(std::clamp)(s.pomodoro->RemainingMs(NowMs()) / m_phaseLengthMs, 0.0, 1.0)};
       DrawArc(c, 9, static_cast<float>(remaining), tint.text, a); // full at the start, empty at the end
       right -= 28;
     }
@@ -760,7 +769,7 @@ class Window {
         else m_rt->FillEllipse(D2D1::Ellipse(c, 3.5f, 3.5f), Brush(Colors().muted, 0.25f * a).Get());
       }
       std::wstring footer{roundText};
-      if (focus) footer += L" \u00B7 " + Countdown((p.phaseEndsAtMs - NowMs()) / 1000.0) + L" left";
+      if (focus) footer += L" \u00B7 " + Countdown(p.RemainingMs(NowMs()) / 1000.0) + L" left";
       Text(footer, Format(false, DWRITE_FONT_WEIGHT_NORMAL, 11).Get(), {kPad, 140, kWidth - kPad, 158}, Colors().muted, a);
     }
   }

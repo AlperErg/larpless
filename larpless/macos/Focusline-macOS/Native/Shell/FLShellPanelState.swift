@@ -6,6 +6,12 @@ struct FLShellPanelPomodoro: Equatable {
   var round: Int = 1               // 1-based current focus round
   var rounds: Int = 4
   var phaseEndsAtMs: Double = 0
+  var pausedRemainingMs: Double? = nil  // set while paused: the countdown is frozen at this value
+
+  /// Phase time left at `nowMs`.
+  func remainingMs(at nowMs: Double) -> Double {
+    pausedRemainingMs ?? (phaseEndsAtMs - nowMs)
+  }
 }
 
 struct FLShellPanelState: Equatable {
@@ -41,6 +47,7 @@ struct FLShellPanelState: Equatable {
         if let v = num(p["round"]) { pom.round = max(1, Int(v)) }
         if let v = num(p["rounds"]) { pom.rounds = max(1, min(12, Int(v))) }
         if let v = num(p["phaseEndsAtMs"]) { pom.phaseEndsAtMs = v }
+        if p["pausedRemainingMs"] != nil { pom.pausedRemainingMs = num(p["pausedRemainingMs"]).map { max(0, $0) } }
         s.pomodoro = pom
       } else {
         s.pomodoro = nil
@@ -70,7 +77,7 @@ struct FLShellPanelState: Equatable {
 
   func pomodoroRemainingS(at date: Date) -> Double? {
     guard let p = pomodoro else { return nil }
-    return max(0, p.phaseEndsAtMs - date.timeIntervalSince1970 * 1000) / 1000
+    return max(0, p.remainingMs(at: date.timeIntervalSince1970 * 1000)) / 1000
   }
 
   var isBreak: Bool { status == "break" }
@@ -161,7 +168,8 @@ struct FLShellPanelState: Equatable {
       "pulse": pulse, "flash": flash.map { $0 as Any } ?? NSNull(),
     ]
     if let p = pomodoro {
-      d["pomodoro"] = ["phase": p.phase, "round": p.round, "rounds": p.rounds, "phaseEndsAtMs": p.phaseEndsAtMs]
+      d["pomodoro"] = ["phase": p.phase, "round": p.round, "rounds": p.rounds, "phaseEndsAtMs": p.phaseEndsAtMs,
+                       "pausedRemainingMs": p.pausedRemainingMs.map { $0 as Any } ?? NSNull()] as [String: Any]
     } else {
       d["pomodoro"] = NSNull()
     }

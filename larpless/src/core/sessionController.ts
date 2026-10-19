@@ -28,7 +28,7 @@ import type { Db } from './db';
 import { computeSummary } from './focus';
 import { newId } from './ids';
 import type { OllamaClient } from './ollama';
-import { initPomodoro, isBreak, phaseDurationMs, remainingMs, resumeWith, skip, tick as pomoTick, toggle } from './pomodoro';
+import { freeze, initPomodoro, isBreak, phaseDurationMs, skip, thaw, tick as pomoTick, toggle } from './pomodoro';
 import { effectiveProfile, resetSessionProfile, stepSessionProfile } from './powerProfile';
 import type { PomodoroEvent } from './pomodoro';
 import { startDemo } from './demoMode';
@@ -102,7 +102,13 @@ export function toPanelState(
   flash: PanelState['flash'] = null,
 ): PanelState {
   const pomodoro = s.pomodoro?.enabled
-    ? { phase: s.pomodoro.phase, round: s.pomodoro.round, rounds: s.pomodoro.roundsBeforeLong, phaseEndsAtMs: s.pomodoro.phaseEndsAtMs }
+    ? {
+        phase: s.pomodoro.phase,
+        round: s.pomodoro.round,
+        rounds: s.pomodoro.roundsBeforeLong,
+        phaseEndsAtMs: s.pomodoro.phaseEndsAtMs,
+        pausedRemainingMs: s.status === 'paused' ? s.pomodoro.pausedRemainingMs ?? null : null,
+      }
     : null;
   const base = { timer: { ...s.timer }, pomodoro, sound: { ...s.sound }, pulse: false, flash };
 
@@ -167,7 +173,6 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
   /** Vision-call id we already stepped down for, so the owner and a waiter don't both step. */
   let steppedGen = 0;
   let suspendedAt: number | null = null; // pause or break start
-  let pomoRemaining: number | null = null; // pomodoro time left when paused
   let alertState: AlertState = INITIAL_ALERT;
   let permissionNotified = false;
   let flash: PanelState['flash'] = null;
@@ -507,7 +512,7 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
     suspendedAt = t;
     freezeTimer(t);
     const p = get().pomodoro;
-    pomoRemaining = p?.enabled ? remainingMs(p, t) : null;
+    if (p?.enabled) set({ pomodoro: freeze(p, t) });
     stopWebcam();
     set({ status: 'paused', pausedForSleep: forSleep });
     pushPanel();
@@ -579,7 +584,6 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
       lastTickAt = t;
       chunkIndex = 0;
       suspendedAt = null;
-      pomoRemaining = null;
       recentSamples = [];
       camLive = null;
       screenNow = null;
@@ -650,8 +654,7 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
       resetWindowWatch();
       if (!demo) runTimer(t);
       const p = get().pomodoro;
-      if (p?.enabled && pomoRemaining !== null) set({ pomodoro: resumeWith(p, t, pomoRemaining) });
-      pomoRemaining = null;
+      if (p) set({ pomodoro: thaw(p, t) });
       lastTickAt = t;
       set({ status: 'running', pausedForSleep: false });
       startWebcam();
@@ -776,8 +779,7 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
         if (st.status === 'break') leaveBreak(t);
       } else {
         const next = toggle(st.pomodoro, t, fallbackPreset());
-        set({ pomodoro: next });
-        if (st.status === 'paused') pomoRemaining = remainingMs(next, t);
+        set({ pomodoro: st.status === 'paused' ? freeze(next, t) : next });
       }
       pushPanel();
     },
@@ -797,9 +799,8 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
       const t = now();
       const st = get();
       const next = initPomodoro(preset, t, st.pomodoro?.completed ?? 0);
-      set({ pomodoro: next });
+      set({ pomodoro: st.status === 'paused' ? freeze(next, t) : next });
       if (st.status === 'break') leaveBreak(t);
-      if (st.status === 'paused') pomoRemaining = remainingMs(next, t);
       pushPanel();
     },
 

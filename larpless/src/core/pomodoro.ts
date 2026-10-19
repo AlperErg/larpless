@@ -92,12 +92,18 @@ export function toggle(state: PomodoroState | null, now: number, fallbackPreset:
   return initPomodoro(state?.preset ?? fallbackPreset, now, state?.completed ?? 0);
 }
 
-/** Freeze for a pause: remember how much of the phase is left. */
+/** How much of the phase is left at `now` (the frozen value while paused). */
 export function remainingMs(state: PomodoroState, now: number): number {
-  return Math.max(0, state.phaseEndsAtMs - now);
+  return state.pausedRemainingMs ?? Math.max(0, state.phaseEndsAtMs - now);
 }
 
-/** Thaw after a pause. */
-export function resumeWith(state: PomodoroState, now: number, remaining: number): PomodoroState {
-  return { ...state, phaseEndsAtMs: now + remaining };
+/** Freeze for a pause: the countdown shows `pausedRemainingMs` until `thaw`. */
+export function freeze(state: PomodoroState, now: number): PomodoroState {
+  return { ...state, pausedRemainingMs: remainingMs(state, now) };
+}
+
+/** Thaw after a pause: the phase ends the frozen time after `now`. */
+export function thaw(state: PomodoroState, now: number): PomodoroState {
+  const { pausedRemainingMs, ...rest } = state;
+  return pausedRemainingMs === undefined ? state : { ...rest, phaseEndsAtMs: now + pausedRemainingMs };
 }
