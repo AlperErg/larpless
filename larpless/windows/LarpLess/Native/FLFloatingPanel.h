@@ -891,6 +891,19 @@ class Window {
     }
   }
 
+  /** Ends any press, panel drag or volume drag without acting: a pressed button doesn't fire, and a volume drag
+   * keeps (and reports) the value it had reached. */
+  void CancelGesture() {
+    if (m_sliderDragging) {
+      m_sliderDragging = false;
+      SetVolumeFromX(m_mouse.x, true);
+    }
+    m_pressing = false;
+    m_pressAction = nullptr;
+    m_dragging = false;
+    if (GetCapture() == m_hwnd) ReleaseCapture();
+  }
+
   LRESULT Handle(UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
       case WM_MOUSEACTIVATE:
@@ -904,12 +917,15 @@ class Window {
         }
         KillTimer(m_hwnd, kLeaveTimer);
         m_hubTarget = 1;
+        // A gesture whose button is no longer down (the release went elsewhere) must not drag or click later.
+        if ((m_pressing || m_dragging || m_sliderDragging) && !(wParam & MK_LBUTTON)) CancelGesture();
         if (m_pressing) {
           // A press that moves past the system drag threshold drags the panel instead of clicking the button.
           POINT p;
           GetCursorPos(&p);
-          if (std::abs(p.x - m_pressScreen.x) > GetSystemMetrics(SM_CXDRAG) ||
-              std::abs(p.y - m_pressScreen.y) > GetSystemMetrics(SM_CYDRAG)) {
+          const UINT dpi{GetDpiForWindow(m_hwnd)};
+          if (std::abs(p.x - m_pressScreen.x) > GetSystemMetricsForDpi(SM_CXDRAG, dpi) ||
+              std::abs(p.y - m_pressScreen.y) > GetSystemMetricsForDpi(SM_CYDRAG, dpi)) {
             m_pressing = false;
             m_pressAction = nullptr;
             m_dragging = true;
@@ -935,6 +951,7 @@ class Window {
         Render();
         return 0;
       case WM_LBUTTONDOWN: {
+        CancelGesture(); // a press left over from a lost capture never fires on this one's release
         const D2D1_POINT_2F p{ToPanel(lParam)};
         POINT cursor;
         GetCursorPos(&cursor);
@@ -989,9 +1006,19 @@ class Window {
         ReleaseCapture();
         Render();
         return 0;
+      case WM_CAPTURECHANGED:
+        // Capture lost before the release (Alt+Tab, the Win key, a UAC prompt): no WM_LBUTTONUP will come. Our own
+        // ReleaseCapture in WM_LBUTTONUP also lands here, after the gesture is already cleared.
+        if ((HWND)lParam != m_hwnd && (m_pressing || m_dragging || m_sliderDragging)) {
+          CancelGesture();
+          Render();
+        }
+        return 0;
       case WM_MOUSEWHEEL: {
         // GetAsyncKeyState too: WinAppSDK input doesn't always update the thread key state.
         if (!(GET_KEYSTATE_WPARAM(wParam) & MK_CONTROL) && !(GetAsyncKeyState(VK_CONTROL) & 0x8000)) return 0;
+        // Zooming mid-gesture would leave the drag offset and the pressed rectangle in the old scale.
+        if (m_pressing || m_dragging || m_sliderDragging) return 0;
         // Precision touchpads send fractions of a notch: one zoom step per full notch.
         m_wheelAccum += GET_WHEEL_DELTA_WPARAM(wParam);
         const int steps{m_wheelAccum / WHEEL_DELTA};
