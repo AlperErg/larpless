@@ -192,7 +192,7 @@ xcodebuild -workspace macos/Focusline.xcworkspace -scheme Focusline-macOS -confi
 
 Onboarding takes four steps:
 
-1. **Your modules.** Optional. LarpLess recognises the built-in subjects on its own; add your own courses (course codes, topics, lecturer names) for sharper labels.For each course, add 6–10 distinctive keywords that actually show up on your screen while you study it (malloc, ER diagram, CS2010). Skip short or common words and anything shared with your other courses
+1. **Your modules.** Optional. LarpLess recognises the built-in subjects on its own; add your own courses (course codes, topics, lecturer names) for sharper labels. For each course, add 6–10 distinctive keywords that actually show up on your screen while you study it (malloc, ER diagram, CS2010). Skip short or common words and anything shared with your other courses
 2. **Permissions.** **Screen Recording** (macOS only applies it after a relaunch; the **Relaunch** button does that), **Camera** (optional: presence and phone detection) and **Notifications**.
 3. **Ollama.** LarpLess checks whether Ollama is installed and running, and the page updates by itself.
    - Not installed: **Download Ollama** downloads `Ollama.dmg`. Open it and drag Ollama into Applications.
