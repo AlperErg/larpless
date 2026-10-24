@@ -904,6 +904,17 @@ class Window {
         }
         KillTimer(m_hwnd, kLeaveTimer);
         m_hubTarget = 1;
+        if (m_pressing) {
+          // A press that moves past the system drag threshold drags the panel instead of clicking the button.
+          POINT p;
+          GetCursorPos(&p);
+          if (std::abs(p.x - m_pressScreen.x) > GetSystemMetrics(SM_CXDRAG) ||
+              std::abs(p.y - m_pressScreen.y) > GetSystemMetrics(SM_CYDRAG)) {
+            m_pressing = false;
+            m_pressAction = nullptr;
+            m_dragging = true;
+          }
+        }
         if (m_dragging) {
           POINT p;
           GetCursorPos(&p);
@@ -925,9 +936,23 @@ class Window {
         return 0;
       case WM_LBUTTONDOWN: {
         const D2D1_POINT_2F p{ToPanel(lParam)};
+        POINT cursor;
+        GetCursorPos(&cursor);
+        RECT r{};
+        GetWindowRect(m_hwnd, &r);
+        m_dragOffset = {cursor.x - r.left, cursor.y - r.top};
+        SetCapture(m_hwnd);
+        // Buttons act on release, like the Mac panel. Acting on press ended sessions (End) and switched Pomodoro
+        // off when a click meant to move the panel landed on a button.
+        auto arm = [&](D2D1_RECT_F rect, std::function<void()> action) {
+          m_pressing = true;
+          m_pressRect = rect;
+          m_pressAction = std::move(action);
+          m_pressScreen = cursor;
+        };
         for (auto const &hit : m_mediaHits) {
           if (!InRect(hit.rect, p)) continue;
-          FLNowPlayingState::Instance().Command(hit.command);
+          arm(hit.rect, [command = hit.command] { FLNowPlayingState::Instance().Command(command); });
           return 0;
         }
         if (m_hubTarget > 0 && m_hubAlpha > 0.05f) { // clickable as soon as the hub starts to appear
@@ -936,10 +961,9 @@ class Window {
             if (control.slider) {
               m_sliderDragging = true;
               m_sentVolume = static_cast<float>(m_state.volume);
-              SetCapture(m_hwnd);
               SetVolumeFromX(p.x, false);
             } else if (control.action) {
-              Send(control.action());
+              arm(control.rect, [this, action = control.action] { Send(action()); });
             }
             Render();
             Schedule(false);
@@ -947,19 +971,19 @@ class Window {
           }
         }
         // Anywhere else drags the panel.
-        POINT cursor;
-        GetCursorPos(&cursor);
-        RECT r{};
-        GetWindowRect(m_hwnd, &r);
-        m_dragOffset = {cursor.x - r.left, cursor.y - r.top};
         m_dragging = true;
-        SetCapture(m_hwnd);
         return 0;
       }
       case WM_LBUTTONUP:
         if (m_sliderDragging) {
           SetVolumeFromX(ToPanel(lParam).x, true);
           m_sliderDragging = false;
+        }
+        if (m_pressing) {
+          m_pressing = false;
+          auto action{std::move(m_pressAction)};
+          m_pressAction = nullptr;
+          if (action && InRect(m_pressRect, ToPanel(lParam))) action();
         }
         m_dragging = false;
         ReleaseCapture();
@@ -1042,6 +1066,10 @@ class Window {
   int m_wheelAccum{0};
   bool m_hover{false}, m_dragging{false}, m_sliderDragging{false}, m_userMoved{false}, m_wantsVisible{false};
   POINT m_dragOffset{};
+  bool m_pressing{false};          // a button is pressed; it acts on release unless the press turns into a drag
+  D2D1_RECT_F m_pressRect{};
+  std::function<void()> m_pressAction;
+  POINT m_pressScreen{};
   D2D1_POINT_2F m_mouse{};
   D2D1_RECT_F m_sliderTrack{};
   std::vector<Control> m_controls;
