@@ -189,8 +189,8 @@ export function createClassifier({ native, ollama, now, config, getPower, screen
     budget: number,
     maxWidth: number,
     only: boolean,
-  ): Promise<{ done: ClassifyResult } | { fallback: ScreenVerdict | null }> {
-    if (!screenModel || !(await screenModel.ready())) return { fallback: null };
+  ): Promise<{ done: ClassifyResult } | { fallback: ScreenVerdict | null; captured: boolean }> {
+    if (!screenModel || !(await screenModel.ready())) return { fallback: null, captured: false };
     let timer: ReturnType<typeof setTimeout> | null = null;
     try {
       const deadline = new Promise<never>((_, reject) => {
@@ -213,9 +213,10 @@ export function createClassifier({ native, ollama, now, config, getPower, screen
           },
         };
       }
-      return { fallback: r.verdict && r.verdict.confidence >= FALLBACK_CONFIDENCE ? r.verdict : null };
+      // The model captured and read the screen even when its answer isn't used.
+      return { fallback: r.verdict && r.verdict.confidence >= FALLBACK_CONFIDENCE ? r.verdict : null, captured: true };
     } catch {
-      return { fallback: null }; // not installed, model error or timeout: Ollama as before
+      return { fallback: null, captured: false }; // not installed, model error or timeout: Ollama as before
     } finally {
       if (timer !== null) clearTimeout(timer);
     }
@@ -233,10 +234,18 @@ export function createClassifier({ native, ollama, now, config, getPower, screen
       const embedded = await runScreenModel(modules, appName, started, budget, capture.maxWidth, only);
       if ('done' in embedded) return embedded.done;
       // Screen model only: an unsure "not study" call, or none at all (not installed, error, timeout), is
-      // `unknown` rather than an Ollama question. Unsure isn't an error: nothing failed.
+      // `unknown` rather than an Ollama question. Unsure isn't an error: nothing failed. A frame that was read
+      // still counts as analysed (privacy.framesAnalysed).
       if (only) {
-        const failed = !embedded.fallback;
-        return { verdict: null, tookScreenshot: false, appName, key, tookMs: Math.max(0, now() - started), ...(failed ? { error: 'vlm' as const } : {}) };
+        const failed = !embedded.captured;
+        return {
+          verdict: null,
+          tookScreenshot: embedded.captured,
+          appName,
+          key,
+          tookMs: Math.max(0, now() - started),
+          ...(failed ? { error: 'vlm' as const } : {}),
+        };
       }
       embedFallback = embedded.fallback;
     }

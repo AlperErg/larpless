@@ -8,6 +8,7 @@ import { isLocalUrl } from '../../core/ollamaHost';
 import { useAppStore } from '../../store/appStore';
 import { useNavStore } from '../../store/navStore';
 import { useOllamaStore } from '../../store/ollamaStore';
+import { useScreenModelStore } from '../../store/screenModelStore';
 import { useSessionStore } from '../../store/sessionStore';
 import { normalizeSupabaseProjectUrl } from '../../social/supabase';
 import { useSocialStore } from '../../store/socialStore';
@@ -40,6 +41,8 @@ export function SettingsPage() {
   const status = useSessionStore((st) => st.status);
   const setVolume = useSessionStore((st) => st.setVolume);
   const go = useNavStore((st) => st.go);
+  // ScreenModelDownload (in the "Screen check" row) refreshes this on mount and after a download.
+  const screenModelInstalled = useScreenModelStore((st) => st.status?.installed === true);
   const [model, setModel] = useState(s.model);
   const [url, setUrl] = useState(s.ollamaUrl);
   const [urlRejected, setUrlRejected] = useState(false);
@@ -146,11 +149,17 @@ export function SettingsPage() {
           hint={
             s.classifierMode === 'embed'
               ? 'Only the on-device classifier reads the screen. Ollama is never opened; unsure screens count as unknown.'
-              : 'The on-device classifier answers when it’s sure; Ollama checks the rest.'
+              : screenModelInstalled
+                ? 'The on-device classifier answers when it’s sure; Ollama checks the rest.'
+                : 'The on-device classifier answers when it’s sure; Ollama checks the rest. Download it below to use it alone.'
           }>
           <Segmented
             testID="settings-classifier"
-            options={CLASSIFIER_OPTIONS}
+            // "On-device only" with no model would make every check unknown. Already chosen, it stays selectable
+            // so it can be switched back.
+            options={CLASSIFIER_OPTIONS.map((o) =>
+              o.value === 'embed' && !screenModelInstalled && s.classifierMode !== 'embed' ? { ...o, disabled: true } : o,
+            )}
             value={s.classifierMode}
             onChange={(v) => update({ classifierMode: v })}
           />

@@ -256,6 +256,8 @@ describe('classifier with the screen model', () => {
       const r = await c.classifyCurrent(MODULES);
       expect(r.verdict).toBeNull();
       expect(r.error).toBeUndefined();
+      // The model did read a frame: it counts in privacy.framesAnalysed even though the answer isn't used.
+      expect(r.tookScreenshot).toBe(true);
       expect(capture).not.toHaveBeenCalled();
       expect(classify).not.toHaveBeenCalled();
     });
