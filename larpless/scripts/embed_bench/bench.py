@@ -44,6 +44,19 @@ p.add_argument("--offline", action="store_true", help="use cached weights only")
 p.add_argument("--dump-scores", metavar="PATH", help="write each image's numeric scores (no text, no pixels) as JSON, "
                "for scripts/embed_bench/parity.mjs")
 p.add_argument("--courses", action="store_true", help='add sidecar "course" names as custom courses (text-only, like the app)')
+p.add_argument("--course-keywords", metavar="PATH",
+               help='with --courses: JSON {"<course>": ["keyword", ...]}, as if the user typed keywords for each course')
+p.add_argument("--drop-keywords", metavar="K1,K2",
+               help="leave these library keywords out of the text/keyword scores (image prompts are unchanged)")
+p.add_argument("--course-base", action="store_true",
+               help="with --courses: experiment where each custom course borrows its closest library subject's image score")
+p.add_argument("--my-subjects", action="store_true",
+               help="experiment: only the library subjects the bench's study screenshots use can be chosen, as if the "
+                    "user had ticked the subjects they take")
+p.add_argument("--codes-need-digits", action="store_true",
+               help='course-code keywords (BIO, MATH, CS...) only match before a course number, e.g. "MATH 101"')
+p.add_argument("--keyword-report", action="store_true",
+               help="list which keywords (from the subject vocabulary only) fired on distractions and wrong subjects")
 args = p.parse_args()
 sys.stdout.reconfigure(encoding="utf-8")  # Windows consoles default to cp1252; `-I` ignores PYTHONIOENCODING
 
@@ -69,6 +82,7 @@ MIN_OCR_CHARS = 40
 MAX_TEXT_CHARS = 1000
 # Library subjects plus, with --courses, custom courses (no image prompt, as in the app). Set in main().
 MODULES: list[dict] = list(SUBJECTS)
+USED = None  # --my-subjects mask over SUBJECTS, set in main()
 
 TEXT_DISTRACTIONS = [
     "social media feed: likes, followers, comments, stories, reels, posts",
@@ -144,15 +158,48 @@ class TextScorer:
         return self.model.encode(texts, normalize_embeddings=True, convert_to_numpy=True)
 
 
+def is_course_code(kw: str) -> bool:
+    """Course-code prefixes in the library (BIO, MATH, CS, ...): all caps, 2-5 letters."""
+    return 2 <= len(kw) <= 5 and kw.isalpha() and kw.isupper()
+
+
+def keyword_pattern(kw: str) -> str:
+    """Whole word, case-insensitive. With --codes-need-digits a course code only counts before a course number
+    ("MATH 101", "CS2010", "BIO-110"), so "bus", "law" or "fin" in ordinary text don't vote."""
+    if args.codes_need_digits and is_course_code(kw):
+        return rf"(?<![a-z0-9]){re.escape(kw.lower())}[ -]?\d{{2,4}}(?![0-9])"
+    return rf"(?<![a-z0-9]){re.escape(kw.lower())}(?![a-z0-9])"
+
+
+def keyword_matches(text: str) -> list[list[str]]:
+    """Per subject, which of its keywords (or its name) appear as whole words, like FLScreenModel counts them."""
+    lower = text.lower()
+    return [[kw for kw in s["keywords"] + [s["name"]] if re.search(keyword_pattern(kw), lower)] for s in MODULES]
+
+
 def keyword_scores(text: str) -> np.ndarray:
     """Whole-word keyword hits per subject (control baseline)."""
-    lower = text.lower()
-    out = np.zeros(len(MODULES))
-    for i, s in enumerate(MODULES):
-        for kw in s["keywords"] + [s["name"]]:
-            if re.search(rf"(?<![a-z0-9]){re.escape(kw.lower())}(?![a-z0-9])", lower):
-                out[i] += 1
-    return out
+    return np.array([len(m) for m in keyword_matches(text)], dtype=float)
+
+
+def keyword_report(items: list[dict]) -> None:
+    """Which keywords fire where they shouldn't: on distractions, and for a wrong subject on study screens.
+    Prints keywords from the subject vocabulary only, never the screen text around them."""
+    misfires: dict[str, set[str]] = {}
+    print("\nKEYWORD MISFIRES (keyword -> subject it voted for)")
+    for it in items:
+        if it["kw_matched"] is None:
+            continue
+        wrong = [(MODULES[i]["name"], kws) for i, kws in enumerate(it["kw_matched"])
+                 if kws and MODULES[i]["name"] not in it["accept"]]
+        if wrong:
+            print(f"  {it['file'][:40]:<41} " + "; ".join(f"{name}: {', '.join(kws)}" for name, kws in wrong))
+            for name, kws in wrong:
+                for k in kws:
+                    misfires.setdefault(f"{k} ({name})", set()).add(it["file"])
+    if misfires:
+        top = sorted(misfires.items(), key=lambda kv: -len(kv[1]))[:12]
+        print("  most frequent: " + ", ".join(f"{k} x{len(v)}" for k, v in top))
 
 
 def dir_size_mb(model_id: str) -> float:
@@ -315,6 +362,32 @@ def main() -> None:
     courses = custom_courses(files, sides) if args.courses else []
     global MODULES
     MODULES = list(SUBJECTS) + course_modules(courses)
+    if args.my_subjects:
+        # "The subjects I take" = every library subject some study screenshot is labelled with.
+        global USED
+        # With --courses, a library subject whose screenshots all belong to custom courses is covered by them
+        # (Computer Architecture replaces Digital Logic), so the user wouldn't tick it.
+        taken = {expected_label(f) for f in files if not (courses and sides[f].get("course") in courses)} - {NOT_STUDY}
+        USED = np.array([s["name"] in taken for s in SUBJECTS])
+        print(f"  my subjects ({int(USED.sum())} of {len(SUBJECTS)}): {', '.join(s['name'] for s, u in zip(SUBJECTS, USED) if u)}")
+    if args.course_base:
+        # A course's closest library subject is the prefix of its screenshots (what the user would pick).
+        names = [s["name"] for s in SUBJECTS]
+        for m in MODULES[len(SUBJECTS):]:
+            prefixes = {expected_label(f) for f in files if sides[f].get("course") == m["name"]}
+            m["base"] = names.index(prefixes.pop()) if len(prefixes) == 1 else None
+        print("  course bases: " + ", ".join(f"{m['name']} -> {names[m['base']] if m['base'] is not None else '-'}"
+                                            for m in MODULES[len(SUBJECTS):]))
+    if args.drop_keywords:
+        drop = {k.strip().lower() for k in args.drop_keywords.split(",") if k.strip()}
+        MODULES = [{**m, "keywords": [k for k in m["keywords"] if k.lower() not in drop]} for m in MODULES]
+        print(f"  dropped keywords: {', '.join(sorted(drop))}")
+    if args.course_keywords:
+        extra = json.loads(Path(args.course_keywords).read_text(encoding="utf-8"))
+        for m in MODULES[len(SUBJECTS):]:
+            m["keywords"] = list(extra.get(m["name"], []))
+        print(f"  course keywords from {args.course_keywords}: " +
+              ", ".join(f"{m['name']} ({len(m['keywords'])})" for m in MODULES[len(SUBJECTS):]))
 
     print(f"embed bench · {len(files)} images{f' in bench/{args.dir}' if args.dir else ''}"
           f"{' (all synthetic)' if synthetic else ''} · image {args.image_model} · "
@@ -373,6 +446,8 @@ def main() -> None:
                 txt_subj, txt_margin, txt_dist = np.zeros(len(MODULES)), 0.0, None
             t4 = time.perf_counter()
             kw = keyword_scores(text)
+            # Only our own vocabulary (which keywords matched), never the screen text around them.
+            kw_matched = keyword_matches(text) if args.keyword_report else None
             ocr_chars = len(screen_text)
             del screen_text, text, capture
         except Exception as e:  # noqa: BLE001 - never echo content, only the stage and type
@@ -384,12 +459,27 @@ def main() -> None:
         img_scores = np.append(lib_subj, logits[idx["distract"]].max())
         img_margin = float(max(logits[idx["study"]].max(), lib_subj.max()) - logits[idx["distract"]].max())
         img_subj = np.append(lib_subj, [np.nan] * (len(MODULES) - len(SUBJECTS)))
+        if args.my_subjects:
+            # Experiment: the user marked which library subjects they take; the rest can't be chosen.
+            off = ~USED
+            img_subj[: len(SUBJECTS)][off] = np.nan
+            if has_text:
+                txt_subj = txt_subj.copy()
+                txt_subj[: len(SUBJECTS)][off] = -10.0
+            kw = kw.copy()
+            kw[: len(SUBJECTS)][off] = 0
+            img_margin = float(max(logits[idx["study"]].max(), lib_subj[USED].max()) - logits[idx["distract"]].max())
+        if args.course_base:
+            # Experiment: each custom course borrows its closest library subject's image score (not in the app).
+            for j, m in enumerate(MODULES[len(SUBJECTS):], start=len(SUBJECTS)):
+                if m.get("base") is not None:
+                    img_subj[j] = lib_subj[m["base"]]
         item = dict(file=f.name, expected=expected, accept=accept, kind=side.get("kind"), img_subj=img_subj, img_margin=img_margin,
                     txt_subj=txt_subj, txt_margin=txt_margin, has_text=has_text, kw=kw,
                     img_pred=LABELS[int(img_scores.argmax())],
                     img_conf=float(1 / (1 + np.exp(-img_scores.max()))) if img.kind == "siglip" else float(softmax(img_scores, 1).max()),
                     txt_pred=(MODULES[int(txt_subj.argmax())]["name"] if txt_margin > 0 else NOT_STUDY) if has_text else None,
-                    kw_pred=MODULES[int(kw.argmax())]["name"] if kw.max() > 0 else None)
+                    kw_pred=MODULES[int(kw.argmax())]["name"] if kw.max() > 0 else None, kw_matched=kw_matched)
         # The same numbers FLScreenModel hands to JS (ScreenModelScores), for the TS parity check.
         item["scores"] = {
             "image": {**{s["id"]: float(v) for s, v in zip(SUBJECTS, lib_subj)},
@@ -434,6 +524,8 @@ def main() -> None:
     verdict_curves(app_preds, items)
     misses_by_kind(app_preds, items)
     print(f"  params fitted on all images: {fit(items)} (app uses {APP_PARAMS})")
+    if args.keyword_report:
+        keyword_report(items)
 
     print("\nLATENCY per image, ms (first image excluded as warm-up)")
     for k, v in lat.items():
