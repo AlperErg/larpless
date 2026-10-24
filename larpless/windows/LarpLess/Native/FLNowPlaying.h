@@ -439,17 +439,24 @@ class FLNowPlayingState {
     }
     Hook(session, gen);
     try {
+      // Every getter here can return null while the player is closing its session. A call through a null
+      // C++/WinRT object is an access violation, which catch (...) can't catch: it crashed the app.
       auto props = session.TryGetMediaPropertiesAsync().get();
       {
         std::lock_guard lock{m_mu};
         if (!Current(gen)) return;
       }
-      const std::wstring title{props.Title().c_str()};
-      if (title.empty()) {
+      if (!props) {
         Publish({}, gen);
         return;
       }
+      const std::wstring title{props.Title().c_str()};
       auto playback = session.GetPlaybackInfo();
+      auto timeline = session.GetTimelineProperties();
+      if (title.empty() || !playback || !timeline) {
+        Publish({}, gen);
+        return;
+      }
       using Status = winrt::Windows::Media::Control::GlobalSystemMediaTransportControlsSessionPlaybackStatus;
       const bool playing{playback.PlaybackStatus() == Status::Playing};
       double rate{0};
@@ -457,7 +464,6 @@ class FLNowPlayingState {
       if (!playing) rate = 0;
       else if (!(rate > 0)) rate = 1;
 
-      auto timeline = session.GetTimelineProperties();
       FLNowPlayingTrack track;
       track.active = true;
       track.title = title;
@@ -542,6 +548,7 @@ class FLNowPlayingState {
     Manager manager{nullptr};
     try {
       manager = Manager::RequestAsync().get();
+      if (!manager) throw winrt::hresult_error{E_POINTER}; // retry below, like a failed request
     } catch (...) {
       std::unique_lock lock{m_mu};
       if (!Current(gen)) return;
@@ -616,7 +623,7 @@ class FLNowPlayingState {
         session = m_commandQueue.front().session;
         which = m_commandQueue.front().which;
         m_commandQueue.pop_front();
-        if (!m_enabled || session != m_session) continue;
+        if (!m_enabled || !session || session != m_session) continue;
       }
       try {
         if (which == 0) session.TrySkipPreviousAsync().get();
