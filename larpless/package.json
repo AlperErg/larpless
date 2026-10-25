@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "windows": "npx @react-native-community/cli run-windows",
+    "bundle:windows": "react-native bundle --platform windows --dev false --entry-file index.js --bundle-output windows/LarpLess/Bundle/index.windows.bundle --assets-dest windows/LarpLess/Bundle",
     "test:windows": "jest --config jest.config.windows.js",
     "postinstall": "node scripts/patch-rnsvg-windows.mjs"
   },

@@ -16,9 +16,13 @@ The Windows app is **react-native-windows 0.81.36** (cpp-app template: C++/WinRT
 Run from `larpless/` (PowerShell):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\run-windows.ps1     # stops old LarpLess, removes sideloaded AppX, Metro, patch RNSVG, build/deploy/launch
+powershell -ExecutionPolicy Bypass -File scripts\run-windows.ps1           # bundle JS into the app, build/deploy/launch (works from Start with no Metro)
+powershell -ExecutionPolicy Bypass -File scripts\run-windows.ps1 -Metro    # load JS from Metro :8081 while developing
+powershell -ExecutionPolicy Bypass -File scripts\launch-windows.ps1        # Metro + launch (only for -Metro installs)
 Get-Process LarpLess -EA SilentlyContinue | Stop-Process; npx @react-native-community/cli run-windows --no-packager --logging *> .logs\build-windows.log   # rebuild only
 ```
+
+Default installs embed `windows/LarpLess/Bundle/index.windows.bundle` (`EmbedJsBundle=true` → `BUNDLE` in `LarpLess.cpp`). Re-run `run-windows.ps1` after JS changes. `src/social/env.ts` is read at bundle time, so recreate the bundle when those keys change.
 
 - Stop the running app before rebuilding. A first build takes several minutes; incremental ones about one.
 - **`run-windows.ps1` deletes the downloaded screen model.** It removes the installed package, and that deletes its `LocalState` (`%LOCALAPPDATA%\Packages\LarpLess_96wyba02c09cm\LocalState\Models`, ~460 MB). For JS-only changes don't rebuild: start Metro (`npx react-native start --port 8081`) and relaunch the installed build (command below). For native changes use the rebuild-only command, which keeps the package.
