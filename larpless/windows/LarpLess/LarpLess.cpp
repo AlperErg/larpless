@@ -96,9 +96,13 @@ _Use_decl_annotations_ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE, PSTR 
   settings.UseFastRefresh(true);
 #endif
 #if _DEBUG
-  // For Debug builds
-  // Direct debugger + Metro still work; js-eval and Fast Refresh do not need the dev menu.
+  // For Debug builds. Offline bundles (BUNDLE) crash in Microsoft.ReactNative.dll if the direct
+  // debugger is left on; Metro dev builds keep it for js-eval.
+#if BUNDLE
+  settings.UseDirectDebugger(false);
+#else
   settings.UseDirectDebugger(true);
+#endif
   // RNW draws a green "Loading" bar while the bundle loads when this is true (not our BootScreen).
   settings.UseDeveloperSupport(false);
 #else

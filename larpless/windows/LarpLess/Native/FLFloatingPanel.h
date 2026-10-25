@@ -52,6 +52,7 @@ constexpr float kWidth{300}, kHeight{170}, kMediaStrip{56}, kMargin{14}, kRadius
 constexpr float kMinZoom{0.7f}, kMaxZoom{1.6f}, kZoomStep{0.1f};
 constexpr wchar_t kZoomKey[]{L"Software\\LarpLess"}, kZoomValue[]{L"PanelZoomPercent"};
 constexpr UINT kMediaMessage{WM_APP + 41};
+constexpr UINT kRepairMessage{WM_APP + 42};
 
 struct Rgb {
   float r, g, b;
@@ -1044,6 +1045,12 @@ class Window {
       }
       case kMediaMessage:
         // Browser / Spotify media sessions resize the strip and can cloak or park the layered window.
+        // Defer repair: GSMTC callbacks can arrive while we are inside this wndproc.
+        if (!m_wantsVisible) return 0;
+        FitMediaHeight();
+        PostMessageW(m_hwnd, kRepairMessage, 0, 0);
+        return 0;
+      case kRepairMessage:
         if (!m_wantsVisible) return 0;
         EnsureVisible();
         return 0;
