@@ -98,6 +98,12 @@
       <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
+  <!-- Set EmbedJsBundle=true (run-windows.ps1) to load index.windows.bundle instead of Metro. -->
+  <ItemDefinitionGroup Condition="'$(EmbedJsBundle)'=='true'">
+    <ClCompile>
+      <PreprocessorDefinitions>BUNDLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+  </ItemDefinitionGroup>
   <!-- ONNX Runtime's native props key off PlatformTarget, which vcxproj does not set. -->
   <PropertyGroup>
     <PlatformTarget Condition="'$(Platform)'=='x64'">x64</PlatformTarget>
@@ -139,6 +145,10 @@
     </None>
     <!-- Single file, so it lands next to the exe under Assets\Models. -->
     <None Include="Assets\Models\yolo11n.onnx">
+      <DeploymentContent>true</DeploymentContent>
+    </None>
+    <!-- Offline Metro bundle (scripts/bundle-windows.ps1). Wildcard keeps assets Metro may emit. -->
+    <None Include="Bundle\**\*">
       <DeploymentContent>true</DeploymentContent>
     </None>
   </ItemGroup>
