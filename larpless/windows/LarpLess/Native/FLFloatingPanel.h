@@ -189,24 +189,32 @@ class Window {
       return false;
     }
     m_mediaShown = FLNowPlayingState::Instance().Snapshot().active;
-    if (!m_userMoved || NeedsReposition()) PlaceDefault();
+    if (!m_userMoved || NeedsReposition() || IsCloaked() || !OnSomeMonitor()) PlaceDefault();
     else FitMediaHeight();
     Present();
     OutputDebugStringA(Visible() ? "[FLPanel] Show: visible\n" : "[FLPanel] Show: ShowWindow failed\n");
     return Visible();
   }
 
-  // Puts the timer back on the work area. A window Windows still calls "visible" can be 0-sized,
-  // parked off-screen, or cloaked after another app (Spotify) closes; IsWindowVisible is not enough.
+  // Re-front and repaint when the panel should be up. Windows can keep IsWindowVisible true while the
+  // timer is cloaked, 0-sized, or parked off-screen (common when a browser media session starts).
   void EnsureVisible() {
     if (m_dragging || m_sliderDragging) return;
     m_wantsVisible = true;
     if (!Create()) return;
-    const bool broken{!IsWindowVisible(m_hwnd) || IsIconic(m_hwnd) || NeedsReposition()};
-    if (!broken) return;
-    if (IsIconic(m_hwnd)) ShowWindow(m_hwnd, SW_RESTORE);
-    if (!m_userMoved || NeedsReposition()) PlaceDefault();
-    else FitMediaHeight();
+    if (!IsWindowVisible(m_hwnd) || IsIconic(m_hwnd)) {
+      if (IsIconic(m_hwnd)) ShowWindow(m_hwnd, SW_RESTORE);
+      if (!m_userMoved || NeedsReposition()) PlaceDefault();
+      else FitMediaHeight();
+      Present();
+      return;
+    }
+    if (!OnSomeMonitor() || NeedsReposition()) {
+      if (!m_userMoved || NeedsReposition()) PlaceDefault();
+      else FitMediaHeight();
+    } else {
+      FitMediaHeight();
+    }
     Present();
   }
 
@@ -433,9 +441,16 @@ class Window {
     return MonitorFromRect(&r, MONITOR_DEFAULTTONULL) != nullptr;
   }
 
-  // True when the timer is minimized, tiny, or mostly outside the work area (so "show" must move it).
+  bool IsCloaked() const {
+    if (!m_hwnd) return false;
+    int cloaked{0};
+    if (FAILED(DwmGetWindowAttribute(m_hwnd, DWMWA_CLOAKED, &cloaked, sizeof(cloaked)))) return false;
+    return cloaked != 0;
+  }
+
+  // True when the timer is minimized, tiny, cloaked, or mostly outside the work area (so "show" must move it).
   bool NeedsReposition() const {
-    if (!m_hwnd || !IsWindow(m_hwnd) || IsIconic(m_hwnd)) return true;
+    if (!m_hwnd || !IsWindow(m_hwnd) || IsIconic(m_hwnd) || IsCloaked()) return true;
     RECT r{};
     if (!GetWindowRect(m_hwnd, &r)) return true;
     const int w{r.right - r.left}, h{r.bottom - r.top};
@@ -1028,10 +1043,9 @@ class Window {
         return 0;
       }
       case kMediaMessage:
-        // Spotify starting or quitting changes the strip height. That must not leave the timer hidden.
+        // Browser / Spotify media sessions resize the strip and can cloak or park the layered window.
         if (!m_wantsVisible) return 0;
-        FitMediaHeight();
-        Present();
+        EnsureVisible();
         return 0;
       case WM_TIMER:
         if (wParam == kLeaveTimer) {
