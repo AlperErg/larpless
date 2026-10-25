@@ -8,9 +8,10 @@ New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 
 $bundle = Join-Path $outDir 'index.windows.bundle'
 Write-Host "Bundling JS to $bundle ..."
+# Debug packages use a Debug build; --dev true matches what Hermes expects when EmbedJsBundle is set.
 npx react-native bundle `
   --platform windows `
-  --dev false `
+  --dev true `
   --entry-file index.js `
   --bundle-output $bundle `
   --assets-dest $outDir
