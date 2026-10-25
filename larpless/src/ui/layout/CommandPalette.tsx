@@ -77,8 +77,10 @@ export function buildCommands(ctx: {
       icon: 'timer',
       title: 'Show floating timer',
       run: () => {
-        // show() always repaints. ensureVisible() is the quiet repair used by the session tick.
-        native.panel.show().catch(() => undefined);
+        native.panel
+          .show()
+          .then(() => native.panel.ensureVisible())
+          .catch(() => undefined);
       },
     });
     out.push({ id: 'end', group: 'Session', icon: 'stop', title: 'End session', run: () => endSession() });
