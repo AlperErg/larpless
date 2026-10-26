@@ -66,7 +66,7 @@ These are product guarantees; preserve them in any change:
 
 ## Windows
 
-There is also a Windows build (react-native-windows, C++ native modules in `larpless/windows/LarpLess/Native/`). Its commands, gotchas, module status and Ollama GPU setup (Vulkan on AMD iGPUs via `OLLAMA_IGPU_ENABLE=1`) are in [`larpless/windows/CLAUDE.md`](larpless/windows/CLAUDE.md). Webcam presence and phones use the same YOLO11n thresholds as Mac, through ONNX Runtime. UI differences go through `src/ui/platform.ts` and must leave the Mac output unchanged. Only Windows has the on-device screen model and so the `'embed'` classifier mode. `scripts/run-windows.ps1` uninstalls the package first, which deletes `LocalState` and the ~460 MB downloaded screen model; after a JS-only change relaunch the installed app with Metro running instead.
+There is also a Windows build (react-native-windows, C++ native modules in `larpless/windows/LarpLess/Native/`). Its commands, gotchas, module status and Ollama GPU setup (Vulkan on AMD iGPUs via `OLLAMA_IGPU_ENABLE=1`) are in [`larpless/windows/CLAUDE.md`](larpless/windows/CLAUDE.md). Webcam presence and phones use the same YOLO11n thresholds as Mac, through ONNX Runtime. UI differences go through `src/ui/platform.ts` and must leave the Mac output unchanged. Only Windows has the on-device screen model and so the `'embed'` classifier mode. `scripts/run-windows.ps1` embeds the JS bundle by default (`-Metro` loads it from Metro instead) and uninstalls the package first, which deletes `LocalState` and the ~460 MB downloaded screen model; to keep it, use the rebuild-only command in the Windows CLAUDE.md.
 
 ## Stale references
 
