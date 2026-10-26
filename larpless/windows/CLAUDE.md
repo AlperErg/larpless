@@ -149,15 +149,20 @@ Why the two bars differ: in hybrid mode a threshold means "answer here or ask Ol
 
 Real screenshots, 39 after batch 1 (2026-10-14): 20 study screens (CS courses on PDF / VS Code / Blackboard, plus calculus exercises, an economics book on Google Books, Desmos, IB physics notes, a YouTube probability lecture, Claude explaining C structs) and 19 distractions (Netflix, TV, 2 YouTube Shorts, YouTube home and a music video, TikTok, Twitch, Instagram, Reddit, Pinterest, Discord, chess.com, a Steam promo page, Amazon, Nike, BBC, a football report, Spotify). Batch 1 sidecars have `windowTitle` and `kind`; the first 18 have no titles.
 
+Re-run 2026-10-26 after main added **Computer Architecture** and **Information Management** to the library (46 subjects, prompts regenerated). The user's screenshots of those two courses are now library cases (prefixes `computer_architecture` / `information_management`, the old stand-in subject in `accept`), so only Systems Programming is still a custom course:
+
 | | image only | text only | keywords only | fused, leave-one-out |
 | --- | --- | --- | --- | --- |
-| library subjects only | 77% | 62% | 36% | **95%** (95% CI 83–99) |
-| + 3 custom courses (names only, no keywords) | 67% | 59% | 31% | **85%** (70–93) |
+| library subjects only | 77% | 62% | 36% | **92%** (36/39, 95% CI 80–97) |
+| + Systems Programming as a custom course (name only) | 69% | 62% | 36% | **87%** (73–94) |
+| + its 8 keywords (`--course-keywords`) | 69% | 67% | 38% | **92%** (80–97); 95% with the shipped params |
 | study vs distraction | 39/39 | | | 39/39 |
 
-- Shipped parameters (`FUSION` in `screenModel.ts` = `APP_PARAMS` in `bench.py`): alpha 0.25, tImg 1, tTxt 0.05, gImg 0.5, gTxt 0, beta 0.5, tKw 0.5. Still the best fit on all 39 with library subjects; with custom courses the fit prefers beta 1 and tTxt 0.02, a small gain not worth a split.
+On the 44-subject library (2026-10-14) the same set gave 95% with library subjects and 85% with 3 custom courses. The one extra miss comes from the new subject: Information Management pulls in an Algorithms screen, and one Information Management screen goes to Sociology. All 3 library misses are unsure (confidence 0.05–0.15), so hybrid mode sends them to Ollama; `parity.mjs` 39/39 identical.
+
+- Shipped parameters (`FUSION` in `screenModel.ts` = `APP_PARAMS` in `bench.py`): alpha 0.25, tImg 1, tTxt 0.05, gImg 0.5, gTxt 0, beta 0.5, tKw 0.5. On 46 subjects the all-image fit prefers beta 1 (as it already did with custom courses), within noise on 39 images, so unchanged.
 - The gate separates cleanly: study screens have P(study) ≥ 0.6 and distractions ≤ 0.32, so no study screen (not even the YouTube lecture) is called a distraction.
-- Confidence sits low because P(subject) is spread over 44+ subjects. `MIN_CONFIDENCE` 0.2 answers 9 of 20 study screens, all right (the one wrong answer above 0.15 sat at 0.16); the rest go to Ollama. `FALLBACK_CONFIDENCE` 0.05 is used when Ollama can't answer.
+- Confidence sits low because P(subject) is spread over 46+ subjects. `MIN_CONFIDENCE` 0.2 answers 9 of 20 study screens, all right (on 46 subjects nothing wrong reaches 0.15); the rest go to Ollama. `FALLBACK_CONFIDENCE` 0.05 is used when Ollama can't answer.
 - "Not study" has its own bar, `MIN_NOT_STUDY_CONFIDENCE` 0.7 (`isConfident` in `screenModel.ts`). Its confidence is 1 − P(study), which never drops below 0.5, so under the study bar every distraction call skipped Ollama, and a wrong "distracted" fires alerts. At 0.7 it answers 17 of 19 distractions, all right; the two YouTube Shorts (0.68 / 0.69) get an Ollama check.
 - Keyword hits are noisy on distractions (7 of them hit Statistics, 2 Political Science), most likely from the Chrome tab strip, which shows the same study tabs in every screenshot. That's real for this user, and keywords only weigh in the subject choice, not the gate.
 - Speed on the Ryzen 5 7545U: ~0.3–0.6 s per check once loaded (capture ~55 ms, OCR ~100 ms, image ~150 ms, text ~30 ms), ~1.5 s for the first check of a session (loading). About 1 GB RAM while loaded; unloaded at session end. Download ~460 MB.
@@ -193,7 +198,7 @@ Real screenshots, 39 after batch 1 (2026-10-14): 20 study screens (CS courses on
 ### How to keep improving Option 1
 
 - **More real screenshots** in `larpless/bench/`, in batches: batch 1 = 16 distractions (feeds, chat, non-study video, games, shopping, news, 2–3 each) + 6 study (non-CS, plus hard cases like a YouTube lecture or ChatGPT); batch 2 = ~20 aimed at batch 1's misses; then a frozen 12-image holdout in `bench/holdout/`, scored once with `--dir holdout` and never tuned on. About 60/40 study/not. Name `<prefix>__<desc>.png` (prefix = correct answer); sidecar `{"windowTitle": "...", "kind": "social", "accept": [...], "course": "..."}` with `windowTitle` always, `accept` only for genuinely right alternatives, `course` only for the user's own courses. The format and report helpers live in `benchdata.py`; the report prints Wilson 95% intervals, per-verdict curves and misses by `kind`. Own material only, chats and notifications closed.
-- **Keywords for custom courses**: every remaining custom-course miss is a near-miss to a library subject with keywords (Systems Programming → Coding, Computer Architecture → Digital Logic). 8 keywords per course lifted accuracy with custom courses from 82% to 90% on 39 screenshots (`bench.py --courses --course-keywords`), so prompt users for keywords when they add a course. Guidance for choosing them (also what the UI hint should say):
+- **Keywords for custom courses**: every remaining custom-course miss is a near-miss to a library subject with keywords (Systems Programming → Coding, and Computer Architecture → Digital Logic before it joined the library). 8 keywords per course lifted accuracy with custom courses from 82% to 90% on 39 screenshots with 3 custom courses, and from 87% to 92% with Systems Programming alone (`bench.py --courses --course-keywords`), so prompt users for keywords when they add a course. Guidance for choosing them (also what the UI hint should say):
   - **6–10 per course, about 8.** Each distinct keyword found counts as one vote (`softmax(hits / 0.5)`), so a couple of extra hits decide clearly; generic words only add wrong votes.
   - **Distinctive jargon, named concepts and tools** that actually appear on the screen while studying it (slide titles, assignment and file names, tools): `malloc`, `fork`, `segmentation fault`, `Makefile` rather than `memory` or `program`. Multi-word phrases are fine and often better (`ER diagram`, `primary key`).
   - **No short or common words.** Matching is whole-word and case-insensitive: the library's `R` fired on 12 of 39 screens, and `table`, `function`, `analysis`, `model`, `series` all voted for wrong subjects.
@@ -202,7 +207,7 @@ Real screenshots, 39 after batch 1 (2026-10-14): 20 study screens (CS courses on
   - Test per word: would it show up on another course's screen, or on Reddit/YouTube? Then drop it.
 - **Re-fit and re-check** after adding images: run `bench.py` (and `--courses`), update `APP_PARAMS` and `FUSION` together, then `--dump-scores` + `node scripts/embed_bench/parity.mjs <file>` must print `parity N/N identical`.
 - **Confidence**: the 0.2 / 0.7 thresholds are from 39 images (batch 1). With more data, pick each from the per-verdict curve, compare with the top-1 vs runner-up confidence, or fit a temperature on the fused score so the cut-off means a target accuracy.
-- **Prompts**: change templates or distraction prompts in `scripts/embed_bench/prompts.py`, then rerun `export_prompts.py` to rebuild `FLScreenModelPrompts.json` (and rebuild the app).
+- **Prompts**: change templates or distraction prompts in `scripts/embed_bench/prompts.py`, then rerun `export_prompts.py` to rebuild `FLScreenModelPrompts.json` (and rebuild the app). **Also rerun it whenever `subjectLibrary.ts` changes** (a new subject, or new first three keywords, which go into the prompt text): a library subject missing from the file silently gets no image score, like a custom course, and no test catches it.
 - int8 quantisation of the vision tower cut its size 4× (94 MB) and halved latency but dropped image-only accuracy on the synthetic set (10/10 → 8/10); re-test on real screenshots before using it.
 
 ## Tips for working from PowerShell
