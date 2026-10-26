@@ -2,8 +2,8 @@ import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import App from '../../src/App';
 import type { MenuCommand } from '../../src/contracts/native';
-import { noticeGroups } from '../../src/legal/acknowledgements';
-import type { NoticePlatform } from '../../src/legal/acknowledgements';
+import { noticeGroups } from '../../src/legal/notices';
+import type { NoticePlatform } from '../../src/legal/notices';
 import { native } from '../../src/native';
 import { useNavStore } from '../../src/store/navStore';
 import { AcknowledgementsPage } from '../../src/ui/pages/AcknowledgementsPage';
@@ -63,6 +63,24 @@ describe('acknowledgements data (scripts/acknowledgements.mjs)', () => {
     expect(names('windows')).not.toContain('react-native-macos');
     expect(names('windows')).not.toContain('mediaremote-adapter');
     expect(names('windows')).not.toContain('RCT-Folly');
+  });
+
+  // Metro resolves `.json` before `.ts` (Jest the other way round), so `legal/acknowledgements` next to
+  // acknowledgements.json loaded the raw JSON in the app and the page crashed while these tests passed.
+  it('no JSON in src/ shares a basename with a TS module', () => {
+    const fs = require('fs') as typeof import('fs');
+    const path = require('path') as typeof import('path');
+    const files: string[] = [];
+    const walk = (dir: string): void => {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        const p = path.join(dir, e.name);
+        if (e.isDirectory()) walk(p);
+        else files.push(p);
+      }
+    };
+    walk(path.join(__dirname, '../../src'));
+    const modules = new Set(files.filter((f) => /\.tsx?$/.test(f)).map((f) => f.replace(/\.tsx?$/, '')));
+    expect(files.filter((f) => f.endsWith('.json') && modules.has(f.slice(0, -'.json'.length)))).toEqual([]);
   });
 });
 
