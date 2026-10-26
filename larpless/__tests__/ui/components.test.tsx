@@ -132,16 +132,16 @@ describe('UI primitives', () => {
     const r = render(
       <Segmented
         testID="mode"
-        options={[{ value: 'hybrid', label: 'Hybrid' }, { value: 'embed', label: 'Alone', disabled: true }]}
-        value="hybrid"
+        options={[{ value: 'vlm', label: 'Vision LLM' }, { value: 'classifier', label: 'Classifier', disabled: true }]}
+        value="vlm"
         onChange={onChange}
       />,
     );
-    expect(textOf(r)).toContain('Alone');
+    expect(textOf(r)).toContain('Classifier');
     const pressable = (id: string) => r.root.findAll((n) => n.props.testID === id && typeof n.props.onPress === 'function');
-    expect(pressable('mode-embed')).toHaveLength(0);
-    act(() => pressable('mode-hybrid')[0].props.onPress());
-    expect(onChange).toHaveBeenCalledWith('hybrid');
+    expect(pressable('mode-classifier')).toHaveLength(0);
+    act(() => pressable('mode-vlm')[0].props.onPress());
+    expect(onChange).toHaveBeenCalledWith('vlm');
     act(() => r.unmount());
   });
 

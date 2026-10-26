@@ -47,9 +47,9 @@ flowchart LR
     SD[FLSound]
   end
   F[src/native facades] --> CTRL[core/sessionController]
-  CTRL --> CLS[core/classifier: rules → cache → screen model → VLM]
-  CLS -->|Windows: scores only| SM[FLScreenModel: SigLIP 2 + OCR + MiniLM]
-  CLS -->|POST /api/chat, hybrid mode| OL[Ollama 127.0.0.1:11434]
+  CTRL --> CLS[core/classifier: rules → cache → VLM or screen model]
+  CLS -->|Windows classifier mode: scores only| SM[FLScreenModel: SigLIP 2 + OCR + MiniLM]
+  CLS -->|POST /api/chat, vision LLM mode| OL[Ollama 127.0.0.1:11434]
   CTRL --> FU[core/chunkFuser] --> ST[zustand stores]
   CTRL --> AL[core/alerts] --> NT
   CTRL --> PN

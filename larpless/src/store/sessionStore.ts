@@ -33,11 +33,11 @@ export const initialSessionState: SessionStoreState = {
 const settings = () => useAppStore.getState().settings;
 
 /**
- * The 'embed' classifier mode is in effect: the on-device screen model alone, no Ollama. Windows only, the one
- * platform with the screen model; elsewhere the setting is ignored and the mode stays hybrid.
+ * The 'classifier' mode is in effect: the on-device screen model alone, no Ollama. Windows only, the one
+ * platform with the screen model; elsewhere the setting is ignored and Ollama's vision LLM reads the screen.
  */
-export function isEmbedOnly(s = settings()): boolean {
-  return Platform.OS === 'windows' && s.classifierMode === 'embed';
+export function isClassifierMode(s = settings()): boolean {
+  return Platform.OS === 'windows' && s.classifierMode === 'classifier';
 }
 
 let controller: SessionController | null = null;
@@ -57,7 +57,7 @@ export function getSessionController(): SessionController {
       config,
       getPower: () => effectiveProfile(settings().powerProfile),
       screenModel: createScreenModelStep({ api: native.screenModel, now: Date.now }),
-      screenModelOnly: () => isEmbedOnly(),
+      screenModelOnly: () => isClassifierMode(),
     });
     controller = createSessionController({
       native,
@@ -69,8 +69,8 @@ export function getSessionController(): SessionController {
       ollama,
       now: Date.now,
       config,
-      // 'embed' mode never opens Ollama.
-      prepareOllama: () => (isEmbedOnly() ? Promise.resolve() : useOllamaStore.getState().prepare({ launch: true })),
+      // 'classifier' mode never opens Ollama.
+      prepareOllama: () => (isClassifierMode() ? Promise.resolve() : useOllamaStore.getState().prepare({ launch: true })),
       onSessionSaved: upsertSessionSummary,
       demoChunks: fixtureChunks,
     });

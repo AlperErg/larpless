@@ -3,10 +3,7 @@ import type { ActiveWindow, ScreenModelApi, ScreenModelScores } from '../../src/
 import { createClassifier } from '../../src/core/classifier';
 import {
   EMBED_NOT_STUDY_CONFIDENCE,
-  FALLBACK_CONFIDENCE,
   fuseScores,
-  MIN_CONFIDENCE,
-  MIN_NOT_STUDY_CONFIDENCE,
   MIN_OCR_CHARS,
   SCREEN_MODEL_FILES,
   createScreenModelStep,
@@ -139,7 +136,7 @@ describe('createScreenModelStep', () => {
   });
 });
 
-describe('classifier with the screen model', () => {
+describe('classifier modes', () => {
   const VLM: ScreenVerdict = { studying: true, moduleId: 'lib_history', activity: '', confidence: 0.9, source: 'vlm' };
   const win: ActiveWindow = { appName: 'Edge', bundleId: 'msedge.exe', windowTitle: 'Integration by parts', isSelf: false };
 
@@ -164,95 +161,65 @@ describe('classifier with the screen model', () => {
       now: () => 0,
       config: { USE_MOCK_CLASSIFIER: false, CACHE_TTL_MS: 120_000, CAPTURE: { maxWidth: 1024, jpegQuality: 0.6 } },
       screenModel: step,
-      screenModelOnly: typeof opts.only === 'function' ? opts.only : () => opts.only === true,
+      screenModelOnly: typeof opts.only === 'function' ? opts.only : () => opts.only !== false,
     });
     return { c, capture, classify, step, ollama };
   }
 
   const embed = (confidence: number): ScreenVerdict => ({ studying: true, moduleId: 'lib_calculus', activity: '', confidence, source: 'embed' });
-
-  it('answers from the screen model when it is confident: no JPEG, no Ollama', async () => {
-    const { c, capture, classify } = setup({ verdict: embed(0.8) });
-    const r = await c.classifyCurrent(MODULES);
-    expect(r.verdict).toMatchObject({ moduleId: 'lib_calculus', source: 'embed' });
-    expect(r.tookScreenshot).toBe(true);
-    expect(capture).not.toHaveBeenCalled();
-    expect(classify).not.toHaveBeenCalled();
-  });
-
-  it('caches a confident answer like a VLM one', async () => {
-    const { c, step } = setup({ verdict: embed(0.8) });
-    await c.classifyCurrent(MODULES);
-    const again = await c.classifyCurrent(MODULES);
-    expect(again.verdict?.source).toBe('cache');
-    expect(step.classify).toHaveBeenCalledTimes(1);
-  });
-
-  it('asks Ollama when the screen model is unsure', async () => {
-    const { c, classify } = setup({ verdict: embed(MIN_CONFIDENCE - 0.05) });
-    const r = await c.classifyCurrent(MODULES);
-    expect(classify).toHaveBeenCalled();
-    expect(r.verdict).toMatchObject({ moduleId: 'lib_history', source: 'vlm' });
-  });
-
   const notStudy = (confidence: number): ScreenVerdict => ({ studying: false, moduleId: null, activity: '', confidence, source: 'embed' });
 
-  it('has Ollama check a "not study" call that is not clearly sure', async () => {
-    // 1 - P(study) is never below 0.5, so the study bar alone would let every distraction call through.
-    const { c, classify } = setup({ verdict: notStudy(MIN_NOT_STUDY_CONFIDENCE - 0.1) });
-    const r = await c.classifyCurrent(MODULES);
-    expect(classify).toHaveBeenCalled();
-    expect(r.verdict).toMatchObject({ studying: true, source: 'vlm' });
-  });
-
-  it('trusts a clear "not study" call without Ollama', async () => {
-    const { c, capture, classify } = setup({ verdict: notStudy(MIN_NOT_STUDY_CONFIDENCE + 0.05) });
-    const r = await c.classifyCurrent(MODULES);
-    expect(r.verdict).toMatchObject({ studying: false, source: 'embed' });
-    expect(capture).not.toHaveBeenCalled();
-    expect(classify).not.toHaveBeenCalled();
-  });
-
-  it('keeps an unsure verdict when Ollama cannot answer either', async () => {
-    const { c } = setup({ verdict: embed(FALLBACK_CONFIDENCE + 0.05) }, { vlm: null });
-    const r = await c.classifyCurrent(MODULES);
-    expect(r.verdict).toMatchObject({ moduleId: 'lib_calculus', source: 'embed' });
-    expect(r.error).toBeUndefined();
-  });
-
-  it('falls back to Ollama when the model is not installed or fails', async () => {
-    const notReady = setup({ verdict: embed(0.9) }, { ready: false });
-    expect((await notReady.c.classifyCurrent(MODULES)).verdict?.source).toBe('vlm');
-    expect(notReady.step.classify).not.toHaveBeenCalled();
-
-    const failing = setup(new Error('E_MODEL'));
-    expect((await failing.c.classifyCurrent(MODULES)).verdict?.source).toBe('vlm');
-  });
-
-  it('unloads both models at session end', async () => {
-    const { c, step } = setup({ verdict: embed(0.8) });
-    await c.unload();
-    expect(step.unload).toHaveBeenCalled();
-  });
-
-  describe("'embed' mode (screen model only)", () => {
-    it('uses an unsure study verdict as final: no JPEG, no Ollama', async () => {
-      const { c, capture, classify } = setup({ verdict: embed(MIN_CONFIDENCE - 0.15) }, { only: true });
+  describe("'vlm' mode (Ollama's vision LLM alone)", () => {
+    it('never runs the screen model, even when it is installed and sure', async () => {
+      const { c, capture, classify, step } = setup({ verdict: embed(0.9) }, { only: false });
       const r = await c.classifyCurrent(MODULES);
-      expect(r.verdict).toMatchObject({ studying: true, moduleId: 'lib_calculus', source: 'embed' });
+      expect(r.verdict).toMatchObject({ moduleId: 'lib_history', source: 'vlm' });
+      expect(capture).toHaveBeenCalled();
+      expect(classify).toHaveBeenCalled();
+      expect(step.ready).not.toHaveBeenCalled();
+      expect(step.classify).not.toHaveBeenCalled();
+    });
+
+    it('gives `unknown` when Ollama cannot answer: no on-device fallback', async () => {
+      const { c, step } = setup({ verdict: embed(0.9) }, { only: false, vlm: null });
+      const r = await c.classifyCurrent(MODULES);
+      expect(r).toMatchObject({ verdict: null, error: 'vlm' });
+      expect(step.classify).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("'classifier' mode (on-device screen model alone)", () => {
+    it('answers from the screen model: no JPEG, no Ollama', async () => {
+      const { c, capture, classify } = setup({ verdict: embed(0.8) });
+      const r = await c.classifyCurrent(MODULES);
+      expect(r.verdict).toMatchObject({ moduleId: 'lib_calculus', source: 'embed' });
+      expect(r.tookScreenshot).toBe(true);
       expect(capture).not.toHaveBeenCalled();
       expect(classify).not.toHaveBeenCalled();
     });
 
-    it(`trusts "not study" from ${EMBED_NOT_STUDY_CONFIDENCE}, below the hybrid bar`, async () => {
-      expect(EMBED_NOT_STUDY_CONFIDENCE).toBeLessThan(MIN_NOT_STUDY_CONFIDENCE);
-      const { c, classify } = setup({ verdict: notStudy(EMBED_NOT_STUDY_CONFIDENCE + 0.02) }, { only: true });
+    it('uses an unsure study verdict as final', async () => {
+      const { c, classify } = setup({ verdict: embed(0.05) });
+      expect((await c.classifyCurrent(MODULES)).verdict).toMatchObject({ studying: true, moduleId: 'lib_calculus', source: 'embed' });
+      expect(classify).not.toHaveBeenCalled();
+    });
+
+    it('caches an answer like a VLM one', async () => {
+      const { c, step } = setup({ verdict: embed(0.8) });
+      await c.classifyCurrent(MODULES);
+      const again = await c.classifyCurrent(MODULES);
+      expect(again.verdict?.source).toBe('cache');
+      expect(step.classify).toHaveBeenCalledTimes(1);
+    });
+
+    it(`trusts "not study" from ${EMBED_NOT_STUDY_CONFIDENCE}`, async () => {
+      const { c, classify } = setup({ verdict: notStudy(EMBED_NOT_STUDY_CONFIDENCE + 0.02) });
       expect((await c.classifyCurrent(MODULES)).verdict).toMatchObject({ studying: false, source: 'embed' });
       expect(classify).not.toHaveBeenCalled();
     });
 
     it('turns a borderline "not study" into unknown (no alert, not an error), still without Ollama', async () => {
-      const { c, capture, classify } = setup({ verdict: notStudy(EMBED_NOT_STUDY_CONFIDENCE - 0.05) }, { only: true });
+      const { c, capture, classify } = setup({ verdict: notStudy(EMBED_NOT_STUDY_CONFIDENCE - 0.05) });
       const r = await c.classifyCurrent(MODULES);
       expect(r.verdict).toBeNull();
       expect(r.error).toBeUndefined();
@@ -262,35 +229,36 @@ describe('classifier with the screen model', () => {
       expect(classify).not.toHaveBeenCalled();
     });
 
-    it('reads the mode on every call, so a settings change applies to the next check', async () => {
-      let only = true;
-      const { c, classify } = setup({ verdict: embed(MIN_CONFIDENCE - 0.1) }, { only: () => only });
-      expect((await c.classifyCurrent(MODULES)).verdict?.source).toBe('embed');
-      expect(classify).not.toHaveBeenCalled();
-      c.reset();
-      only = false;
-      expect((await c.classifyCurrent(MODULES)).verdict?.source).toBe('vlm');
-    });
-
     it('gives `unknown` instead of asking Ollama when the model is missing or fails', async () => {
-      const notReady = setup({ verdict: embed(0.9) }, { ready: false, only: true });
+      const notReady = setup({ verdict: embed(0.9) }, { ready: false });
       const r = await notReady.c.classifyCurrent(MODULES);
       expect(r).toMatchObject({ verdict: null, error: 'vlm', tookScreenshot: false });
       expect(notReady.capture).not.toHaveBeenCalled();
       expect(notReady.classify).not.toHaveBeenCalled();
 
-      const failing = setup(new Error('E_MODEL'), { only: true });
+      const failing = setup(new Error('E_MODEL'));
       expect((await failing.c.classifyCurrent(MODULES)).verdict).toBeNull();
       expect(failing.classify).not.toHaveBeenCalled();
     });
 
     it('never warms up Ollama, but still unloads both (the mode may have changed mid-session)', async () => {
-      const { c, ollama, step } = setup({ verdict: embed(0.8) }, { only: true });
+      const { c, ollama, step } = setup({ verdict: embed(0.8) });
       await c.warmUp(MODULES);
       await c.unload();
       expect(ollama.warmUp).not.toHaveBeenCalled();
       expect(ollama.unload).toHaveBeenCalled();
       expect(step.unload).toHaveBeenCalled();
     });
+  });
+
+  it('reads the mode on every call, so a settings change applies to the next check', async () => {
+    let only = true;
+    const { c, classify, step } = setup({ verdict: embed(0.1) }, { only: () => only });
+    expect((await c.classifyCurrent(MODULES)).verdict?.source).toBe('embed');
+    expect(classify).not.toHaveBeenCalled();
+    c.reset();
+    only = false;
+    expect((await c.classifyCurrent(MODULES)).verdict?.source).toBe('vlm');
+    expect(step.classify).toHaveBeenCalledTimes(1);
   });
 });

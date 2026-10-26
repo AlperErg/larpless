@@ -1,8 +1,8 @@
 /**
- * Screen classifier: PLAN.md §6 steps 2–5 (isSelf → rules → cache → single-flight VLM). On the screenshot
- * path the on-device screen model (core/screenModel.ts, Windows) answers first when it's confident; Ollama
- * takes the rest. In the 'embed' classifier mode (`screenModelOnly`) the screen model's verdict is final and
- * Ollama is never asked.
+ * Screen classifier: PLAN.md §6 steps 2–5 (isSelf → rules → cache → single-flight VLM). The screen is read by
+ * one of two models, picked by the classifier mode on every call: Ollama's vision LLM ('vlm'), or in the
+ * 'classifier' mode (`screenModelOnly`) the on-device screen model (core/screenModel.ts, Windows) alone, whose
+ * verdict is final; Ollama is then never asked.
  *
  * Single flight: one screenshot at a time. A call for the same window shares that result.
  * A call for another window waits, and when the running call finishes exactly one follow-up
@@ -18,7 +18,7 @@ import { BEHIND_WINDOWS } from './powerProfile';
 import type { PowerSpec } from './powerProfile';
 import { MAX_ACTIVITY_CHARS } from './prompt';
 import { matchDistraction, matchStudyTool } from './rules';
-import { FALLBACK_CONFIDENCE, isConfident, isFinalAlone } from './screenModel';
+import { isFinalAlone } from './screenModel';
 import type { ScreenModelStep } from './screenModel';
 import {
   isChatSite,
@@ -53,11 +53,12 @@ export interface ClassifierDeps {
   config: ClassifierConfig;
   /** Capture size, cache TTL, timeout and keep_alive. Falls back to `config` when omitted. */
   getPower?: () => PowerSpec;
-  /** On-device screen model (Windows), tried before the Ollama screenshot when it's installed. */
+  /** On-device screen model (Windows), used only in the 'classifier' mode. */
   screenModel?: ScreenModelStep;
   /**
-   * True for the 'embed' classifier mode: the screen model's verdict is final (study at any confidence, "not
-   * study" from EMBED_NOT_STUDY_CONFIDENCE) and Ollama is never called. Read on every call.
+   * True for the 'classifier' mode: the screen model reads the screen instead of Ollama and its verdict is final
+   * (study at any confidence, "not study" from EMBED_NOT_STUDY_CONFIDENCE). False: Ollama alone, the screen model
+   * is never run. Read on every call.
    */
   screenModelOnly?: () => boolean;
 }
@@ -260,77 +261,44 @@ export function createClassifier({ native, ollama, now, config, getPower, screen
   };
 
   /**
-   * The on-device screen model (FLScreenModel), first on the screenshot path. Returns a finished result when
-   * it's confident (`only`: when isFinalAlone); otherwise the low-confidence verdict to use if Ollama can't
-   * answer either (or null).
+   * The 'classifier' mode: the on-device screen model (FLScreenModel) reads the screen and its verdict is final
+   * (isFinalAlone). An unsure "not study" call, or none at all (not installed, error, timeout), is `unknown`;
+   * Ollama is never asked. Unsure isn't an error (nothing failed), and a frame that was read still counts as
+   * analysed (privacy.framesAnalysed).
    */
-  async function runScreenModel(
-    modules: StudyModule[],
-    appName: string | null,
-    started: number,
-    budget: number,
-    maxWidth: number,
-    only: boolean,
-  ): Promise<{ done: ClassifyResult } | { fallback: ScreenVerdict | null; captured: boolean }> {
-    if (!screenModel || !(await screenModel.ready())) return { fallback: null, captured: false };
+  async function runScreenModel(modules: StudyModule[], appName: string | null, key: string, maxWidth: number): Promise<ClassifyResult> {
+    const started = now();
+    const failed = (): ClassifyResult => ({ verdict: null, tookScreenshot: false, appName, key, tookMs: Math.max(0, now() - started), error: 'vlm' });
+    if (!screenModel || !(await screenModel.ready())) return failed();
     let timer: ReturnType<typeof setTimeout> | null = null;
     try {
       const deadline = new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new Error('screen model timeout')), Math.max(0, budget - (now() - started)));
+        timer = setTimeout(() => reject(new Error('screen model timeout')), Math.max(0, ceilingMs() - (now() - started)));
       });
       const r = await Promise.race([screenModel.classify(modules, { maxWidth }), deadline]);
       const snapApp = r.window.appName ?? appName;
       const snapKey = windowKey(snapApp, r.window.windowTitle);
-      if (r.verdict && (only ? isFinalAlone(r.verdict) : isConfident(r.verdict))) {
-        if (r.window.windowTitle !== null) {
-          cache = { appName: snapApp, windowTitle: r.window.windowTitle, verdict: r.verdict, at: now(), ttlMs: cacheTtl() };
-        }
-        return {
-          done: {
-            verdict: remember(r.verdict, snapApp, snapKey),
-            tookScreenshot: true,
-            appName: snapApp,
-            key: snapKey,
-            tookMs: Math.max(0, now() - started),
-          },
-        };
+      const verdict = r.verdict && isFinalAlone(r.verdict) ? r.verdict : null;
+      if (verdict && r.window.windowTitle !== null) {
+        cache = { appName: snapApp, windowTitle: r.window.windowTitle, verdict, at: now(), ttlMs: cacheTtl() };
       }
-      // The model captured and read the screen even when its answer isn't used.
-      return { fallback: r.verdict && r.verdict.confidence >= FALLBACK_CONFIDENCE ? r.verdict : null, captured: true };
+      return { verdict: remember(verdict, snapApp, snapKey), tookScreenshot: true, appName: snapApp, key: snapKey, tookMs: Math.max(0, now() - started) };
     } catch {
-      return { fallback: null, captured: false }; // not installed, model error or timeout: Ollama as before
+      return failed();
     } finally {
       if (timer !== null) clearTimeout(timer);
     }
   }
 
   async function runVlm(modules: StudyModule[], ctx: ClassifyContext, appName: string | null, key: string): Promise<ClassifyResult> {
+    const spec = power();
+    const capture = spec?.capture ?? config.CAPTURE;
+    if (!(ctx.mockClassifier ?? config.USE_MOCK_CLASSIFIER) && embedOnly()) {
+      return runScreenModel(modules, appName, key, capture.maxWidth);
+    }
     const started = now();
     const budget = ceilingMs();
     let snap: ScreenSnapshot | null = null;
-    const spec = power();
-    const capture = spec?.capture ?? config.CAPTURE;
-    let embedFallback: ScreenVerdict | null = null;
-    if (!(ctx.mockClassifier ?? config.USE_MOCK_CLASSIFIER)) {
-      const only = embedOnly();
-      const embedded = await runScreenModel(modules, appName, started, budget, capture.maxWidth, only);
-      if ('done' in embedded) return embedded.done;
-      // Screen model only: an unsure "not study" call, or none at all (not installed, error, timeout), is
-      // `unknown` rather than an Ollama question. Unsure isn't an error: nothing failed. A frame that was read
-      // still counts as analysed (privacy.framesAnalysed).
-      if (only) {
-        const failed = !embedded.captured;
-        return {
-          verdict: null,
-          tookScreenshot: embedded.captured,
-          appName,
-          key,
-          tookMs: Math.max(0, now() - started),
-          ...(failed ? { error: 'vlm' as const } : {}),
-        };
-      }
-      embedFallback = embedded.fallback;
-    }
     try {
       try {
         snap = await captureWithin(Math.max(1, budget - (now() - started)), capture);
@@ -364,9 +332,7 @@ export function createClassifier({ native, ollama, now, config, getPower, screen
         : spec
           ? await ollama.classify(snap, modules, { timeoutMs: left, keepAlive: spec.keepAlive })
           : await ollama.classify(snap, modules, { timeoutMs: left });
-      // Ollama couldn't answer (not installed, timeout): a moderately confident on-device verdict beats `unknown`.
-      // guessStudy is tuned to Ollama's confidence, so the on-device fallback is used as it is.
-      const verdict = (raw ? guessStudy(raw, modules, snapApp, snapTitle) : null) ?? embedFallback;
+      const verdict = raw ? guessStudy(raw, modules, snapApp, snapTitle) : raw;
       if (verdict && snapTitle !== null) {
         cache = { appName: snapApp, windowTitle: snapTitle, verdict, at: now(), ttlMs: cacheTtl() };
       }
@@ -503,7 +469,7 @@ export function createClassifier({ native, ollama, now, config, getPower, screen
 
     async unload() {
       if (config.USE_MOCK_CLASSIFIER) return;
-      // Ollama too in 'embed' mode: the mode may have changed since this session warmed it up.
+      // Both, whatever the mode: it may have changed since this session loaded one of them.
       await Promise.all([ollama.unload(), screenModel?.unload()]);
     },
 

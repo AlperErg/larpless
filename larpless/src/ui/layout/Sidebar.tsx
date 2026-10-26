@@ -9,7 +9,7 @@ import { useNavStore } from '../../store/navStore';
 import type { Route } from '../../store/navStore';
 import { useOllamaStore } from '../../store/ollamaStore';
 import { useScreenModelStore } from '../../store/screenModelStore';
-import { isEmbedOnly, useSessionStore } from '../../store/sessionStore';
+import { isClassifierMode, useSessionStore } from '../../store/sessionStore';
 import { Icon } from '../components/Icon';
 import type { IconName } from '../components/Icon';
 import { Segmented } from '../components/Segmented';
@@ -85,14 +85,14 @@ export function Sidebar() {
   const pull = useOllamaStore((s) => s.pull);
   const dot = sessionDot(status);
   const items = config.SHOW_DEV_TOOLS ? [...ITEMS, DEV_ITEM] : ITEMS;
-  const embedOnly = useAppStore((s) => isEmbedOnly(s.settings));
+  const classifierMode = useAppStore((s) => isClassifierMode(s.settings));
   const screenModel = useScreenModelStore((s) => s.status);
   const screenModelPulling = useScreenModelStore((s) => s.download.status === 'pulling');
   const refreshScreenModel = useScreenModelStore((s) => s.refresh);
   useEffect(() => {
-    if (embedOnly) refreshScreenModel().catch(() => {});
-  }, [embedOnly, refreshScreenModel]);
-  const ol = embedOnly ? screenModelLine(screenModel, screenModelPulling) : ollamaLine(ollama.status, ollama.model, pull);
+    if (classifierMode) refreshScreenModel().catch(() => {});
+  }, [classifierMode, refreshScreenModel]);
+  const ol = classifierMode ? screenModelLine(screenModel, screenModelPulling) : ollamaLine(ollama.status, ollama.model, pull);
   const appearance = useAppStore((s) => s.settings.appearance);
   const updateSettings = useAppStore((s) => s.updateSettings);
 
@@ -141,10 +141,10 @@ export function Sidebar() {
 
       <MacPressable
         testID="ollama-status"
-        tooltip={embedOnly ? 'Click to re-check the on-device classifier' : 'Click to re-check Ollama'}
+        tooltip={classifierMode ? 'Click to re-check the on-device classifier' : 'Click to re-check Ollama'}
         enableFocusRing={false}
         onPress={() => {
-          (embedOnly ? refreshScreenModel() : refreshOllama()).catch(() => {});
+          (classifierMode ? refreshScreenModel() : refreshOllama()).catch(() => {});
         }}
         style={styles.ollama}>
         <RNText style={styles.ollamaText} numberOfLines={1}>

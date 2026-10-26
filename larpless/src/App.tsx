@@ -14,7 +14,7 @@ import { useAppStore } from './store/appStore';
 import { useNavStore } from './store/navStore';
 import type { Route } from './store/navStore';
 import { useOllamaStore } from './store/ollamaStore';
-import { isEmbedOnly, useSessionStore } from './store/sessionStore';
+import { isClassifierMode, useSessionStore } from './store/sessionStore';
 import { useSocialStore } from './store/socialStore';
 import { BootScreen } from './ui/components/BootScreen';
 import { CommandPalette } from './ui/layout/CommandPalette';
@@ -78,7 +78,7 @@ function useBootRouting(): boolean {
           .refreshOllama()
           .catch((e: unknown) => console.warn('[ui] refreshOllama failed:', e instanceof Error ? e.message : String(e)));
         // Restart an idle Ollama without its 8 GB prompt cache now rather than at session start. Never opens it.
-        if (!isEmbedOnly()) {
+        if (!isClassifierMode()) {
           useOllamaStore
             .getState()
             .prepare({ launch: false })

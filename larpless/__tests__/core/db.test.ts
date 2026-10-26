@@ -120,10 +120,15 @@ describe('db', () => {
       await db.saveSettings({ ...DEFAULT_SETTINGS, powerProfile: junk } as unknown as typeof DEFAULT_SETTINGS);
       expect((await db.loadSettings()).powerProfile).toBe('medium');
     }
+    await kv.setItem(KEYS.settings, JSON.stringify({ classifierMode: 'classifier' }));
+    expect((await db.loadSettings()).classifierMode).toBe('classifier');
+    // Older saves: 'embed' (screen model alone) carries over; 'hybrid' is gone and falls back to the vision LLM.
     await kv.setItem(KEYS.settings, JSON.stringify({ classifierMode: 'embed' }));
-    expect((await db.loadSettings()).classifierMode).toBe('embed');
-    await kv.setItem(KEYS.settings, JSON.stringify({ classifierMode: 'vlm-only' }));
-    expect((await db.loadSettings()).classifierMode).toBe('hybrid');
+    expect((await db.loadSettings()).classifierMode).toBe('classifier');
+    for (const old of ['hybrid', 'vlm-only']) {
+      await kv.setItem(KEYS.settings, JSON.stringify({ classifierMode: old }));
+      expect((await db.loadSettings()).classifierMode).toBe('vlm');
+    }
     await kv.setItem(KEYS.settings, JSON.stringify({ appearance: 'neon', supabaseUrl: 12, supabaseAnonKey: { k: 1 } }));
     expect((await db.loadSettings()).appearance).toBe('system');
     expect((await db.loadSettings()).supabaseUrl).toBe('');

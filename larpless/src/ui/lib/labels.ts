@@ -44,8 +44,8 @@ export const POWER_OPTIONS: { value: PowerProfile; label: string }[] = [
 ];
 
 export const CLASSIFIER_OPTIONS: { value: ClassifierMode; label: string }[] = [
-  { value: 'hybrid', label: 'On-device + Ollama' },
-  { value: 'embed', label: 'On-device only' },
+  { value: 'vlm', label: 'Vision LLM (Ollama)' },
+  { value: 'classifier', label: 'On-device classifier' },
 ];
 
 export const STRICTNESS_OPTIONS: { value: Strictness; label: string }[] = [

@@ -148,18 +148,18 @@ export function SettingsPage() {
         <Row
           label="Screen check"
           hint={
-            s.classifierMode === 'embed'
-              ? 'Only the on-device classifier reads the screen. Ollama is never opened; unsure screens count as unknown.'
+            s.classifierMode === 'classifier'
+              ? 'A small on-device classifier reads the screen in under a second, on any PC. Ollama is never opened; unsure screens count as unknown.'
               : screenModelInstalled
-                ? 'The on-device classifier answers when it’s sure; Ollama checks the rest.'
-                : 'The on-device classifier answers when it’s sure; Ollama checks the rest. Download it below to use it alone.'
+                ? 'A vision language model in Ollama reads each screenshot. Best on powerful PCs with a GPU; on CPU alone a check can take 30 s.'
+                : 'A vision language model in Ollama reads each screenshot. Best on powerful PCs with a GPU. On a slower PC, download the on-device classifier below and use it instead.'
           }>
           <Segmented
             testID="settings-classifier"
-            // "On-device only" with no model would make every check unknown. Already chosen, it stays selectable
+            // The classifier with no model would make every check unknown. Already chosen, it stays selectable
             // so it can be switched back.
             options={CLASSIFIER_OPTIONS.map((o) =>
-              o.value === 'embed' && !screenModelInstalled && s.classifierMode !== 'embed' ? { ...o, disabled: true } : o,
+              o.value === 'classifier' && !screenModelInstalled && s.classifierMode !== 'classifier' ? { ...o, disabled: true } : o,
             )}
             value={s.classifierMode}
             onChange={(v) => update({ classifierMode: v })}

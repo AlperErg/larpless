@@ -26,7 +26,7 @@ Default installs embed `windows/LarpLess/Bundle/index.windows.bundle` (`EmbedJsB
 
 - Stop the running app before rebuilding. A first build takes several minutes; incremental ones about one.
 - **`run-windows.ps1` deletes the downloaded screen model.** It removes the installed package, and that deletes its `LocalState` (`%LOCALAPPDATA%\Packages\LarpLess_96wyba02c09cm\LocalState\Models`, ~460 MB). Use the rebuild-only command instead, which keeps the package: with `--msbuildprops EmbedJsBundle=true` after `scripts\bundle-windows.ps1` for an embedded install, without it for a Metro one. On a Metro install, JS-only changes need no rebuild: start Metro (`npx react-native start --port 8081`) and relaunch the installed build (command below). An embedded install ignores Metro, so it needs the bundle + rebuild.
-- **The installed build has to come from a branch with `FLScreenModel`** (`add-embeddings` and branches off it; `main` doesn't have it yet). A build from `main` has no `NativeModules.FLScreenModel`, so `native/index.ts` silently swaps in the mock, which always reports "not installed" even with the files in `LocalState\Models`: every check goes to Ollama, and `'embed'` mode turns every chunk into `unknown`. Check with `js-eval "__FL.NativeModules.FLScreenModel"` (null = wrong build) and rebuild after switching branches.
+- **The installed build has to come from a branch with `FLScreenModel`** (`add-embeddings` and branches off it; `main` doesn't have it yet). A build from `main` has no `NativeModules.FLScreenModel`, so `native/index.ts` silently swaps in the mock, which always reports "not installed" even with the files in `LocalState\Models`: the `'classifier'` mode turns every chunk into `unknown`. Check with `js-eval "__FL.NativeModules.FLScreenModel"` (null = wrong build) and rebuild after switching branches.
 - Debug builds set `UseDeveloperSupport(false)` so RNW does not paint its green Metro **Loading** bar (that is not `BootScreen`). Themed launch is `BootScreen.tsx` after JS loads. `LarpLess.cpp` also sets the Win32 window canvas to match `theme.ts` before React paints.
 - Compile errors: the newest `windows\msbuild_*.err`. The build log written with `*>` is UTF-16 — read it with `Get-Content`.
 - Relaunch the installed build without rebuilding: `Start-Process "shell:AppsFolder\$((Get-AppxPackage *LarpLess*).PackageFamilyName)!App"`.
@@ -122,27 +122,31 @@ An LLM council compared the current generative VLM with a small "decision" model
 - **laya-vision (thaitea/laya-vision) rejected.** Its weights are CC BY-NC-SA (not shippable in a distributed app), it runs only in PyTorch, and it was trained on game frames rather than screens. Copy the idea, not the artifact.
 - **Option 1, embeddings + OCR (built):** SigLIP 2 image embeddings answer "study or distraction" (zero-shot against text prompts), and Windows OCR + MiniLM text embeddings + keyword hits answer "which subject". No training needed, Apache-2.0 models. SigLIP was chosen over CLIP: its sigmoid gives each label an independent score (it can say "none of these"), it was more accurate on the bench, and SigLIP 2 is multilingual.
 - **Option 2, option scoring with a small VLM (benched, not adopted):** SmolVLM (Apache-2.0) used as a decision model: score each module name as an answer instead of generating. Meant as the backup if Option 1 isn't accurate enough; it lost clearly on the current set (see "Option 2 results").
-- Wherever the model is unsure, Ollama still answers, so nothing regresses (the default `'hybrid'` mode). The `'embed'` mode drops Ollama entirely (see "Classifier modes").
+- First shipped as a hybrid (the screen model answered when sure, Ollama the rest). Since 2026-10-26 the user picks one model per PC instead: Ollama's vision LLM for powerful PCs, or the on-device classifier alone (see "Classifier modes").
 
 ### What was built
 
 - `scripts/embed_bench/` (Python 3.12 venv; setup in `requirements.txt`): `bench.py` scores `larpless/bench/` screenshots with image / text / keyword / fused methods and reports accuracy, confidence curves and latency; `--courses` adds sidecar `"course"` names as custom courses; `--onnx` times the image tower in ONNX Runtime; `--dump-scores` + `parity.mjs` check that `src/core/screenModel.ts` gives identical answers to the bench. `export_prompts.py` builds `Assets/Models/FLScreenModelPrompts.json` (fixed SigLIP prompt embeddings) and checks the pinned ONNX files and the C++ resize against PyTorch.
 - `Native/FLScreenModel.h`: capture to BGRA (`FLScreenCapture::CaptureBgra`), `Windows.Media.Ocr`, SigLIP 2 vision tower (PIL-style tent resize to 224, cosine 0.9999 to the official processor) and all-MiniLM-L6-v2 (`FLWordPiece.h`, matches Hugging Face's tokenizer on the test cases in `wordpiece_cases.json`) through ONNX Runtime, plus whole-word keyword counts. Returns numbers only. Downloads the models (pinned HF commits, SHA-256 checked) into `LocalFolder\Models`.
-- JS: contract `ScreenModelApi` (`src/contracts/native.ts`), `src/core/screenModel.ts` (fusion, files, step), a step in `runVlm` in `src/core/classifier.ts` before the Ollama screenshot (source `'embed'`), `src/store/screenModelStore.ts`, `ScreenModelDownload` on onboarding's AI-model step and in Settings → Local AI (Windows only). macOS has a stub module reporting `supported: false`.
+- JS: contract `ScreenModelApi` (`src/contracts/native.ts`), `src/core/screenModel.ts` (fusion, files, step), `runScreenModel` in `src/core/classifier.ts`, which replaces the Ollama screenshot in the `'classifier'` mode (source `'embed'`), `src/store/screenModelStore.ts`, `ScreenModelDownload` on onboarding's AI-model step and in Settings → Local AI (Windows only). macOS has a stub module reporting `supported: false`.
 
 ### Classifier modes
 
-`Settings.classifierMode`, picked in Settings → Local AI → **Screen check** (Windows only; `isEmbedOnly()` in `sessionStore.ts` is false on other platforms whatever is saved). The classifier reads it through its `screenModelOnly()` dep on every check, so a change applies from the next check without a restart.
+`Settings.classifierMode`, picked in Settings → Local AI → **Screen check** (Windows only; `isClassifierMode()` in `sessionStore.ts` is false on other platforms whatever is saved). The classifier reads it through its `screenModelOnly()` dep on every check, so a change applies from the next check without a restart. Exactly one model reads the screen:
 
-| | `'hybrid'` (default, "On-device + Ollama") | `'embed'` ("On-device only") |
+| | `'vlm'` (default, "Vision LLM (Ollama)") | `'classifier'` ("On-device classifier") |
 | --- | --- | --- |
-| Study verdict | final at ≥ `MIN_CONFIDENCE` 0.2, else Ollama | always final (`isFinalAlone`) |
-| "Not study" verdict | final at ≥ `MIN_NOT_STUDY_CONFIDENCE` 0.7, else Ollama | final at ≥ `EMBED_NOT_STUDY_CONFIDENCE` 0.6, else `unknown` with no error |
-| No verdict (not installed, error, timeout) | Ollama; an unsure verdict ≥ `FALLBACK_CONFIDENCE` if Ollama can't answer | `unknown` (`error: 'vlm'`) |
+| For | powerful PCs (GPU or fast iGPU): ~3–7 s per check | any PC: ~0.3–0.6 s per check, ~1 GB RAM while loaded |
+| Reads the screen | Ollama's vision LLM on a JPEG, as on the Mac; the screen model is never run | the screen model alone (`runScreenModel`), no JPEG |
+| Study verdict | Ollama's answer (`guessStudy` turns an unsure "not study" into a subject) | always final (`isFinalAlone`) |
+| "Not study" verdict | Ollama's answer | final at ≥ `EMBED_NOT_STUDY_CONFIDENCE` 0.6, else `unknown` with no error |
+| No verdict (not installed, error, timeout) | `unknown` (`error: 'vlm'`) | `unknown` (`error: 'vlm'`) |
 | Ollama | opened at boot/session start (`prepare`), warmed up, asked | never opened, warmed up or asked; still unloaded at session end in case the mode changed mid-session |
-| Sidebar status | Ollama / qwen status | `screenModelLine()`: on-device classifier ready / not downloaded |
+| Sidebar status | Ollama / model status | `screenModelLine()`: on-device classifier ready / not downloaded |
 
-Why the two bars differ: in hybrid mode a threshold means "answer here or ask Ollama"; in embed mode there's no one to ask, so it means "worth an alert". Study calls have no bar because the subject guess is right 15/16 even when unsure. The 0.6 "not study" cutoff comes from P(study) on the 39-screenshot bench (2026-10-17, `bench.py --dump-scores` + a gate replay): distractions reach P(study) ≤ 0.317 (confidence ≥ 0.683), study screens ≥ 0.605, so 0.6 still flags 19/19 distractions and turns only P(study) 0.4–0.5 into `unknown`. Re-pick it with the other thresholds when the bench grows. The fusion weights (`FUSION`) are shared by both modes: they were already fitted for top-1 over every screen, which is what embed mode needs.
+Settings disables "On-device classifier" until the model is downloaded. Older saves migrate in `cleanSettings` (`core/db.ts`): `'embed'` → `'classifier'`, the removed `'hybrid'` → `'vlm'`.
+
+Study calls have no bar because the subject guess is mostly right even when unsure. The 0.6 "not study" cutoff comes from P(study) on the bench: on 54 screenshots every distraction reaches confidence ≥ 0.6 and no study screen is called a distraction, so 0.6 flags 24/24 and turns only P(study) 0.4–0.5 into `unknown`. Re-pick it when the bench grows. The fusion weights (`FUSION`) were fitted for top-1 over every screen, which is what this mode needs.
 - Privacy: frame, OCR text and embeddings stay in native memory; JS gets scores and the OCR character count; logs carry timings and labels. The bench writes no images or text and prints character counts only.
 
 ### How well it works
@@ -158,7 +162,7 @@ Re-run 2026-10-26 after main added **Computer Architecture** and **Information M
 | + its 8 keywords (`--course-keywords`) | 69% | 67% | 38% | **92%** (80–97); 95% with the shipped params |
 | study vs distraction | 39/39 | | | 39/39 |
 
-On the 44-subject library (2026-10-14) the same set gave 95% with library subjects and 85% with 3 custom courses. The one extra miss comes from the new subject: Information Management pulls in an Algorithms screen, and one Information Management screen goes to Sociology. All 3 library misses are unsure (confidence 0.05–0.15), so hybrid mode sends them to Ollama; `parity.mjs` 39/39 identical.
+On the 44-subject library (2026-10-14) the same set gave 95% with library subjects and 85% with 3 custom courses. The one extra miss comes from the new subject: Information Management pulls in an Algorithms screen, and one Information Management screen goes to Sociology. All 3 library misses are unsure (confidence 0.05–0.15); `parity.mjs` 39/39 identical.
 
 **54 after batch 2** (2026-10-26, 15 of the planned 20): 30 study / 24 not study. Added: Computer Architecture slides (Blackboard ALU) and Obsidian notes, Information Management UML in Google Docs and XML slides, Systems Programming C in VS Code and a Makefile lab page, ChatGPT on mitosis and on a student-managed fund (Finance), a YouTube physics lecture and a **full-screen** chemistry lecture; Instagram Reels, TikTok For You, a YouTube travel vlog, the Disney+ landing page (Spanish) and a WhatsApp self-chat. Titles come from `scripts/embed_bench/save-title.ps1` (full foreground title, no truncation).
 
@@ -170,13 +174,13 @@ On the 44-subject library (2026-10-14) the same set gave 95% with library subjec
 | study vs distraction | 54/54 | | | 54/54 | |
 
 - Every new hard case is right: the full-screen lecture, both AI chats, the travel vlog and the Spanish Disney+ page. `parity.mjs` 54/54. The remaining library misses are unsure (≤ 0.19): an Algorithms Blackboard page → Information Management, a batch-1 Information Management screen → Sociology, a Coding screen → Probability, a Systems Programming PDF → Computer Architecture.
-- Thresholds hold, unchanged: study at 0.2 answers 14 of 30, all right (the one wrong study answer above 0.15 sits at 0.19); "not study" at 0.7 answers 21 of 24, all right; embed mode's 0.6 flags all 24.
+- The classifier mode's "not study" bar (0.6) flags all 24 distractions. For the record, the removed hybrid bars also held: study at 0.2 answered 14 of 30, all right (a wrong one sat at 0.19), "not study" at 0.7 answered 21 of 24, all right.
 - **User keywords, measured:** the user's own Systems Programming list (`pointer, malloc, C, free(), Linux, Unix, Structure, shell, command`) scored the same top-1 (96% app) but `C` voted Systems Programming on 21 of the 49 other screens (drive letters, single-letter labels, Desmos, physics notes); `free()` never matches (code shows `free(s)`), and `Linux`/`Unix`/`shell` hit none of the user's screens. A list picked by counting each word's hits on the course's screens vs every other screen (`CSU22014, malloc, pointer, struct, Makefile, gcc, gdb, sizeof, segmentation fault`) keeps 96% and cuts wrong-course votes from 20 to 1 (the course name in an Obsidian sidebar). Top-1 hides keyword harm until a weak image flips an answer, so judge keywords by own vs other hits; this is what a course-keyword UI should warn about (single letters, punctuation, words never on screen).
 
 - Shipped parameters (`FUSION` in `screenModel.ts` = `APP_PARAMS` in `bench.py`): alpha 0.25, tImg 1, tTxt 0.05, gImg 0.5, gTxt 0, beta 0.5, tKw 0.5. On 46 subjects the all-image fit prefers beta 1 (as it already did with custom courses), within noise on 39 images, so unchanged.
 - The gate separates cleanly: study screens have P(study) ≥ 0.6 and distractions ≤ 0.32, so no study screen (not even the YouTube lecture) is called a distraction.
-- Confidence sits low because P(subject) is spread over 46+ subjects. `MIN_CONFIDENCE` 0.2 answers 9 of 20 study screens, all right (on 46 subjects nothing wrong reaches 0.15); the rest go to Ollama. `FALLBACK_CONFIDENCE` 0.05 is used when Ollama can't answer.
-- "Not study" has its own bar, `MIN_NOT_STUDY_CONFIDENCE` 0.7 (`isConfident` in `screenModel.ts`). Its confidence is 1 − P(study), which never drops below 0.5, so under the study bar every distraction call skipped Ollama, and a wrong "distracted" fires alerts. At 0.7 it answers 17 of 19 distractions, all right; the two YouTube Shorts (0.68 / 0.69) get an Ollama check.
+- Confidence sits low because P(subject) is spread over 46+ subjects, so study calls have no bar: in the classifier mode the top subject is used whatever its confidence (most wrong ones are below 0.2). Until 2026-10-26 the hybrid mode sent study calls below 0.2 (`MIN_CONFIDENCE`) and "not study" below 0.7 to Ollama; those bars are gone with it.
+- "Not study" confidence is 1 − P(study), which never drops below 0.5, and a wrong "distracted" fires alerts, so it has its own bar (`EMBED_NOT_STUDY_CONFIDENCE` 0.6, above).
 - Keyword hits are noisy on distractions (7 of them hit Statistics, 2 Political Science), most likely from the Chrome tab strip, which shows the same study tabs in every screenshot. That's real for this user, and keywords only weigh in the subject choice, not the gate.
 - Speed on the Ryzen 5 7545U: ~0.3–0.6 s per check once loaded (capture ~55 ms, OCR ~100 ms, image ~150 ms, text ~30 ms), ~1.5 s for the first check of a session (loading). About 1 GB RAM while loaded; unloaded at session end. Download ~460 MB.
 - Synthetic mock screens score 10/10; they're too clean to tune on.
@@ -198,7 +202,7 @@ On the 44-subject library (2026-10-14) the same set gave 95% with library subjec
 - Raw option scores have strong priors (Algorithms, Chemistry, Psychology, Business win regardless of the screen); calibration roughly doubles accuracy but not enough. More image tokens (tiles) made it slower without helping.
 - Re-run on the 39 images after batch 1 (2026-10-14), it does worse: 256M calibrated 9/39 (23%), 500M calibrated rerank 14/39 (36%). It can't tell distractions apart (0 right on shopping, social, games, news, music; it picks Business, Web Development or Digital Logic for them), while Option 1 gets all 19. On the 16 screens Option 1 is unsure of, Option 1's guess is right 15/16 and Option 2's 7/16.
 - **Verdict: not adopted.** It misses the bar on accuracy (needed ≥ Option 1 + 10 points) and on RAM (≤ ~600 MB extra). Revisit only with a stronger small VLM, or after the larger bench if Option 1 drops a lot on non-CS subjects.
-- Side finding: Option 1's low-confidence answers are mostly right (10/11 below 0.15 on 18 images; 9/11 below 0.2 on 39). Ollama only adds value there if it beats that, which is worth measuring in the app (`[embed]` vs `[ollama]` lines) before lowering `MIN_CONFIDENCE`.
+- Side finding: Option 1's low-confidence answers are mostly right (10/11 below 0.15 on 18 images; 9/11 below 0.2 on 39). That's part of why the classifier mode uses every study call as it is.
 
 ### To do (from the plan)
 
@@ -219,7 +223,7 @@ On the 44-subject library (2026-10-14) the same set gave 95% with library subjec
   - **A course code only with its number** (`CS2010`, not `CS`); the course name already counts, so don't repeat it.
   - Test per word: would it show up on another course's screen, or on Reddit/YouTube? Then drop it.
 - **Re-fit and re-check** after adding images: run `bench.py` (and `--courses`), update `APP_PARAMS` and `FUSION` together, then `--dump-scores` + `node scripts/embed_bench/parity.mjs <file>` must print `parity N/N identical`.
-- **Confidence**: the 0.2 / 0.7 thresholds are from 39 images (batch 1), re-checked on 54 (batch 2). With more data, pick each from the per-verdict curve, compare with the top-1 vs runner-up confidence, or fit a temperature on the fused score so the cut-off means a target accuracy.
+- **Confidence**: the 0.6 "not study" bar was picked on 39 images and re-checked on 54. With more data, pick it from the per-verdict curve (`bench.py` prints it), compare with the top-1 vs runner-up confidence, or fit a temperature on the fused score so the cut-off means a target accuracy.
 - **Prompts**: change templates or distraction prompts in `scripts/embed_bench/prompts.py`, then rerun `export_prompts.py` to rebuild `FLScreenModelPrompts.json` (and rebuild the app). **Also rerun it whenever `subjectLibrary.ts` changes** (a new subject, or new first three keywords, which go into the prompt text): a library subject missing from the file silently gets no image score, like a custom course, and no test catches it.
 - int8 quantisation of the vision tower cut its size 4× (94 MB) and halved latency but dropped image-only accuracy on the synthetic set (10/10 → 8/10); re-test on real screenshots before using it.
 

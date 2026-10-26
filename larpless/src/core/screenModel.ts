@@ -12,12 +12,13 @@
  *              (alpha, when OCR found text) and softmax(hits / tKw) (beta, when any keyword matched)
  *   confidence = P(study) * P(subject)   (or 1 - P(study) for "not study")
  *
- * v2 parameters come from 18 real screenshots and still win on 39 (20 study screens, 19 distractions of
- * 8 kinds): leave-one-out top-1 95% with library subjects, 85% with custom courses that have no keywords,
- * study vs distraction 39/39.
+ * v2 parameters come from 18 real screenshots and still win on 54 (30 study screens, 24 distractions):
+ * leave-one-out top-1 94% with library subjects, 87% with a custom course that has no keywords (94% with
+ * keywords), study vs distraction 54/54.
  *
- * Custom courses have no image prompt (the SigLIP text tower isn't shipped), so they're chosen from the
- * screen text only. Pure: no React Native, no stores.
+ * Used only in the 'classifier' mode (Settings → Local AI), where its verdict is final; in the 'vlm' mode
+ * Ollama reads the screen and this model is never run. Custom courses have no image prompt (the SigLIP text
+ * tower isn't shipped), so they're chosen from the screen text only. Pure: no React Native, no stores.
  */
 import type { ScreenVerdict, StudyModule } from '../contracts/domain';
 import type { ActiveWindow, ScreenModelApi, ScreenModelFile, ScreenModelInput, ScreenModelScores } from '../contracts/native';
@@ -51,20 +52,6 @@ export const SCREEN_MODEL_BYTES = SCREEN_MODEL_FILES.reduce((n, f) => n + f.size
 export const FUSION = { alpha: 0.25, tImg: 1.0, tTxt: 0.05, gImg: 0.5, gTxt: 0.0, bias: 0.0, beta: 0.5, tKw: 0.5, gKw: 0.0 };
 /** Below this many OCR characters the screen text is ignored (title-only text is too thin). */
 export const MIN_OCR_CHARS = 40;
-/**
- * Use a "study" verdict at or above this; below it, ask Ollama. P(subject) is spread over 44+ subjects, so
- * real answers sit low: on the 39-screenshot bench >= 0.2 answered 9 of 20 study screens, all right (a wrong
- * one sat at 0.16).
- */
-export const MIN_CONFIDENCE = 0.2;
-/**
- * "Not study" is held to a much higher bar: its confidence is 1 - P(study), which is never below 0.5, and a
- * wrong "distracted" fires alerts. Below this, Ollama checks it (the verdict stays the fallback). On the
- * bench, distractions reached P(study) <= 0.32 and study screens >= 0.6; 0.7 answered 17 of 19, all right.
- */
-export const MIN_NOT_STUDY_CONFIDENCE = 0.7;
-/** If Ollama can't answer either, still use a verdict at or above this rather than `unknown`. */
-export const FALLBACK_CONFIDENCE = 0.05;
 
 /** Text-side "not study" descriptions (same as bench.py TEXT_DISTRACTIONS). */
 export const TEXT_DISTRACTIONS = [
@@ -77,21 +64,16 @@ export const TEXT_DISTRACTIONS = [
 ];
 
 /**
- * 'embed' classifier mode (no Ollama): a "not study" call below this (P(study) between 0.4 and 0.5) is `unknown`
- * instead, so a borderline screen doesn't fire distraction alerts. On the 39-screenshot bench distractions reach
- * P(study) <= 0.317 (confidence >= 0.68) and study screens >= 0.605, so 0.6 still flags all 19 distractions and
- * leaves a margin on both sides. Study calls have no bar in this mode.
+ * A "not study" call below this (P(study) between 0.4 and 0.5) is `unknown` instead, so a borderline screen
+ * doesn't fire distraction alerts. Its confidence is 1 - P(study), which is never below 0.5. On the
+ * 54-screenshot bench every distraction reaches confidence >= 0.6 (P(study) <= 0.4) and no study screen is
+ * called a distraction, so 0.6 flags all 24 with a margin on both sides. Study calls have no bar.
  */
 export const EMBED_NOT_STUDY_CONFIDENCE = 0.6;
 
-/** Sure enough to skip Ollama (separate bars for "study" and "not study"). */
-export function isConfident(v: ScreenVerdict): boolean {
-  return v.confidence >= (v.studying ? MIN_CONFIDENCE : MIN_NOT_STUDY_CONFIDENCE);
-}
-
 /**
- * Good enough to use with no Ollama behind it ('embed' mode). Every study call counts, whatever its confidence:
- * the subject guess is mostly right even when unsure. "Not study" needs EMBED_NOT_STUDY_CONFIDENCE.
+ * Good enough to use ('classifier' mode has no Ollama behind it). Every study call counts, whatever its
+ * confidence: the subject guess is mostly right even when unsure. "Not study" needs EMBED_NOT_STUDY_CONFIDENCE.
  */
 export function isFinalAlone(v: ScreenVerdict): boolean {
   return v.studying || v.confidence >= EMBED_NOT_STUDY_CONFIDENCE;
