@@ -27,7 +27,7 @@ export function ScreenModelDownload({ testID = 'screen-model-download' }: { test
   if (status.installed && download.status !== 'pulling') {
     return (
       <Callout testID={`${testID}-ready`} icon="check" tone="green">
-        <Text>The on-device classifier is ready. Choose it in Settings → Local AI → Screen check to read your screen in under a second without Ollama.</Text>
+        <Text>The on-device classifier is ready. It reads your screen in under a second, without Ollama.</Text>
       </Callout>
     );
   }

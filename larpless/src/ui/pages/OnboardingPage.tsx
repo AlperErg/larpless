@@ -1,32 +1,59 @@
 /**
  * Onboarding (D5): 1. Your modules → 2. Permissions → 3. Ollama → 4. AI model → Home.
  * Full-window (no sidebar). Steps 3 and 4 install, open and fill Ollama without the terminal.
+ *
+ * Windows starts with "Your PC", which picks the screen reader (`classifierMode`): the vision LLM keeps the
+ * Ollama steps; the on-device classifier replaces them with its own download. The Mac flow is unchanged.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Animated, Easing, Linking, ScrollView, StyleSheet, View } from 'react-native';
 import { config } from '../../config';
-import type { TagColor } from '../../contracts/domain';
+import type { ClassifierMode, TagColor } from '../../contracts/domain';
 import type { PermissionKind, PermissionStatus } from '../../contracts/native';
 import { isLocalUrl } from '../../core/ollamaHost';
+import { SCREEN_MODEL_BYTES } from '../../core/screenModel';
 import { native } from '../../native';
 import { useAppStore } from '../../store/appStore';
 import { useNavStore } from '../../store/navStore';
 import { useOllamaStore } from '../../store/ollamaStore';
+import { useScreenModelStore } from '../../store/screenModelStore';
 import { useSessionStore } from '../../store/sessionStore';
-import { Button, Callout, CodeBlock, EditableTable, Icon, ModelDownload, Muted, ScreenModelDownload, SubjectLibrary, PageHeader, Strong, Tag, Text } from '../components';
+import { Button, Callout, CodeBlock, EditableTable, Icon, MacPressable, ModelDownload, Muted, ScreenModelDownload, SubjectLibrary, PageHeader, Strong, Tag, Text } from '../components';
 import type { IconName } from '../components';
 import { PageBody } from '../layout/Page';
+import { formatBytes } from '../lib/format';
+import { CLASSIFIER_OPTIONS } from '../lib/labels';
 import { courseNameProblem, draftsFromModules, modulesFromDrafts } from '../lib/modules';
 import type { ModuleDraft } from '../lib/modules';
 import { colors, motion, radius, space, tag, themed } from '../theme';
 import { ANIMATE, DEVICE, IS_WINDOWS, MotionView } from '../platform';
 import { LIBRARY_MODULES } from '../../core/subjectLibrary';
 
-const STEPS = ['Your modules', 'Permissions', 'Ollama', 'AI model'] as const;
+export type OnboardingStep = 'pc' | 'modules' | 'permissions' | 'ollama' | 'model' | 'classifier';
+
+const STEP_LABEL: Record<OnboardingStep, string> = {
+  pc: 'Your PC',
+  modules: 'Your modules',
+  permissions: 'Permissions',
+  ollama: 'Ollama',
+  model: 'AI model',
+  classifier: 'Classifier',
+};
+
+/** The steps for this platform and screen reader. Only Windows asks about the PC (the Mac has the vision LLM only). */
+export function onboardingSteps(windows: boolean, mode: ClassifierMode): OnboardingStep[] {
+  if (!windows) return ['modules', 'permissions', 'ollama', 'model'];
+  return ['pc', 'modules', 'permissions', ...(mode === 'classifier' ? (['classifier'] as const) : (['ollama', 'model'] as const))];
+}
 
 export function OnboardingPage() {
   const [step, setStep] = useState(0);
+  const mode = useAppStore((s) => s.settings.classifierMode);
+  const steps = onboardingSteps(IS_WINDOWS, mode);
+  const current = steps[Math.min(step, steps.length - 1)];
+  const next = () => setStep((i) => i + 1);
+  const back = () => setStep((i) => Math.max(0, i - 1));
   const fade = useRef(new Animated.Value(1)).current;
   useEffect(() => {
     if (!ANIMATE) return undefined;
@@ -48,12 +75,14 @@ export function OnboardingPage() {
     <ScrollView testID="page-onboarding" style={styles.scroll} contentContainerStyle={styles.scrollContent}>
       <PageHeader icon="hand" title="Welcome to LarpLess" subtitle={<Text muted>{`Strava for studying. Everything is analysed on this ${DEVICE}.`}</Text>} />
       <PageBody>
-        <Progress step={step} />
+        <Progress steps={steps} current={current} />
         <MotionView style={ANIMATE ? { opacity: fade, transform: [{ translateY }] } : undefined}>
-          {step === 0 ? <ModulesStep onNext={() => setStep(1)} /> : null}
-          {step === 1 ? <PermissionsStep onBack={() => setStep(0)} onNext={() => setStep(2)} /> : null}
-          {step === 2 ? <OllamaStep onBack={() => setStep(1)} onNext={() => setStep(3)} /> : null}
-          {step === 3 ? <ModelStep onBack={() => setStep(2)} onFinish={finish} /> : null}
+          {current === 'pc' ? <PcStep onNext={next} /> : null}
+          {current === 'modules' ? <ModulesStep onBack={IS_WINDOWS ? back : undefined} onNext={next} /> : null}
+          {current === 'permissions' ? <PermissionsStep onBack={back} onNext={next} /> : null}
+          {current === 'ollama' ? <OllamaStep onBack={back} onNext={next} /> : null}
+          {current === 'model' ? <ModelStep onBack={back} onFinish={finish} /> : null}
+          {current === 'classifier' ? <ClassifierStep onBack={back} onFinish={finish} /> : null}
         </MotionView>
         {config.SHOW_DEV_TOOLS ? (
           <View style={styles.devRow}>
@@ -66,14 +95,15 @@ export function OnboardingPage() {
   );
 }
 
-function Progress({ step }: { step: number }) {
+function Progress({ steps, current }: { steps: OnboardingStep[]; current: OnboardingStep }) {
+  const at = steps.indexOf(current);
   return (
     <View testID="onboarding-progress" style={styles.progress}>
-      {STEPS.map((label, i) => (
-        <View key={label} style={styles.progressItem}>
-          <View style={[styles.progressBar, { backgroundColor: i <= step ? colors.accent : colors.border }]} />
-          <Text variant="small" weight={i === step ? 'semibold' : 'regular'} color={i === step ? colors.text : colors.muted}>
-            {`${i + 1}. ${label}`}
+      {steps.map((id, i) => (
+        <View key={id} style={styles.progressItem}>
+          <View style={[styles.progressBar, { backgroundColor: i <= at ? colors.accent : colors.border }]} />
+          <Text variant="small" weight={i === at ? 'semibold' : 'regular'} color={i === at ? colors.text : colors.muted}>
+            {`${i + 1}. ${STEP_LABEL[id]}`}
           </Text>
         </View>
       ))}
@@ -82,10 +112,128 @@ function Progress({ step }: { step: number }) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Windows: Your PC (which model reads the screen)                     */
+/* ------------------------------------------------------------------ */
+
+const MODE_LABEL = Object.fromEntries(CLASSIFIER_OPTIONS.map((o) => [o.value, o.label])) as Record<ClassifierMode, string>;
+
+function PcStep({ onNext }: { onNext: () => void }) {
+  const saved = useAppStore((s) => s.settings.classifierMode);
+  const model = useAppStore((s) => s.settings.model);
+  const updateSettings = useAppStore((s) => s.updateSettings);
+  const refresh = useScreenModelStore((s) => s.refresh);
+  // A Windows build without FLScreenModel reports unsupported: only the vision LLM can work there.
+  const unsupported = useScreenModelStore((s) => s.status?.supported === false);
+  const [picked, setPicked] = useState<ClassifierMode | null>(null);
+  useEffect(() => {
+    refresh().catch(() => {});
+  }, [refresh]);
+  const size = config.MODEL_SIZES[model];
+
+  return (
+    <View testID="onboarding-pc">
+      <Text variant="h2" style={styles.h}>
+        How powerful is this PC?
+      </Text>
+      <Text muted style={styles.lead}>
+        LarpLess reads your screen with one of two AI models. Both run entirely on this PC, and nothing is sent
+        anywhere. Pick the one that fits your hardware; you can switch any time in Settings → Local AI.
+      </Text>
+      <ChoiceCard
+        testID="onboarding-pc-classifier"
+        icon="zap"
+        title="An everyday laptop or PC"
+        model={MODE_LABEL.classifier}
+        badge="Recommended if you’re not sure"
+        selected={picked === 'classifier'}
+        disabled={unsupported}
+        onPress={() => setPicked('classifier')}>
+        {unsupported
+          ? 'Not available in this build of LarpLess.'
+          : `A small classifier built into LarpLess. It recognises the subject from what’s on screen in under a second, on any PC, with no other app to install. One download of about ${formatBytes(SCREEN_MODEL_BYTES)}. Screens it isn’t sure about count as unknown.`}
+      </ChoiceCard>
+      <ChoiceCard
+        testID="onboarding-pc-vlm"
+        icon="bot"
+        title="A powerful PC with a graphics card"
+        model={MODE_LABEL.vlm}
+        selected={picked === 'vlm'}
+        onPress={() => setPicked('vlm')}>
+        {`A vision language model looks at each screenshot and understands it the way a person would, so it copes best with unusual screens. It runs in Ollama, a free app, and the model is ${
+          size ? `a ${size} download` : 'a one-time download'
+        }. A check takes a few seconds with a dedicated GPU or a recent fast integrated one; without one it can take 30 s or more and use several GB of memory.`}
+      </ChoiceCard>
+      <View style={styles.actions}>
+        <Button
+          testID="onboarding-next"
+          title="Continue"
+          variant="primary"
+          disabled={!picked}
+          onPress={() => {
+            if (!picked) return;
+            if (picked !== saved) updateSettings({ classifierMode: picked }).catch(() => {});
+            onNext();
+          }}
+        />
+      </View>
+    </View>
+  );
+}
+
+function ChoiceCard({
+  testID,
+  icon,
+  title,
+  model,
+  badge,
+  selected,
+  disabled,
+  onPress,
+  children,
+}: {
+  testID: string;
+  icon: IconName;
+  title: string;
+  model: string;
+  badge?: string;
+  selected: boolean;
+  disabled?: boolean;
+  onPress: () => void;
+  children: string;
+}) {
+  return (
+    <MacPressable
+      testID={testID}
+      accessibilityRole="radio"
+      accessibilityState={{ selected, disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      style={[styles.permRow, styles.choice, selected && styles.choiceSelected, disabled && styles.choiceDisabled]}>
+      <View style={styles.permMain}>
+        <View style={styles.permIcon}>
+          <Icon name={icon} size={18} color={selected ? colors.accent : colors.text} />
+        </View>
+        <View style={styles.flex}>
+          <View style={styles.permTitleRow}>
+            <Text weight="semibold">{title}</Text>
+            {badge && !disabled ? <Tag label={badge} color="green" style={styles.gapLeftSm} /> : null}
+          </View>
+          <Text variant="small" weight="medium" style={styles.choiceModel}>
+            {`Uses: ${model}`}
+          </Text>
+          <Text variant="small">{children}</Text>
+        </View>
+        <Icon name={selected ? 'check' : 'circle'} size={16} color={selected ? colors.accent : colors.faint} />
+      </View>
+    </MacPressable>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* 1. Modules                                                          */
 /* ------------------------------------------------------------------ */
 
-function ModulesStep({ onNext }: { onNext: () => void }) {
+function ModulesStep({ onBack, onNext }: { onBack?: () => void; onNext: () => void }) {
   const stored = useAppStore((s) => s.modules);
   const saveModules = useAppStore((s) => s.saveModules);
   const [drafts, setDrafts] = useState<ModuleDraft[]>(() => draftsFromModules(stored));
@@ -108,6 +256,7 @@ function ModulesStep({ onNext }: { onNext: () => void }) {
         </Text>
       ) : null}
       <View style={styles.actions}>
+        {onBack ? <Button title="Back" variant="ghost" onPress={onBack} /> : null}
         <Button
           testID="onboarding-next"
           title={mods.length ? 'Continue' : 'Skip for now'}
@@ -116,6 +265,7 @@ function ModulesStep({ onNext }: { onNext: () => void }) {
             if (mods.length || stored.length) saveModules(mods).catch(() => {});
             onNext();
           }}
+          style={onBack ? styles.gapLeft : undefined}
         />
       </View>
       <Text variant="small" weight="medium" style={styles.presets}>
@@ -476,11 +626,6 @@ function ModelStep({ onBack, onFinish }: { onBack: () => void; onFinish: () => v
           <Muted>You can finish now and download it later from Settings; demo mode works offline.</Muted>
         </Text>
       ) : null}
-      {IS_WINDOWS ? (
-        <View style={styles.screenModel}>
-          <ScreenModelDownload />
-        </View>
-      ) : null}
       <View style={styles.actions}>
         <Button title="Back" variant="ghost" onPress={onBack} />
         <Button testID="onboarding-finish" title={ok ? 'Finish' : 'Finish anyway'} variant="primary" onPress={onFinish} style={styles.gapLeft} />
@@ -489,9 +634,51 @@ function ModelStep({ onBack, onFinish }: { onBack: () => void; onFinish: () => v
   );
 }
 
+/* ------------------------------------------------------------------ */
+/* Windows: the on-device classifier (instead of Ollama + AI model)    */
+/* ------------------------------------------------------------------ */
+
+function ClassifierStep({ onBack, onFinish }: { onBack: () => void; onFinish: () => void }) {
+  const installed = useScreenModelStore((s) => s.status?.installed === true);
+  return (
+    <View testID="onboarding-classifier">
+      <Text variant="h2" style={styles.h}>
+        Download the on-device classifier
+      </Text>
+      <Text muted style={styles.lead}>
+        {`It looks at your screen to tell study from distraction and which subject it is. It’s a one-time download of about ${formatBytes(
+          SCREEN_MODEL_BYTES,
+        )}, and it runs entirely on this ${DEVICE}.`}
+      </Text>
+      <ScreenModelDownload testID="onboarding-screen-model" />
+      {!installed ? (
+        <Text variant="small" style={styles.later}>
+          <Muted>
+            You can finish now and download it later from Settings → Local AI; until then screen checks count as unknown.
+            Demo mode works without it.
+          </Muted>
+        </Text>
+      ) : null}
+      <View style={styles.actions}>
+        <Button title="Back" variant="ghost" onPress={onBack} />
+        <Button
+          testID="onboarding-finish"
+          title={installed ? 'Finish' : 'Finish anyway'}
+          variant="primary"
+          onPress={onFinish}
+          style={styles.gapLeft}
+        />
+      </View>
+    </View>
+  );
+}
+
 const styles = themed(() => StyleSheet.create({
   presets: { marginTop: space.lg },
-  screenModel: { marginTop: space.lg },
+  choice: { borderWidth: 1 },
+  choiceSelected: { borderColor: colors.accent, backgroundColor: colors.accentSoft },
+  choiceDisabled: { opacity: 0.5 },
+  choiceModel: { color: colors.muted, marginBottom: 2 },
   scroll: { flex: 1, backgroundColor: colors.bg },
   scrollContent: { paddingBottom: 96 },
   progress: { flexDirection: 'row', marginBottom: space.xl },
