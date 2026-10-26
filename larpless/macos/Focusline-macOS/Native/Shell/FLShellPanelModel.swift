@@ -6,7 +6,7 @@ import SwiftUI
 final class FLShellPanelModel: ObservableObject {
   @Published private(set) var state = FLShellPanelState()
   @Published private(set) var hubVisible = false {
-    didSet { if hubVisible != oldValue { onCardHeightChange?() } }
+    didSet { if hubVisible != oldValue { onCardSizeChange?() } }
   }
   @Published private(set) var flashVisible = false
   /// "light" or "dark". The view's identity follows this so the panel repaints.
@@ -23,8 +23,8 @@ final class FLShellPanelModel: ObservableObject {
   var buttonFrames: [String: CGRect] = [:]
   /// Set by the controller: screen-space drag point, or nil when the drag ends.
   var dragHandler: ((NSPoint?) -> Void)?
-  /// Set by the controller: the study card's height changed, so the window must follow.
-  var onCardHeightChange: (() -> Void)?
+  /// Set by the controller: the study card's size changed, so the window must follow.
+  var onCardSizeChange: (() -> Void)?
 
   /// Natural heights of the compact view and the hover hub, measured by the view. The card fits the compact
   /// view and grows while the hub is open. The hub's value is a guess until it has been shown once.
@@ -36,7 +36,18 @@ final class FLShellPanelModel: ObservableObject {
     let before = cardHeight
     if let compact, compact > 0 { compactHeight = compact.rounded(.up) }
     if let hub, hub > 0 { hubHeight = hub.rounded(.up) }
-    if abs(cardHeight - before) >= 0.5 { onCardHeightChange?() }
+    if abs(cardHeight - before) >= 0.5 { onCardSizeChange?() }
+  }
+
+  /// Width the compact view needs to show the pill untruncated, measured by the view. The controller clamps it
+  /// between the panel's minimum and maximum width; past the maximum the pill truncates.
+  private(set) var compactWidth: CGFloat = 0
+
+  func setMeasuredWidth(compact: CGFloat) {
+    let next = compact.rounded(.up)
+    guard next > 0, abs(next - compactWidth) >= 0.5 else { return }
+    compactWidth = next
+    onCardSizeChange?()
   }
 
   // Debug bookkeeping (not published, never drives rendering).

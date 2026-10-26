@@ -1,8 +1,9 @@
 import AppKit
 import SwiftUI
 
-// Floating timer UI (WS-B brief: "Look of the panel"). 300 pt wide compact view + hover hub. The card's height
-// fits the compact view and grows while the hub is open (the controller resizes the window to match).
+// Floating timer UI: Compact view + hover hub. The card's height fits the compact
+// view and grows while the hub is open; its width (300 pt minimum) grows so the pill's text fits. The controller
+// resizes the window to match and the views fill it.
 
 private enum FLShellFont {
   static func serif(_ size: CGFloat) -> Font { .custom(FLNotionFonts.serifRegular, fixedSize: size) }
@@ -35,6 +36,20 @@ private extension View {
           .onChange(of: g.size.height) { _, h in report(h) }
       })
   }
+
+  /// Reports the width this view would take with nothing truncated, whatever width it is offered. The measuring
+  /// copy is hidden and never affects layout.
+  func flMeasureIdealWidth(_ report: @escaping (CGFloat) -> Void) -> some View {
+    background(alignment: .topLeading) {
+      fixedSize()
+        .background(GeometryReader { g in
+          Color.clear
+            .onAppear { report(g.size.width) }
+            .onChange(of: g.size.width) { _, w in report(w) }
+        })
+        .hidden()
+    }
+  }
 }
 
 struct FLShellPanelView: View {
@@ -64,8 +79,7 @@ struct FLShellPanelView: View {
             .transition(.opacity)
         }
       }
-      .frame(width: FLShellPanelController.width)
-      .frame(maxHeight: .infinity)
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
       .clipped()
       .contentShape(Rectangle())
       // Drag the study card only. The strip's buttons sit outside this gesture.
@@ -79,8 +93,7 @@ struct FLShellPanelView: View {
         FLShellNowPlayingStrip(track: media)
       }
     }
-    .frame(width: FLShellPanelController.width)
-    .frame(maxHeight: .infinity, alignment: .top)
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     .overlay(
       RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -132,7 +145,8 @@ private struct FLShellNowPlayingStrip: View {
       }
       .padding(.horizontal, 8)
       .padding(.bottom, 6)
-      .frame(width: FLShellPanelController.width, height: FLShellPanelController.mediaStripHeight)
+      .frame(maxWidth: .infinity)
+      .frame(height: FLShellPanelController.mediaStripHeight)
       .background(tintWash)
       .background(FLNotionColors.bg)
       .overlay(alignment: .top) {
@@ -210,13 +224,16 @@ private struct FLShellCompactView: View {
   let state: FLShellPanelState
   let tag: FLNotionTag
 
+  private static let insets = EdgeInsets(top: 17, leading: 16, bottom: 15, trailing: 16)
+
   var body: some View {
     TimelineView(.periodic(from: state.tickAnchor(now: Date()), by: 1)) { ctx in
       let timer = state.timerText(at: ctx.date)
       let pill = state.pillText(at: ctx.date)
       let _ = model.noteRender(timer: timer, pill: pill)
       VStack(alignment: .leading, spacing: 0) {
-        // The timer never shrinks (it widens past an hour); the pill takes what is left and truncates.
+        // The timer never shrinks (it widens past an hour). The panel widens to fit the whole pill, up to its
+        // maximum width; past that the pill takes what is left and truncates.
         HStack(alignment: .center, spacing: 10) {
           FLShellClockText(text: timer, size: 44)
             .foregroundColor(FLNotionColors.text)
@@ -232,6 +249,9 @@ private struct FLShellCompactView: View {
               .foregroundColor(tag.text.opacity(0.7))
               .fixedSize()
           }
+        }
+        .flMeasureIdealWidth { w in
+          model.setMeasuredWidth(compact: w + Self.insets.leading + Self.insets.trailing)
         }
         if let secondary = state.secondaryText {
           Text(secondary)
@@ -259,7 +279,7 @@ private struct FLShellCompactView: View {
           .padding(.top, 8)
         }
       }
-      .padding(EdgeInsets(top: 17, leading: 16, bottom: 15, trailing: 16))
+      .padding(Self.insets)
       .flMeasureHeight { h in model.setMeasuredHeight(compact: h) }
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
