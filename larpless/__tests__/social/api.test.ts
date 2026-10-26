@@ -90,6 +90,25 @@ describe('accounts', () => {
     ]);
   });
 
+  it('deleteAccount calls delete_account, then forgets the dead session on this device only', async () => {
+    const f = fakeSupabase();
+    await api.deleteAccount(f.client);
+    expect(f.rpc).toHaveBeenCalledWith('delete_account');
+    expect(f.auth.signOut).toHaveBeenCalledWith({ scope: 'local' });
+  });
+
+  it('deleteAccount keeps the session when the server refuses, and explains an outdated schema', async () => {
+    const f = fakeSupabase({
+      'rpc:delete_account': [
+        { error: { message: 'Could not find the function public.delete_account without parameters in the schema cache', code: 'PGRST202' } },
+        { error: { message: 'JWT expired' } },
+      ],
+    });
+    await expect(api.deleteAccount(f.client)).rejects.toThrow(/Run the latest supabase\/schema\.sql/);
+    await expect(api.deleteAccount(f.client)).rejects.toThrow('JWT expired');
+    expect(f.auth.signOut).not.toHaveBeenCalled();
+  });
+
   it('getProfile errors clearly when the schema trigger never ran', async () => {
     const f = fakeSupabase({ profiles: [{ data: null }] });
     await expect(api.getProfile(f.client, ME)).rejects.toThrow(/schema.sql/);

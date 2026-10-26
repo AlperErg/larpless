@@ -117,6 +117,7 @@ export function Sidebar() {
           active={
             route === it.route ||
             (it.route === 'session' && route === 'summary') ||
+            (it.route === 'settings' && route === 'acknowledgements') ||
             (it.route === 'feed' && (route === 'profile' || route === 'login'))
           }
           onPress={() => go(it.route)}

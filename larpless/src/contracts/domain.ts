@@ -14,6 +14,20 @@ export interface StudyModule {
   keywords: string[];  // prompt hints, e.g. ["mitosis", "cell", "BIO101"]
 }
 
+/** Fixed distraction categories for the VLM and rule fast path. Never free text. */
+export const ACTIVITY_CATEGORIES = [
+  'Social media',
+  'Video',
+  'Gaming',
+  'Shopping',
+  'News',
+  'Chatting',
+  'Browsing',
+  'Other',
+] as const;
+
+export type ActivityCategory = (typeof ACTIVITY_CATEGORIES)[number];
+
 export type ChunkKind = 'subject' | 'distracted' | 'away' | 'unknown';
 export type DistractionReason = 'phone' | 'screen' | 'rule';
 /** 'embed': the on-device screen model (FLScreenModel, Windows), before Ollama. */

@@ -1,6 +1,6 @@
 import type { ScreenVerdict } from '../../src/contracts/domain';
 import type { ActiveWindow, ScreenSnapshot } from '../../src/contracts/native';
-import { createClassifier, mockVerdictFromTitle, TITLE_CHECK_MIN_CONFIDENCE, windowKey } from '../../src/core/classifier';
+import { createClassifier, guessStudy, mockVerdictFromTitle, TITLE_CHECK_MIN_CONFIDENCE, windowKey } from '../../src/core/classifier';
 import { config } from '../../src/config';
 import type { ClassifierConfig } from '../../src/core/classifier';
 import { fixtureModules } from '../../src/fixtures/data';
@@ -163,9 +163,219 @@ describe('classifier', () => {
     s.setWin({ appName: 'Safari', windowTitle: 'Instagram' });
     const r = await s.c.classifyCurrent(fixtureModules);
     expect(r.tookScreenshot).toBe(false);
-    expect(r.verdict).toEqual({ studying: false, moduleId: null, activity: 'Instagram', confidence: 1, source: 'rule' });
+    expect(r.verdict).toEqual({ studying: false, moduleId: null, activity: 'Social media', confidence: 1, source: 'rule' });
     expect(s.capture).not.toHaveBeenCalled();
     expect(s.classify).not.toHaveBeenCalled();
+  });
+
+  it('an unsure or simulation verdict is a subject guess, not distracted', async () => {
+    const s = setup({
+      verdict: { studying: false, moduleId: null, activity: 'simulation', confidence: 0.9, source: 'vlm' },
+    });
+    const arch = { id: 'lib_computer_architecture', name: 'Computer Architecture', color: 'blue' as const, keywords: ['processor', 'pipeline'] };
+    s.setWin({ appName: 'Java', windowTitle: 'Behavioral Simulation' });
+    const guessed = await s.c.classifyCurrent([...fixtureModules, arch]);
+    expect(guessed.verdict).toEqual({
+      studying: true,
+      moduleId: 'lib_computer_architecture',
+      activity: 'simulation',
+      confidence: 0.55,
+      source: 'vlm',
+    });
+    expect(s.capture).toHaveBeenCalledTimes(1);
+
+    const sure = guessStudy(
+      { studying: false, moduleId: null, activity: 'Gaming', confidence: 0.93, source: 'vlm' },
+      [...fixtureModules, arch],
+      'Steam',
+      'Library',
+    );
+    expect(sure).toMatchObject({ studying: false, activity: 'Gaming' });
+
+    const unsure = guessStudy(
+      { studying: false, moduleId: null, activity: 'Browsing', confidence: 0.4, source: 'vlm' },
+      [...fixtureModules, { id: 'lib_coding', name: 'Coding', color: 'purple', keywords: ['python'] }],
+      'Chrome',
+      'New Tab',
+    );
+    expect(unsure).toMatchObject({ studying: true, moduleId: 'lib_coding', confidence: 0.4 });
+  });
+
+  it('WhatsApp labeled online shopping is a guess, and a real shop still is not', () => {
+    const coding = { id: 'lib_coding', name: 'Coding', color: 'purple' as const, keywords: ['python'] };
+    const modules = [...fixtureModules, coding];
+    const chat = guessStudy(
+      { studying: false, moduleId: null, activity: 'Online shopping', confidence: 0.96, source: 'vlm' },
+      modules,
+      'WhatsApp',
+      'Alex',
+    );
+    expect(chat).toMatchObject({ studying: true, moduleId: 'lib_coding', activity: '' });
+
+    const project = guessStudy(
+      { studying: false, moduleId: null, activity: 'Messaging', confidence: 0.95, source: 'vlm' },
+      modules,
+      'WhatsApp',
+      'Group project',
+    );
+    expect(project).toMatchObject({ studying: true, moduleId: 'lib_coding' });
+
+    const diagrams = guessStudy(
+      { studying: false, moduleId: null, activity: 'Online chatting', confidence: 0.96, source: 'vlm' },
+      [
+        ...modules,
+        { id: 'lib_business', name: 'Business', color: 'orange', keywords: ['management'] },
+        { id: 'lib_information_management', name: 'Information Management', color: 'blue', keywords: ['info management', 'class diagram', 'use case'] },
+      ],
+      'WhatsApp',
+      'info management project',
+    );
+    expect(diagrams).toMatchObject({ studying: true, moduleId: 'lib_information_management', activity: '' });
+
+    const unread = guessStudy(
+      { studying: false, moduleId: null, activity: 'Messaging', confidence: 0.96, source: 'vlm' },
+      modules,
+      'WhatsApp',
+      'Alex',
+    );
+    expect(unread).toMatchObject({ studying: true, moduleId: 'lib_coding', activity: '' });
+
+    const plans = guessStudy(
+      { studying: false, moduleId: null, activity: 'Planning dinner', confidence: 0.96, source: 'vlm' },
+      modules,
+      'WhatsApp',
+      'Alex',
+    );
+    expect(plans).toMatchObject({ studying: false, activity: 'Planning dinner' });
+
+    const assistant = guessStudy(
+      { studying: false, moduleId: null, activity: 'Messaging', confidence: 0.95, source: 'vlm' },
+      [
+        ...modules,
+        { id: 'lib_discrete_maths', name: 'Discrete Maths', color: 'yellow', keywords: ['injective', 'proof', 'set theory'] },
+      ],
+      'ChatGPT',
+      'ChatGPT',
+    );
+    expect(assistant).toMatchObject({ studying: true, activity: '' });
+
+    const exam = guessStudy(
+      { studying: false, moduleId: null, activity: 'Messaging', confidence: 0.95, source: 'vlm' },
+      [
+        ...modules,
+        { id: 'lib_discrete_maths', name: 'Discrete Maths', color: 'yellow', keywords: ['injective', 'proof', 'set theory'] },
+      ],
+      'Chrome',
+      'injective functions - ChatGPT',
+    );
+    expect(exam).toMatchObject({ studying: true, moduleId: 'lib_discrete_maths', activity: '' });
+
+    const shop = guessStudy(
+      { studying: false, moduleId: null, activity: 'Shopping', confidence: 0.96, source: 'vlm' },
+      modules,
+      'Safari',
+      'Amazon.com: Shopping Cart',
+    );
+    expect(shop).toMatchObject({ studying: false, activity: 'Shopping' });
+  });
+
+  it('a virtual machine is a lab unless a game or feed runs inside it', () => {
+    const coding = { id: 'lib_coding', name: 'Coding', color: 'purple' as const, keywords: ['python'] };
+    const os = { id: 'lib_os', name: 'Operating Systems', color: 'blue' as const, keywords: ['kernel', 'scheduling'] };
+    const modules = [...fixtureModules, coding, os];
+    const vm = guessStudy(
+      { studying: false, moduleId: null, activity: 'Using a virtual machine', confidence: 0.95, source: 'vlm' },
+      modules,
+      'UTM',
+      'Ubuntu 24.04',
+    );
+    expect(vm).toMatchObject({ studying: true, moduleId: 'lib_os', activity: '' });
+
+    const noOs = guessStudy(
+      { studying: false, moduleId: null, activity: 'Desktop', confidence: 0.9, source: 'vlm' },
+      [...fixtureModules, coding],
+      'VirtualBox VM',
+      'Windows 11',
+    );
+    expect(noOs).toMatchObject({ studying: true, moduleId: 'lib_coding' });
+
+    const game = guessStudy(
+      { studying: false, moduleId: null, activity: 'Gaming', confidence: 0.95, source: 'vlm' },
+      modules,
+      'Parallels Desktop',
+      'Windows 11',
+    );
+    expect(game).toMatchObject({ studying: false, activity: 'Gaming' });
+  });
+
+  it('WhatsApp is looked at before it can be called distracted', async () => {
+    const s = setup();
+    s.setWin({ appName: 'WhatsApp', windowTitle: 'Group project' });
+    const r = await s.c.classifyCurrent(fixtureModules);
+    expect(s.capture).toHaveBeenCalledTimes(1);
+    expect(s.classify).toHaveBeenCalledTimes(1);
+    expect(r.verdict?.source).not.toBe('rule');
+  });
+
+  it('Vivado is studying even after the model cached it as simulation', async () => {
+    const s = setup({
+      verdict: { studying: false, moduleId: null, activity: 'simulation', confidence: 0.9, source: 'vlm' },
+    });
+    s.setWin({ appName: 'Vivado', windowTitle: 'sim_1 - Behavioral Simulation - Vivado 2024.1' });
+    // No Digital Logic module yet, so the tool rule cannot name it. "simulation" is still a study guess.
+    const missed = await s.c.classifyCurrent(fixtureModules);
+    expect(missed.verdict).toMatchObject({ studying: true, moduleId: 'mod_biology', activity: 'simulation', confidence: 0.55 });
+    expect(s.classify).toHaveBeenCalledTimes(1);
+
+    const modules = [
+      ...fixtureModules,
+      { id: 'lib_digital_logic', name: 'Digital Logic', color: 'yellow' as const, keywords: ['Vivado', 'Verilog'] },
+    ];
+    s.advance(1_000);
+    const r = await s.c.classifyCurrent(modules);
+    expect(r.tookScreenshot).toBe(false);
+    expect(r.verdict).toEqual({
+      studying: true,
+      moduleId: 'lib_digital_logic',
+      activity: 'Vivado',
+      confidence: 1,
+      source: 'rule',
+    });
+    expect(s.capture).toHaveBeenCalledTimes(1);
+    expect(s.classify).toHaveBeenCalledTimes(1);
+  });
+
+  it('a distraction in the title still beats a study-tool name', async () => {
+    const s = setup();
+    s.setWin({ appName: 'Safari', windowTitle: 'reddit.com/r/vivado' });
+    const r = await s.c.classifyCurrent([
+      { id: 'lib_digital_logic', name: 'Digital Logic', color: 'yellow', keywords: ['Vivado'] },
+    ]);
+    expect(r.verdict).toMatchObject({ studying: false, activity: 'Social media', source: 'rule' });
+    expect(s.capture).not.toHaveBeenCalled();
+  });
+
+  it('drops cache when the user switches away and back', async () => {
+    const s = setup();
+    await s.c.classifyCurrent(fixtureModules);
+    expect(s.capture).toHaveBeenCalledTimes(1);
+    s.setWin({ appName: 'Chrome', windowTitle: 'New Tab' });
+    await s.c.classifyCurrent(fixtureModules);
+    expect(s.capture).toHaveBeenCalledTimes(2);
+    s.setWin({ appName: 'Preview', windowTitle: 'BIO101 Lecture 4.pdf' });
+    await s.c.classifyCurrent(fixtureModules);
+    expect(s.capture).toHaveBeenCalledTimes(3);
+  });
+
+  it('re-checks a distracted window after 60s even within the cache TTL', async () => {
+    const s = setup({
+      verdict: { studying: false, moduleId: null, activity: 'Social media', confidence: 0.95, source: 'vlm' },
+    });
+    await s.c.classifyCurrent(fixtureModules);
+    expect(s.capture).toHaveBeenCalledTimes(1);
+    s.advance(61_000);
+    await s.c.classifyCurrent(fixtureModules);
+    expect(s.capture).toHaveBeenCalledTimes(2);
   });
 
   it('cache path: same app + title within the TTL reuses the VLM verdict without a screenshot', async () => {
@@ -280,10 +490,11 @@ describe('classifier', () => {
     await tick();
     s.setWin({ windowTitle: 'BIO101 Lecture 4.pdf' });
     const second = s.c.classifyCurrent(fixtureModules);
-    expect(await second).toMatchObject({ tookScreenshot: false, key: BIO_KEY, verdict: { source: 'cache' } });
+    await tick();
     release(BIO_VERDICT);
     await first;
-    expect(s.capture).toHaveBeenCalledTimes(2);
+    expect(await second).toMatchObject({ tookScreenshot: true, key: BIO_KEY });
+    expect(s.capture).toHaveBeenCalledTimes(3);
   });
 
   it('warmUp and unload delegate to Ollama, except with the mock classifier (tests never reach Ollama)', async () => {

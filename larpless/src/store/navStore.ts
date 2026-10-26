@@ -8,6 +8,7 @@ export type Route =
   | 'history'
   | 'modules'
   | 'settings'
+  | 'acknowledgements'
   | 'dev'
   | 'feed'
   | 'profile'

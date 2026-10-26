@@ -6,9 +6,11 @@
  *   node scripts/bench-classifier.ts --no-prefill      # let Qwen3-VL reason first (slow)
  *   node scripts/bench-classifier.ts --clean          # delete bench/ images afterwards
  *
- * Reads bench/*.png|jpg. The expected label is the filename prefix before "__"
- * ("notstudy" means "Not study"). An optional sidecar bench/<name>.json holds
- * { appName, windowTitle } for the prompt.
+ * Reads bench/*.png|jpg. Filename format:
+ *   `<subject>__<category>__<desc>.png` — subject is a module name or `notstudy`; category is a fixed
+ *   activity label (Social media, Video, …) scored when present.
+ *   `<subject>__<desc>.png` — legacy; subject only.
+ * Sidecar bench/<name>.json holds { appName, windowTitle } for the prompt. bench/ is gitignored.
  *
  * If bench/ has no images it renders 10 SYNTHETIC mock-ups (local HTML → headless Chrome on macOS,
  * Edge on Windows). It never captures the real screen. `--generate-only` also works on Windows, for
@@ -22,6 +24,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { StudyModule } from '../src/contracts/domain';
 import { buildMessages, buildSchema, extractJson, NOT_STUDY, NUM_CTX, parseVerdict } from '../src/core/prompt.ts';
+import { normalizeActivityCategory } from '../src/core/sites.ts';
 
 /* ------------------------------------------------------------------ */
 /* Args                                                                */
@@ -47,10 +50,24 @@ const PREFILL = !flag('no-prefill'); // empty-think assistant prefill, as the ap
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const BENCH = path.resolve(HERE, '..', 'bench');
 const TMP = path.join(BENCH, '.tmp');
-const CHROME =
-  process.platform === 'win32'
-    ? 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe'
-    : '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+function resolveChrome(): string {
+  const candidates =
+    process.platform === 'win32'
+      ? [
+          process.env.LOCALAPPDATA && `${process.env.LOCALAPPDATA}\\Google\\Chrome\\Application\\chrome.exe`,
+          'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+          'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+          process.env.PROGRAMFILES && `${process.env.PROGRAMFILES}\\Microsoft\\Edge\\Application\\msedge.exe`,
+          'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+        ]
+      : process.platform === 'darwin'
+        ? ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome']
+        : ['/usr/bin/google-chrome', '/usr/bin/chromium-browser', '/usr/bin/chromium'];
+  for (const c of candidates) {
+    if (c && fs.existsSync(c)) return c;
+  }
+  throw new Error('Chrome or Edge not found (set bench/ images manually to skip synthetic render)');
+}
 
 /* Fixture modules (same as src/fixtures/data.ts). */
 const MODULES: StudyModule[] = [
@@ -416,7 +433,7 @@ const SCENES: Scene[] = [
 ];
 
 function generateSynthetic(): void {
-  if (!fs.existsSync(CHROME)) throw new Error(`Chrome not found at ${CHROME}`);
+  const chrome = resolveChrome();
   const htmlDir = path.join(TMP, 'html');
   const profile = path.join(TMP, 'chrome-profile');
   fs.mkdirSync(htmlDir, { recursive: true });
@@ -425,7 +442,7 @@ function generateSynthetic(): void {
     fs.writeFileSync(htmlPath, s.html);
     const out = path.join(BENCH, `${s.file}.png`);
     execFileSync(
-      CHROME,
+      chrome,
       [
         '--headless=new',
         '--disable-gpu',
@@ -462,17 +479,30 @@ function listImages(): string[] {
     .sort();
 }
 
-function expectedLabel(file: string): string {
-  const prefix = file.split('__')[0].toLowerCase();
+function expectedSubject(baseName: string): string {
+  const prefix = baseName.split('__')[0].toLowerCase();
   if (prefix === 'notstudy') return NOT_STUDY;
   const mod = MODULES.find((m) => m.name.toLowerCase() === prefix);
   return mod ? mod.name : prefix;
 }
 
+function expectedFromFile(file: string): { subject: string; category: string | null } {
+  const base = path.parse(file).name;
+  const parts = base.split('__');
+  const subject = expectedSubject(base);
+  if (parts.length >= 3) {
+    const cat = normalizeActivityCategory(parts[1]) ?? parts[1];
+    return { subject, category: cat };
+  }
+  return { subject, category: null };
+}
+
 function downscale(file: string): string {
+  const src = path.join(BENCH, file);
+  if (process.platform !== 'darwin') return src;
   fs.mkdirSync(TMP, { recursive: true });
   const out = path.join(TMP, `${path.parse(file).name}.jpg`);
-  execFileSync('sips', ['-s', 'format', 'jpeg', '-s', 'formatOptions', '70', '--resampleWidth', '1280', path.join(BENCH, file), '--out', out], {
+  execFileSync('sips', ['-s', 'format', 'jpeg', '-s', 'formatOptions', '70', '--resampleWidth', '1280', src, '--out', out], {
     stdio: 'ignore',
   });
   return out;
@@ -578,8 +608,19 @@ async function main(): Promise<void> {
   console.log(`warm-up: ${w.ok ? 'ok' : `FAILED ${w.status} ${w.error}`} · ${w.ms} ms (model load ${w.loadMs} ms)`);
   if (!w.ok) process.exitCode = 1;
 
-  const rows: { file: string; expected: string; got: string; conf: string; ms: number; hit: boolean }[] = [];
+  const rows: {
+    file: string;
+    expected: string;
+    expectedCategory: string | null;
+    got: string;
+    gotCategory: string;
+    conf: string;
+    ms: number;
+    hit: boolean;
+    categoryHit: boolean | null;
+  }[] = [];
   for (const file of files) {
+    const exp = expectedFromFile(file);
     const side = path.join(BENCH, `${path.parse(file).name}.json`);
     const meta = fs.existsSync(side) ? (JSON.parse(fs.readFileSync(side, 'utf8')) as { appName?: string; windowTitle?: string }) : {};
     const jpg = downscale(file);
@@ -595,14 +636,37 @@ async function main(): Promise<void> {
         got = v.studying ? MODULES.find((m) => m.id === v.moduleId)?.name ?? '?' : NOT_STUDY;
         conf = v.confidence.toFixed(2);
         const act = v.activity;
-        got = `${got}`;
-        rows.push({ file, expected: expectedLabel(file), got, conf, ms: r.ms, hit: got === expectedLabel(file) });
-        console.log(`${pad(file, 34)} ${pad(expectedLabel(file), 10)} ${pad(got, 10)} ${pad(conf, 5)} ${String(r.ms).padStart(6)} ms  ${got === expectedLabel(file) ? '✓' : '✗'}  [load ${r.loadMs} · img ${r.promptMs} · gen ${r.evalMs}/${r.evalCount}tok]  "${act}"`);
+        const subjectHit = got === exp.subject;
+        const categoryHit = exp.category === null ? null : act === exp.category;
+        const hit = subjectHit && (categoryHit === null || categoryHit);
+        rows.push({
+          file,
+          expected: exp.subject,
+          expectedCategory: exp.category,
+          got,
+          gotCategory: act,
+          conf,
+          ms: r.ms,
+          hit,
+          categoryHit,
+        });
+        const catMark = exp.category === null ? '' : ` cat ${categoryHit ? '✓' : '✗'}`;
+        console.log(`${pad(file, 34)} ${pad(exp.subject, 10)} ${pad(got, 10)} ${pad(conf, 5)} ${String(r.ms).padStart(6)} ms  ${hit ? '✓' : '✗'}${catMark}  [load ${r.loadMs} · img ${r.promptMs} · gen ${r.evalMs}/${r.evalCount}tok]  "${act}"`);
         continue;
       }
     }
-    rows.push({ file, expected: expectedLabel(file), got, conf, ms: r.ms, hit: false });
-    console.log(`${pad(file, 34)} ${pad(expectedLabel(file), 10)} ${pad(got, 10)} ${pad(conf, 5)} ${String(r.ms).padStart(6)} ms  ✗  ${r.error ?? ''}`);
+    rows.push({
+      file,
+      expected: exp.subject,
+      expectedCategory: exp.category,
+      got,
+      gotCategory: '',
+      conf,
+      ms: r.ms,
+      hit: false,
+      categoryHit: exp.category === null ? null : false,
+    });
+    console.log(`${pad(file, 34)} ${pad(exp.subject, 10)} ${pad(got, 10)} ${pad(conf, 5)} ${String(r.ms).padStart(6)} ms  ✗  ${r.error ?? ''}`);
   }
 
   const lat = rows.map((r) => r.ms).sort((a, b) => a - b);
@@ -610,7 +674,11 @@ async function main(): Promise<void> {
   console.log('\n| file | expected | got | confidence | ms |');
   console.log('|---|---|---|---|---|');
   for (const r of rows) console.log(`| ${r.file} | ${r.expected} | ${r.got}${r.hit ? '' : ' ✗'} | ${r.conf} | ${r.ms} |`);
-  console.log(`\nSUMMARY model=${MODEL} titles=${NO_TITLE ? 'off' : 'on'} prefill=${PREFILL ? 'on' : 'off'} accuracy=${hits}/${rows.length} p50=${pct(lat, 50)}ms p90=${pct(lat, 90)}ms think:false=${thinkOk ? 'accepted' : 'not sent'}`);
+  const catScored = rows.filter((r) => r.expectedCategory !== null);
+  const catHits = catScored.filter((r) => r.categoryHit).length;
+  console.log(
+    `\nSUMMARY model=${MODEL} titles=${NO_TITLE ? 'off' : 'on'} prefill=${PREFILL ? 'on' : 'off'} subject=${hits}/${rows.length} category=${catScored.length ? `${catHits}/${catScored.length}` : 'n/a'} p50=${pct(lat, 50)}ms p90=${pct(lat, 90)}ms think:false=${thinkOk ? 'accepted' : 'not sent'}`,
+  );
 
   fs.rmSync(TMP, { recursive: true, force: true });
   if (CLEAN) {

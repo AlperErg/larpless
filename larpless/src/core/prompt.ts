@@ -5,6 +5,8 @@
  * `import type` imports and erasable TypeScript: no enums, namespaces or parameter properties.
  */
 import type { ScreenVerdict, StudyModule } from '../contracts/domain';
+import { ACTIVITY_CATEGORIES } from '../contracts/domain';
+import { normalizeActivityCategory, siteLookHint } from './sites';
 
 export const NOT_STUDY = 'Not study';
 export const MAX_ACTIVITY_CHARS = 60;
@@ -22,16 +24,20 @@ export const NUM_CTX = 4096;
 export const SYSTEM = [
   'You label what a student is doing on their Mac for a study tracker. You get a screenshot of the main display, the frontmost app name, and its window title. Decide whether the visible content is studying for one of the student\'s modules.',
   '- Judge the content, not the app: a lecture on YouTube, slides in Preview, notes in Notion, a problem set in a browser or an IDE exercise all count as studying if they match a module.',
-  '- Looking things up is studying: search results, Wikipedia, documentation, Stack Overflow, papers, forums about a topic, or an AI assistant chat about coursework. Pick the module the search is about.',
+  '- Looking things up is studying: search results, Wikipedia, documentation, Stack Overflow, papers, forums about a topic, or an AI assistant chat about coursework. ChatGPT, Claude, Gemini and similar chats are not messaging. An exam, a proof, lecture notes, or a course PDF in that chat is studying. Pick the module the work is about.',
   '- Code in an editor or IDE (Cursor, VS Code, Xcode, a terminal) is Coding unless the code is clearly about a more specific module (e.g. pandas or a Jupyter notebook is Data Science).',
-  '- Only social media, messaging, games, shopping, entertainment video and unrelated news are "Not study". If you can\'t tell, choose the closest module with low confidence rather than "Not study".',
+  '- Hardware design tools are studying too: Vivado, ModelSim, QuestaSim, Quartus, GTKWave, Logisim, XSIM and their waveform or simulation views. A gate-level or FPGA lab is Digital Logic. A processor, pipeline, datapath or instruction-set assignment is Computer Architecture. Do not call these a game or "Not study".',
+  '- A simulation, lab, homework or assignment is studying. "simulation" is never a reason for "Not study".',
+  '- A virtual machine (UTM, Parallels, VMware, VirtualBox, QEMU) is a coursework tool: an OS, networking or security lab. Judge what runs inside it. Another desktop, a terminal, an installer or settings inside it is studying; pick Operating Systems, Cybersecurity or Coding.',
+  '- In a chat, read the messages. A conversation about code, a repository, a branch, a model, an assignment, or how a project works is studying. Class diagrams, notes, PDFs, and project files are studying too. "Messaging" and "Online chatting" only name the app, so they are not a reason for "Not study". Use "Not study" only when the messages are clearly social and not about work or a course.',
+  '- Only a screen you are sure is social media, a game, shopping, entertainment video or unrelated news is "Not study". If you are not sure, guess the closest module and lower your confidence. Do not use "Not study" as the default.',
   '- Use the module keywords to pick the subject. The list covers many fields: pick the most specific module that fits (e.g. Calculus over Maths, Digital Logic over Coding). If it\'s clearly study content but matches no module, pick the closest one and lower your confidence.',
   '- The window title is a strong hint; if it conflicts with the screenshot, trust the screenshot.',
   '- "confidence": 0 to 1, how certain you are that the subject you chose is correct. It is NOT the probability of studying: a clear social feed is "Not study" with confidence 0.9 or more; use low values only when you are unsure which label fits.',
   '- Do not describe the screen. The subject is the whole answer.',
-  '- When the subject is "Not study", also set "activity" to a generic 2 to 4 word reason for what is actually visible, e.g. "Online shopping" or "Playing a game". Say email only when a mail inbox or message is on screen. Never copy names, message text, subjects or the window title. When the subject is a module, leave "activity" empty.',
+  '- When the subject is "Not study", set "activity" to exactly one category from the schema list that matches what is on screen. Never invent a phrase. When the subject is a module, set "activity" to "".',
   '',
-  'Reply with JSON only, matching the schema: {"studying": true or false, "subject": one of the module names or "Not study", "confidence": 0.0 to 1.0, "activity": "" or a short reason}',
+  `Reply with JSON only, matching the schema: {"studying": true or false, "subject": one of the module names or "Not study", "confidence": 0.0 to 1.0, "activity": "" or one of ${ACTIVITY_CATEGORIES.map((c) => `"${c}"`).join(', ')}`,
 ].join('\n');
 
 /**
@@ -48,10 +54,12 @@ export interface VerdictSchema {
     subject: { type: 'string'; enum: string[] };
     confidence: { type: 'number' };
     /** Optional. Only kept for "Not study"; studying verdicts drop it. */
-    activity: { type: 'string' };
+    activity: { type: 'string'; enum?: string[] };
   };
   required: string[];
 }
+
+const ACTIVITY_ENUM = ['', ...ACTIVITY_CATEGORIES] as const;
 
 export function buildSchema(moduleNames: string[]): VerdictSchema {
   return {
@@ -60,38 +68,15 @@ export function buildSchema(moduleNames: string[]): VerdictSchema {
       studying: { type: 'boolean' },
       subject: { type: 'string', enum: [...moduleNames, NOT_STUDY] },
       confidence: { type: 'number' },
-      activity: { type: 'string' },
+      activity: { type: 'string', enum: [...ACTIVITY_ENUM] },
     },
     required: ['studying', 'subject', 'confidence'],
   };
 }
 
-/** A distraction reason for the panel. Empty when missing, too specific, or a copy of the window title. */
-export function sanitizeReason(raw: unknown, windowTitle?: string | null): string {
-  if (typeof raw !== 'string') return '';
-  let text = raw.replace(/\s+/g, ' ').trim();
-  if (!text) return '';
-  if (text.length > MAX_REASON_CHARS) {
-    const cut = text.slice(0, MAX_REASON_CHARS);
-    const space = cut.lastIndexOf(' ');
-    text = (space >= 12 ? cut.slice(0, space) : cut).trim();
-  }
-  if (looksLikeTitle(text, windowTitle)) return '';
-  return text;
-}
-
-function looksLikeTitle(reason: string, windowTitle?: string | null): boolean {
-  const title = (windowTitle ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
-  const low = reason.toLowerCase();
-  if (!title || !low) return false;
-  if (low === title) return true;
-  if (low.length >= 8 && title.includes(low)) return true;
-  if (title.length >= 12 && low.includes(title)) return true;
-  if (title.length >= 12) {
-    const slice = title.slice(0, 12);
-    if (low.includes(slice)) return true;
-  }
-  return false;
+/** Distraction category for the panel. Unknown or invented text becomes empty. */
+export function distractionCategory(raw: unknown, _windowTitle?: string | null): string {
+  return normalizeActivityCategory(raw) ?? '';
 }
 
 export interface ChatMessage {
@@ -132,7 +117,10 @@ export function buildSystem(modules: Pick<StudyModule, 'name' | 'keywords'>[]): 
 }
 
 export function buildUserText(appName: string | null, windowTitle: string | null): string {
-  return [`Frontmost app: ${appName ?? 'unknown'}`, `Window title: ${windowTitle ?? 'unknown'}`].join('\n');
+  const lines = [`Frontmost app: ${appName ?? 'unknown'}`, `Window title: ${windowTitle ?? 'unknown'}`];
+  const hint = siteLookHint(appName, windowTitle);
+  if (hint) lines.push(hint);
+  return lines.join('\n');
 }
 
 /** Same window line as the vision prompt, without an image, so Windows can answer before a screenshot. */
@@ -255,7 +243,7 @@ export function parseVerdict(
 
   if (candidates.some((s) => s.toLowerCase() === NOT_STUDY.toLowerCase())) {
     // Studying keeps the subject name. A distraction gets a short category, never the window title.
-    return { studying: false, moduleId: null, activity: sanitizeReason(r.activity, windowTitle), confidence, source: 'vlm' };
+    return { studying: false, moduleId: null, activity: distractionCategory(r.activity, windowTitle), confidence, source: 'vlm' };
   }
   const mod = candidates.map((s) => findModule(s, modules)).find((m) => m !== null) ?? null;
   if (!mod) return null;
@@ -264,7 +252,7 @@ export function parseVerdict(
   return {
     studying,
     moduleId: studying ? mod.id : null,
-    activity: studying ? '' : sanitizeReason(r.activity, windowTitle),
+    activity: studying ? '' : distractionCategory(r.activity, windowTitle),
     confidence,
     source: 'vlm',
   };

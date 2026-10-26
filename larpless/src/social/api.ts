@@ -60,6 +60,8 @@ const EMAIL_DOMAIN = 'larpless.local';
 /** Accounts created before the rebrand. Username sign-in still accepts them. */
 const LEGACY_EMAIL_DOMAIN = 'focusline.local';
 const UNIQUE_VIOLATION = '23505';
+/** PostgREST: no such function in its schema cache (schema.sql predates it). */
+const MISSING_FUNCTION = 'PGRST202';
 
 export class SocialError extends Error {}
 
@@ -112,6 +114,17 @@ export async function signIn(client: SupabaseClient, rawUsername: string, passwo
 export async function signOut(client: SupabaseClient): Promise<void> {
   const { error } = await client.auth.signOut();
   if (error) throw new SocialError(error.message);
+}
+
+/** Deletes the signed-in account with its profile, friendships and posts (delete_account in supabase/schema.sql). */
+export async function deleteAccount(client: SupabaseClient): Promise<void> {
+  const { error } = await client.rpc('delete_account');
+  if (error) {
+    if (error.code === MISSING_FUNCTION) throw new SocialError("This Supabase project can't delete accounts yet. Run the latest supabase/schema.sql.");
+    throw new SocialError(error.message);
+  }
+  // The tokens belong to a user that no longer exists, so only forget them here.
+  await client.auth.signOut({ scope: 'local' });
 }
 
 export async function getProfile(client: SupabaseClient, userId: string): Promise<Profile> {

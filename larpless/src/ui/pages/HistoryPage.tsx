@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { addDays, format } from 'date-fns';
 import { useAppStore } from '../../store/appStore';
 import { useNavStore } from '../../store/navStore';
+import { useSessionStore } from '../../store/sessionStore';
 import { Callout, Heatmap, Strong, Tag, Text, ToggleList, sessionToggleItem } from '../components';
 import { Page } from '../layout/Page';
 import { groupByWeek, totalsBySubject } from '../lib/derive';
@@ -17,7 +18,13 @@ export function HistoryPage() {
   const weeks = useMemo(() => groupByWeek(sessions), [sessions]);
   const totals = useMemo(() => totalsBySubject(sessions, modules), [sessions, modules]);
   const totalS = sessions.reduce((a, s) => a + s.totalS, 0);
+  const deleteSession = useAppStore((s) => s.deleteSession);
   const open = (id: string) => go('summary', { sessionId: id });
+  const remove = (id: string) => {
+    // The summary page falls back to lastSummary, so drop it too or the deleted session reappears there.
+    if (useSessionStore.getState().lastSummary?.id === id) useSessionStore.setState({ lastSummary: null });
+    deleteSession(id).catch(() => console.warn('[history] delete failed'));
+  };
 
   return (
     <Page testID="page-history" header={{ icon: 'calendar', title: 'History' }}>
@@ -60,7 +67,7 @@ export function HistoryPage() {
                   {`${formatDuration(w.totalS)} · ${w.sessions.length} session${w.sessions.length === 1 ? '' : 's'}`}
                 </Text>
               </View>
-              <ToggleList items={w.sessions.map((s) => sessionToggleItem(s, modules, open))} />
+              <ToggleList items={w.sessions.map((s) => sessionToggleItem(s, modules, open, remove))} />
             </View>
           ))}
         </>

@@ -16,9 +16,10 @@ import { Button, CodeBlock, MacPressable, MacTextInput, ModelDownload, ScreenMod
 import { TextField } from '../components/TextField';
 import { Page } from '../layout/Page';
 import { isLive } from '../lib/actions';
+import { errorText } from '../lib/social';
 import { APPEARANCE_OPTIONS, CLASSIFIER_OPTIONS, POMODORO_OPTIONS, POWER_OPTIONS, SOUNDS, SOUND_ICON, SOUND_LABEL, STRICTNESS_OPTIONS } from '../lib/labels';
 import { ollamaLine } from '../layout/Sidebar';
-import { IS_WINDOWS } from '../platform';
+import { DEVICE, IS_WINDOWS } from '../platform';
 import { colors, fonts, layout, radius, space, tag, themed } from '../theme';
 
 /** Local mirror of settings so controls respond instantly; every change also goes to updateSettings. */
@@ -280,6 +281,11 @@ export function SettingsPage() {
         <VolumeBar value={s.volume} onChange={changeVolume} />
       </Row>
 
+      <SectionTitle>About</SectionTitle>
+      <Row label="Acknowledgements" hint="Open-source software, fonts and models in LarpLess.">
+        <Button testID="settings-acknowledgements" title="View" icon="scale" variant="secondary" onPress={() => go('acknowledgements')} />
+      </Row>
+
       {config.SHOW_DEV_TOOLS ? (
         <>
           <SectionTitle>Developer</SectionTitle>
@@ -314,21 +320,24 @@ function AccountSection() {
     <>
       <SectionTitle>Account</SectionTitle>
       {status === 'signedIn' ? (
-        <Row label={profile ? `@${profile.username}` : 'Signed in'} hint="This is the name friends see on posts you share.">
-          <Button
-            testID="settings-signout"
-            title={busy ? 'Signing out…' : 'Sign out'}
-            variant="danger"
-            disabled={busy}
-            onPress={() => {
-              if (busy) return;
-              setBusy(true);
-              signOut()
-                .catch(() => {})
-                .finally(() => setBusy(false));
-            }}
-          />
-        </Row>
+        <>
+          <Row label={profile ? `@${profile.username}` : 'Signed in'} hint="This is the name friends see on posts you share.">
+            <Button
+              testID="settings-signout"
+              title={busy ? 'Signing out…' : 'Sign out'}
+              variant="danger"
+              disabled={busy}
+              onPress={() => {
+                if (busy) return;
+                setBusy(true);
+                signOut()
+                  .catch(() => {})
+                  .finally(() => setBusy(false));
+              }}
+            />
+          </Row>
+          <DeleteAccountRow />
+        </>
       ) : (
         <Row label="Friends" hint="Sign in to share sessions, or make an account.">
           <View style={styles.inline}>
@@ -338,6 +347,53 @@ function AccountSection() {
         </Row>
       )}
     </>
+  );
+}
+
+/** Two steps, so one stray click can't delete an account. */
+function DeleteAccountRow() {
+  const deleteAccount = useSocialStore((s) => s.deleteAccount);
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const run = () => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    deleteAccount()
+      .catch((e: unknown) => setError(errorText(e)))
+      .finally(() => {
+        setBusy(false);
+        setConfirming(false);
+      });
+  };
+
+  return (
+    <Row
+      label="Delete account"
+      hint={`Deletes your username, friends and every session you posted. History on this ${DEVICE} stays.`}>
+      {confirming ? (
+        <View style={styles.inline}>
+          <Button testID="settings-delete-confirm" title={busy ? 'Deleting…' : 'Delete for good'} variant="danger" disabled={busy} onPress={run} />
+          <Button
+            testID="settings-delete-cancel"
+            title="Cancel"
+            variant="ghost"
+            disabled={busy}
+            onPress={() => setConfirming(false)}
+            style={styles.gapLeft}
+          />
+        </View>
+      ) : (
+        <Button testID="settings-delete-account" title="Delete account…" variant="secondary" onPress={() => setConfirming(true)} />
+      )}
+      {error ? (
+        <Text testID="settings-delete-error" variant="small" color={tag.red.text}>
+          {error}
+        </Text>
+      ) : null}
+    </Row>
   );
 }
 

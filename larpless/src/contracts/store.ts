@@ -112,5 +112,7 @@ export interface AppDataActions {
   saveModules(m: StudyModule[]): Promise<void>;
   updateSettings(patch: Partial<Settings>): Promise<void>;
   getChunks(sessionId: string): Promise<Chunk[]>;
+  /** Remove a saved session and its chunks. */
+  deleteSession(sessionId: string): Promise<void>;
 }
 export type AppStore = AppDataState & AppDataActions;

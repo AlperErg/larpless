@@ -15,6 +15,7 @@ type AuthCallback = (event: string, session: { user: { id: string } } | null) =>
 /**
  * Minimal stand-in for the Supabase client. Each `from(table)` chain records its method calls and
  * resolves to the next scripted response for that table (or `{ data: null, error: null }`).
+ * `rpc(fn)` resolves to the next response scripted under `rpc:<fn>`.
  */
 export function fakeSupabase(script: Record<string, FakeResponse[]> = {}) {
   const calls: FakeCall[] = [];
@@ -41,10 +42,15 @@ export function fakeSupabase(script: Record<string, FakeResponse[]> = {}) {
     return builder;
   };
 
+  const rpc = jest.fn(async (fn: string, _args?: unknown) => {
+    const res = script[`rpc:${fn}`]?.shift() ?? {};
+    return { data: res.data ?? null, error: res.error ?? null };
+  });
+
   const auth = {
     signUp: jest.fn(async (_: unknown) => ({ data: { session: { access_token: 't' } }, error: null as { message: string } | null })),
     signInWithPassword: jest.fn(async (_: unknown) => ({ data: {}, error: null as { message: string } | null })),
-    signOut: jest.fn(async () => ({ error: null })),
+    signOut: jest.fn(async (_?: unknown) => ({ error: null })),
     onAuthStateChange: jest.fn((cb: AuthCallback) => {
       authCallback = cb;
       return { data: { subscription: { unsubscribe: () => {} } } };
@@ -52,8 +58,9 @@ export function fakeSupabase(script: Record<string, FakeResponse[]> = {}) {
   };
 
   return {
-    client: { from, auth } as unknown as SupabaseClient,
+    client: { from, rpc, auth } as unknown as SupabaseClient,
     auth,
+    rpc,
     calls,
     /** Ops recorded for the n-th call to `table` (0-based). */
     opsFor(table: string, n = 0) {

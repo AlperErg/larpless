@@ -17,9 +17,19 @@ import type { OllamaClient } from './ollama';
 import { BEHIND_WINDOWS } from './powerProfile';
 import type { PowerSpec } from './powerProfile';
 import { MAX_ACTIVITY_CHARS } from './prompt';
-import { matchDistraction } from './rules';
+import { matchDistraction, matchStudyTool } from './rules';
 import { FALLBACK_CONFIDENCE, isConfident, isFinalAlone } from './screenModel';
 import type { ScreenModelStep } from './screenModel';
+import {
+  isChatSite,
+  isStoreWindow,
+  isVirtualMachineApp,
+  normalizeActivityCategory,
+  vmShowsDistraction,
+} from './sites';
+
+/** Cached "Not study" verdicts expire sooner so a wrong label does not stick. */
+export const DISTRACTED_CACHE_MAX_MS = 60_000;
 
 export interface ClassifierConfig {
   USE_MOCK_CLASSIFIER: boolean;
@@ -102,6 +112,76 @@ interface CacheEntry {
 const lc = (s: string) => s.toLowerCase();
 
 /**
+ * A "Not study" verdict is kept only when the model is at least this sure.
+ * Below it, the label is a guess at a subject. The prompt asks for 0.9 or more on a clear feed.
+ */
+export const SURE_NOT_STUDY = 0.8;
+
+/** Coursework the model keeps misreading as a distraction reason. */
+const WORK_ACTIVITY = /\b(simulat\w*|lab|homework|assignment|coursework|problem set|waveform)\b/i;
+const CHAT_WORK = /\b(group project|project|assignment|homework|coursework|lecture|exam|lab|diagram)\b/i;
+
+function bogusShoppingCategory(activity: string, appName: string | null, windowTitle: string | null): boolean {
+  return normalizeActivityCategory(activity) === 'Shopping' && !isStoreWindow(appName, windowTitle);
+}
+
+function genericChatCategory(activity: string): boolean {
+  return normalizeActivityCategory(activity) === 'Chatting';
+}
+
+/**
+ * Not study is a confident distraction, or it isn't. An unsure answer, or one whose reason is
+ * "simulation" / a lab, or a virtual machine with no game or feed in it, becomes the closest
+ * subject instead of distracted.
+ */
+export function guessStudy(
+  verdict: ScreenVerdict,
+  modules: readonly StudyModule[],
+  appName: string | null,
+  windowTitle: string | null,
+): ScreenVerdict {
+  if (verdict.studying || verdict.source === 'rule' || modules.length === 0) return verdict;
+  const blob = `${verdict.activity} ${appName ?? ''} ${windowTitle ?? ''}`;
+  const chat = isChatSite(appName, windowTitle);
+  const chatWork = chat && CHAT_WORK.test(`${verdict.activity} ${windowTitle ?? ''}`);
+  const bogusShop = bogusShoppingCategory(verdict.activity, appName, windowTitle);
+  const vm = isVirtualMachineApp(appName, windowTitle) && !vmShowsDistraction(verdict.activity);
+  const unreadChat = chat && genericChatCategory(verdict.activity);
+  const work = WORK_ACTIVITY.test(blob) || chatWork || vm;
+  if (!work && !bogusShop && !unreadChat && verdict.confidence >= SURE_NOT_STUDY) return verdict;
+
+  const hay = lc(blob);
+  // Longest keyword wins, so "info management" beats "management".
+  let mentioned: (typeof modules)[number] | undefined;
+  let mentionedLen = 0;
+  for (const m of modules) {
+    for (const k of [m.name, ...m.keywords]) {
+      const kw = lc(k.trim());
+      if (kw.length >= 4 && kw.length > mentionedLen && hay.includes(kw)) {
+        mentioned = m;
+        mentionedLen = kw.length;
+      }
+    }
+  }
+  const named = (name: string) => modules.find((m) => lc(m.name) === lc(name));
+  const sim = /\bsimulat/i.test(blob);
+  const guessed =
+    mentioned ??
+    (sim ? named('Computer Architecture') ?? named('Digital Logic') ?? named('Coding') : undefined) ??
+    (vm ? named('Operating Systems') ?? named('Cybersecurity') : undefined) ??
+    named('Coding') ??
+    modules[0];
+  return {
+    studying: true,
+    moduleId: guessed.id,
+    // A VM reason is about the box ("Using a virtual machine"), not the work; drop it like a chat label.
+    activity: bogusShop || vm || genericChatCategory(verdict.activity) ? '' : verdict.activity,
+    confidence: Math.min(verdict.confidence, 0.55),
+    source: verdict.source,
+  };
+}
+
+/**
  * USE_MOCK_CLASSIFIER: derive a verdict from the window title, no Ollama.
  * A module matches when its name or a keyword appears in the title (keywords of 6+ letters also
  * match their stem, so "integral" matches "Integration by parts").
@@ -146,6 +226,8 @@ export function createClassifier({ native, ollama, now, config, getPower, screen
   let previousApp: string | null = null;
   let previousKey: string | null = null;
   let cache: CacheEntry | null = null;
+  /** Frontmost window on the last decide(); used to drop cache when the user switches away. */
+  let lastDecideKey: string | null = null;
   let inFlight: Flight | null = null;
   let nextGen = 1;
   /** Bumped on reset so a call that started earlier cannot arm a hold for the next session. */
@@ -277,13 +359,14 @@ export function createClassifier({ native, ollama, now, config, getPower, screen
           error: 'capture',
         };
       }
-      const vlmVerdict = useMock
+      const raw = useMock
         ? mockVerdictFromTitle(snapApp, snapTitle, modules)
         : spec
           ? await ollama.classify(snap, modules, { timeoutMs: left, keepAlive: spec.keepAlive })
           : await ollama.classify(snap, modules, { timeoutMs: left });
       // Ollama couldn't answer (not installed, timeout): a moderately confident on-device verdict beats `unknown`.
-      const verdict = vlmVerdict ?? embedFallback;
+      // guessStudy is tuned to Ollama's confidence, so the on-device fallback is used as it is.
+      const verdict = (raw ? guessStudy(raw, modules, snapApp, snapTitle) : null) ?? embedFallback;
       if (verdict && snapTitle !== null) {
         cache = { appName: snapApp, windowTitle: snapTitle, verdict, at: now(), ttlMs: cacheTtl() };
       }
@@ -317,18 +400,38 @@ export function createClassifier({ native, ollama, now, config, getPower, screen
       };
     }
     const key = windowKey(appName, win.windowTitle);
+    if (cache && lastDecideKey !== null && lastDecideKey !== key) {
+      const cachedKey = windowKey(cache.appName, cache.windowTitle);
+      if (lastDecideKey === cachedKey) cache = null;
+    }
+    lastDecideKey = key;
+
     const rule = matchDistraction(win.appName, win.windowTitle);
     if (rule) {
       const verdict: ScreenVerdict = { studying: false, moduleId: null, activity: rule.activity, confidence: 1, source: 'rule' };
       return { kind: 'fast', result: { verdict: remember(verdict, appName, key), tookScreenshot: false, appName, key } };
     }
+    // Before the cache: a Vivado window the model already called "simulation" must not stay distracted.
+    const study = matchStudyTool(win.appName, win.windowTitle, modules);
+    if (study) {
+      const verdict: ScreenVerdict = {
+        studying: true,
+        moduleId: study.moduleId,
+        activity: study.activity,
+        confidence: 1,
+        source: 'rule',
+      };
+      return { kind: 'fast', result: { verdict: remember(verdict, appName, key), tookScreenshot: false, appName, key } };
+    }
     const t = now();
+    const entryTtl = (v: ScreenVerdict) =>
+      !v.studying ? Math.min(cache!.ttlMs, DISTRACTED_CACHE_MAX_MS) : cache!.ttlMs;
     if (
       cache &&
       win.windowTitle !== null &&
       cache.appName === appName &&
       cache.windowTitle === win.windowTitle &&
-      t - cache.at < cache.ttlMs
+      t - cache.at < entryTtl(cache.verdict)
     ) {
       return {
         kind: 'fast',
@@ -386,6 +489,7 @@ export function createClassifier({ native, ollama, now, config, getPower, screen
       previousApp = null;
       previousKey = null;
       cache = null;
+      lastDecideKey = null;
       holdUntil = 0;
       epoch += 1;
     },

@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { config } from '../../src/config';
-import { fixtureModules } from '../../src/fixtures/data';
+import { fixtureModules, fixtureSessions } from '../../src/fixtures/data';
 import { mockNowPlaying } from '../../src/native/mock/nowPlaying';
 import { resetMockScreen } from '../../src/native/mock/screen';
 import { useAppStore } from '../../src/store/appStore';
@@ -39,6 +39,15 @@ describe('appStore (AsyncStorage)', () => {
     await useAppStore.getState().load();
     expect(useAppStore.getState().modules).toEqual(fixtureModules);
     expect(useAppStore.getState().settings.onboarded).toBe(true);
+  });
+
+  it('deleteSession drops the session from state and storage', async () => {
+    const [a, b] = fixtureSessions;
+    await AsyncStorage.setItem('fl:sessions', JSON.stringify([a, b]));
+    await useAppStore.getState().load();
+    await useAppStore.getState().deleteSession(a.id);
+    expect(useAppStore.getState().sessions.map((s) => s.id)).toEqual([b.id]);
+    expect(JSON.parse((await AsyncStorage.getItem('fl:sessions'))!).map((s: { id: string }) => s.id)).toEqual([b.id]);
   });
 });
 

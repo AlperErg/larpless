@@ -63,7 +63,7 @@ afterEach(() => {
 });
 
 describe('every page renders in every fixture state', () => {
-  const routes: Route[] = ['home', 'session', 'summary', 'history', 'modules', 'settings', 'feed', 'login', 'dev', 'onboarding'];
+  const routes: Route[] = ['home', 'session', 'summary', 'history', 'modules', 'settings', 'acknowledgements', 'feed', 'login', 'dev', 'onboarding'];
   const fixtures: FixtureName[] = ['idle', 'running', 'distracted', 'break', 'summary'];
   for (const [w, h] of [
     [900, 600],

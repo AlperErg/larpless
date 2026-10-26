@@ -49,6 +49,11 @@ jobs:
         working-directory: larpless/macos
         run: pod install
 
+      # The in-app Acknowledgements are generated from the JS bundles, the pods and licenses/.
+      # Fails when a dependency changed without regenerating them.
+      - name: Acknowledgements are up to date
+        run: node scripts/acknowledgements.mjs --check
+
       # Debug signs ad-hoc ("-"), so no certificates are needed.
       - name: xcodebuild
         run: |

@@ -28,6 +28,8 @@ export interface SocialActions {
   signIn(username: string, password: string): Promise<void>;
   signUp(username: string, password: string): Promise<void>;
   signOut(): Promise<void>;
+  /** Delete the account and everything it posted, then sign out. Local history stays. */
+  deleteAccount(): Promise<void>;
   /** Drop the current session and listen on the client for the latest keys. */
   reconfigure(): void;
   refresh(): Promise<void>;
@@ -116,6 +118,12 @@ export function createSocialStore(getClient: () => SupabaseClient, configured: b
       signIn: (username, password) => api.signIn(getClient(), username, password),
       signUp: (username, password) => api.signUp(getClient(), username, password),
       signOut: () => api.signOut(getClient()),
+
+      deleteAccount: async () => {
+        requireUser();
+        await api.deleteAccount(getClient());
+        set({ ...signedOutState, status: 'signedOut' });
+      },
 
       refresh: async () => {
         const userId = get().userId;
