@@ -3,7 +3,8 @@ import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import type { StudyModule } from '../../src/contracts/domain';
 import { initialAppState, useAppStore } from '../../src/store/appStore';
-import { nextTagColor } from '../../src/ui/lib/modules';
+import { LIBRARY_MODULES, librarySubjectId } from '../../src/core/subjectLibrary';
+import { nextTagColor, toggleSubject } from '../../src/ui/lib/modules';
 import { ModulesPage } from '../../src/ui/pages/ModulesPage';
 
 const DEBOUNCE_MS = 600;
@@ -232,5 +233,58 @@ describe('Modules page', () => {
     expect(saveState(r)).toBe('');
     warn.mockRestore();
     act(() => r.unmount());
+  });
+});
+
+describe('Choosing which subjects are detected', () => {
+  const disabled = () => useAppStore.getState().settings.disabledSubjects;
+  const storedSettings = async () => JSON.parse((await AsyncStorage.getItem('fl:settings')) ?? 'null');
+  const count = (r: ReactTestRenderer) => textOf(r.root.findAll((n) => n.props.testID === 'modules-detect-count')[0]);
+  const allOnButton = (r: ReactTestRenderer) => r.root.findAll((n) => n.props.testID === 'modules-all-on');
+
+  it('clicking a subject turns it off and saves; clicking again turns it back on', async () => {
+    const r = render();
+    const total = LIBRARY_MODULES.length;
+    expect(count(r)).toBe(`${total} of ${total} on`);
+    expect(allOnButton(r)).toHaveLength(0);
+
+    await press(r, 'subject-Biology');
+    expect(disabled()).toEqual([librarySubjectId('Biology')]);
+    expect((await storedSettings()).disabledSubjects).toEqual([librarySubjectId('Biology')]);
+    expect(count(r)).toBe(`${total - 1} of ${total} on`);
+
+    await press(r, 'subject-Biology');
+    expect(disabled()).toEqual([]);
+    act(() => r.unmount());
+  });
+
+  it('own courses are listed and can be turned off too', async () => {
+    act(() => useAppStore.setState({ modules: courses }));
+    const r = render();
+    await press(r, 'subject-Thesis');
+    expect(disabled()).toEqual(['mod_thesis']);
+    act(() => r.unmount());
+  });
+
+  it('the last subject on cannot be turned off; Turn all on resets', async () => {
+    const allButHistory = LIBRARY_MODULES.filter((m) => m.name !== 'History').map((m) => m.id);
+    act(() => useAppStore.setState({ settings: { ...useAppStore.getState().settings, disabledSubjects: allButHistory } }));
+    const r = render();
+    expect(count(r)).toBe(`1 of ${LIBRARY_MODULES.length} on`);
+
+    await press(r, 'subject-History');
+    expect(disabled()).toEqual(allButHistory);
+    expect(count(r)).toBe('Keep at least one subject on.');
+
+    await press(r, 'modules-all-on');
+    expect(disabled()).toEqual([]);
+    expect(allOnButton(r)).toHaveLength(0);
+    act(() => r.unmount());
+  });
+
+  it('toggleSubject drops ids of subjects that no longer exist', () => {
+    expect(toggleSubject(['mod_gone', 'a'], 'b', ['a', 'b', 'c'])).toEqual(['a', 'b']);
+    expect(toggleSubject(['a', 'b'], 'b', ['a', 'b', 'c'])).toEqual(['a']);
+    expect(toggleSubject(['a', 'b'], 'c', ['a', 'b', 'c'])).toBeNull();
   });
 });

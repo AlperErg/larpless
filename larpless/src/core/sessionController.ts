@@ -68,7 +68,10 @@ export interface SessionControllerDeps {
   native: NativeApis;
   db: Db;
   store: StoreApi;
+  /** Every subject, for names (panel, alerts, summaries), including ones turned off. */
   getModules(): StudyModule[];
+  /** The subjects the classifier may pick. Defaults to getModules(). */
+  getDetectModules?(): StudyModule[];
   getSettings(): Settings;
   classifier: Pick<Classifier, 'classifyCurrent' | 'reset' | 'warmUp' | 'unload'>;
   ollama: Pick<OllamaClient, 'checkHealth'>;
@@ -155,6 +158,7 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
   const log = deps.log ?? ((line: string) => console.log(line));
   const get = () => store.getState();
   const set = (p: Partial<SessionStoreState>) => store.setState(p);
+  const detectModules = () => (deps.getDetectModules ?? deps.getModules)();
 
   let sessionId: string | null = null;
   let sessionStartedAt = 0;
@@ -329,7 +333,7 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
   }
 
   async function liveCheck(sid: string) {
-    const r = await deps.classifier.classifyCurrent(deps.getModules());
+    const r = await deps.classifier.classifyCurrent(detectModules());
     considerStepDown(sid, r);
     if (sid !== sessionId || ending) return;
     if (r.tookScreenshot) {
@@ -402,14 +406,13 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
 
   async function processChunk(sid: string, index: number, start: number, end: number, samples: WebcamSample[]) {
     const durationS = Math.round((end - start) / 1000);
-    const modules = deps.getModules();
     let verdict = null;
     let appName: string | null = null;
     let tookScreenshot = false;
     let screen: LiveLabel | null = null;
     // 1. Away (webcam) → no screenshot at all.
     if (!awayStats(samples).away) {
-      const r = await deps.classifier.classifyCurrent(modules);
+      const r = await deps.classifier.classifyCurrent(detectModules());
       considerStepDown(sid, r);
       verdict = r.verdict;
       appName = r.appName;
@@ -611,7 +614,7 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
       if (!demo) {
         (deps.prepareOllama?.() ?? Promise.resolve())
           .catch(noop)
-          .then(() => (sessionId === sid ? deps.classifier.warmUp(deps.getModules()) : undefined))
+          .then(() => (sessionId === sid ? deps.classifier.warmUp(detectModules()) : undefined))
           .catch(noop);
       }
       native.appShell.beginSessionActivity();

@@ -10,7 +10,7 @@ import { fixtureChunks } from '../fixtures/data';
 import { native } from '../native';
 import { appDb, upsertSessionSummary, useAppStore } from './appStore';
 import { useOllamaStore } from './ollamaStore';
-import { allSubjects } from '../core/subjectLibrary';
+import { allSubjects, detectableSubjects } from '../core/subjectLibrary';
 
 export const initialSessionState: SessionStoreState = {
   status: 'idle',
@@ -52,6 +52,10 @@ export function getSessionController(): SessionController {
       db: appDb,
       store: useSessionStore,
       getModules: () => allSubjects(useAppStore.getState().modules),
+      getDetectModules: () => {
+        const { modules, settings: s } = useAppStore.getState();
+        return detectableSubjects(allSubjects(modules), s.disabledSubjects);
+      },
       getSettings: settings,
       classifier,
       ollama,

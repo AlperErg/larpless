@@ -96,7 +96,7 @@ describe('every page renders in every fixture state', () => {
     expect(textOf(r)).toContain('Nothing here yet');
     act(() => useNavStore.getState().go('modules'));
     expect(textOf(r)).toContain('Your own courses (optional)');
-    expect(textOf(r)).toContain('Recognised automatically');
+    expect(textOf(r)).toContain('What LarpLess detects');
     act(() => useNavStore.getState().go('summary'));
     expect(textOf(r)).toContain('No finished session yet');
     act(() => r.unmount());

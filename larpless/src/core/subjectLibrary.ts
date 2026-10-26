@@ -142,3 +142,14 @@ export function allSubjects(userCourses: readonly StudyModule[]): StudyModule[] 
   const taken = new Set(userCourses.map((m) => m.name.trim().toLowerCase()));
   return [...userCourses, ...LIBRARY_MODULES.filter((m) => !taken.has(m.name.toLowerCase()))];
 }
+
+/**
+ * The subjects the classifier may pick: `all` minus the ids in `disabledIds`. Never empty, so the
+ * classifier always has a choice; if every subject is off (e.g. the last one on was a deleted course), all of them are used.
+ */
+export function detectableSubjects(all: readonly StudyModule[], disabledIds: readonly string[]): StudyModule[] {
+  if (disabledIds.length === 0) return [...all];
+  const off = new Set(disabledIds);
+  const on = all.filter((m) => !off.has(m.id));
+  return on.length ? on : [...all];
+}

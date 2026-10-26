@@ -422,6 +422,20 @@ describe('classifier', () => {
     expect((await s.c.classifyCurrent(fixtureModules)).verdict).toBeNull();
   });
 
+  it('a subject turned off mid-session is not reused from the cache or while LarpLess is frontmost', async () => {
+    const s = setup();
+    await s.c.classifyCurrent(fixtureModules);
+    const noBiology = fixtureModules.filter((m) => m.id !== BIO_VERDICT.moduleId);
+
+    s.setWin({ appName: 'LarpLess', windowTitle: 'LarpLess', isSelf: true });
+    expect((await s.c.classifyCurrent(noBiology)).verdict).toBeNull();
+
+    s.setWin({ appName: 'Preview', windowTitle: 'BIO101 Lecture 4.pdf', isSelf: false });
+    const r = await s.c.classifyCurrent(noBiology);
+    expect(r.tookScreenshot).toBe(true);
+    expect(s.capture).toHaveBeenCalledTimes(2);
+  });
+
   it('single flight, same window: a second call waits and shares the verdict without a screenshot', async () => {
     let release: (v: ScreenVerdict) => void = () => {};
     const s = setup();

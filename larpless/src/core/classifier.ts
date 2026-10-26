@@ -309,8 +309,10 @@ export function createClassifier({ native, ollama, now, config, getPower }: Clas
   async function decide(modules: StudyModule[], ctx: ClassifyContext): Promise<Decision> {
     const win = await native.screen.getActiveWindow();
     const appName = win.appName ?? null;
+    // A subject turned off mid-session must not come back from the previous verdict or the cache.
+    const allowed = (v: ScreenVerdict) => v.moduleId === null || modules.some((m) => m.id === v.moduleId);
     if (win.isSelf) {
-      if (!previous) return { kind: 'fast', result: { verdict: null, tookScreenshot: false, appName: null, key: null } };
+      if (!previous || !allowed(previous)) return { kind: 'fast', result: { verdict: null, tookScreenshot: false, appName: null, key: null } };
       const source = previous.source === 'rule' ? 'rule' : 'cache';
       return {
         kind: 'fast',
@@ -346,6 +348,7 @@ export function createClassifier({ native, ollama, now, config, getPower }: Clas
       !v.studying ? Math.min(cache!.ttlMs, DISTRACTED_CACHE_MAX_MS) : cache!.ttlMs;
     if (
       cache &&
+      allowed(cache.verdict) &&
       win.windowTitle !== null &&
       cache.appName === appName &&
       cache.windowTitle === win.windowTitle &&

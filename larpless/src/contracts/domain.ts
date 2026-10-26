@@ -107,6 +107,8 @@ export interface Settings {
   defaultSound: SoundId;
   volume: number;                       // 0..1
   pomodoroDefault: PomodoroPreset | 'off';
+  /** Ids of subjects (built-in or own courses) the classifier may not pick. New subjects start on. */
+  disabledSubjects: string[];
   onboarded: boolean;
   appearance: Appearance;
   /** Supabase project URL. Empty uses the keys bundled in src/social/env.ts. */

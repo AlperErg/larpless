@@ -34,6 +34,7 @@ export const DEFAULT_SETTINGS: Settings = {
   defaultSound: 'off',
   volume: 0.5,
   pomodoroDefault: 'off',
+  disabledSubjects: [],
   onboarded: false,
   appearance: 'system',
   supabaseUrl: '',

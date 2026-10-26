@@ -88,3 +88,15 @@ export function blankDraft(used: TagColor[]): ModuleDraft {
   return { id: newModuleId(), name: '', color: freshColor(used), keywordsText: '' };
 }
 
+
+/**
+ * `disabled` with `id` flipped, keeping only ids that still exist in `allIds` (deleted courses drop out).
+ * Null when it would turn off the last subject that's on: the classifier needs at least one.
+ */
+export function toggleSubject(disabled: readonly string[], id: string, allIds: readonly string[]): string[] | null {
+  const known = new Set(allIds);
+  const off = disabled.filter((d) => known.has(d) && d !== id);
+  if (disabled.includes(id)) return off;
+  if (off.length + 1 >= known.size) return null;
+  return [...off, id];
+}

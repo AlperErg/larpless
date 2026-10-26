@@ -1,5 +1,5 @@
 import { DEFAULT_SETTINGS } from '../../src/config';
-import type { Settings } from '../../src/contracts/domain';
+import type { Settings, StudyModule } from '../../src/contracts/domain';
 import type { NativeApis, PanelAction, PanelState } from '../../src/contracts/native';
 import type { SessionStoreState } from '../../src/contracts/store';
 import { createClassifier } from '../../src/core/classifier';
@@ -29,7 +29,9 @@ const INITIAL: SessionStoreState = {
 
 const T0 = new Date(2026, 9, 9, 14, 0, 0).getTime();
 
-function setup(opts: { settings?: Partial<Settings>; native?: Partial<NativeApis>; prepareOllama?: () => Promise<unknown> } = {}) {
+function setup(
+  opts: { settings?: Partial<Settings>; native?: Partial<NativeApis>; prepareOllama?: () => Promise<unknown>; detect?: StudyModule[] } = {},
+) {
   let state: SessionStoreState = { ...INITIAL };
   const store: StoreApi = {
     getState: () => state,
@@ -79,6 +81,7 @@ function setup(opts: { settings?: Partial<Settings>; native?: Partial<NativeApis
     getPower: () => effectiveProfile(settings.powerProfile),
   });
   const warmUp = jest.spyOn(classifier, 'warmUp');
+  const classifyCurrent = jest.spyOn(classifier, 'classifyCurrent');
   const unload = jest.spyOn(classifier, 'unload');
   const saved: string[] = [];
   const ctrl = createSessionController({
@@ -86,6 +89,7 @@ function setup(opts: { settings?: Partial<Settings>; native?: Partial<NativeApis
     db,
     store,
     getModules: () => fixtureModules,
+    getDetectModules: opts.detect ? () => opts.detect! : undefined,
     getSettings: () => settings,
     classifier,
     ollama,
@@ -103,6 +107,7 @@ function setup(opts: { settings?: Partial<Settings>; native?: Partial<NativeApis
     db,
     ollama,
     warmUp,
+    classifyCurrent,
     unload,
     capture,
     webcamStart,
@@ -847,7 +852,18 @@ describe('sessionController', () => {
       await h.ctrl.end();
     });
 
-    it('warms the model up on start and unloads it on end; demo mode does neither', async () => {
+    it('classifies and warms up with only the subjects that are on', async () => {
+      const on = fixtureModules.slice(1);
+      const h = setup({ detect: on });
+      await h.ctrl.start({ pomodoro: 'off' });
+      expect(h.warmUp).toHaveBeenCalledWith(on);
+      await advance(31_000);
+      expect(h.classifyCurrent).toHaveBeenCalled();
+      for (const call of h.classifyCurrent.mock.calls) expect(call[0]).toEqual(on);
+      await h.ctrl.end();
+    });
+
+        it('warms the model up on start and unloads it on end; demo mode does neither', async () => {
       const h = setup();
       await h.ctrl.start({ pomodoro: 'off' });
       expect(h.warmUp).toHaveBeenCalledWith(fixtureModules);

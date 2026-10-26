@@ -1,6 +1,6 @@
 import { DEFAULT_SETTINGS } from '../../src/config';
 import type { Chunk } from '../../src/contracts/domain';
-import { createDb, createMemoryKv, KEYS } from '../../src/core/db';
+import { cleanSettings, createDb, createMemoryKv, KEYS } from '../../src/core/db';
 import { fixtureChunks, fixtureModules, fixtureSessions } from '../../src/fixtures/data';
 
 describe('db', () => {
@@ -136,5 +136,14 @@ describe('db', () => {
     const raw = kv.map.get(KEYS.chunks(dirty.sessionId))!;
     expect(raw).not.toContain('secret.pdf');
     expect(raw).not.toContain('IMG');
+  });
+
+  it('keeps disabledSubjects as unique strings, and drops anything else', () => {
+    expect(cleanSettings({ disabledSubjects: ['lib_biology', 3, 'lib_biology', null, 'mod_x'] }).disabledSubjects).toEqual([
+      'lib_biology',
+      'mod_x',
+    ]);
+    expect(cleanSettings({ disabledSubjects: 'lib_biology' }).disabledSubjects).toEqual([]);
+    expect(cleanSettings({}).disabledSubjects).toEqual([]);
   });
 });
