@@ -218,9 +218,7 @@ private struct FLShellCompactView: View {
       VStack(alignment: .leading, spacing: 0) {
         // The timer never shrinks (it widens past an hour); the pill takes what is left and truncates.
         HStack(alignment: .center, spacing: 10) {
-          Text(timer)
-            .font(FLShellFont.serif(44))
-            .monospacedDigit()
+          FLShellClockText(text: timer, size: 44)
             .foregroundColor(FLNotionColors.text)
             .lineLimit(1)
             .fixedSize()
@@ -265,6 +263,34 @@ private struct FLShellCompactView: View {
       .flMeasureHeight { h in model.setMeasuredHeight(compact: h) }
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
+  }
+}
+
+/// Serif clock with every digit in a cell as wide as the widest digit. Instrument Serif only has proportional
+/// figures (a "1" is about half as wide as a "0") and ignores `.monospacedDigit()`, so without this the timer
+/// changed width every second and pushed the pill beside it around.
+private struct FLShellClockText: View {
+  let text: String
+  let size: CGFloat
+
+  var body: some View {
+    let cell = Self.digitWidth(size)
+    HStack(spacing: 0) {
+      ForEach(Array(text.enumerated()), id: \.offset) { _, ch in
+        Text(String(ch))
+          .font(FLShellFont.serif(size))
+          .monospacedDigit()
+          .frame(width: ch.isWholeNumber ? cell : nil)
+      }
+    }
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(text)
+  }
+
+  private static func digitWidth(_ size: CGFloat) -> CGFloat {
+    guard let font = NSFont(name: FLNotionFonts.serifRegular, size: size) else { return ceil(size * 0.6) }
+    let widths = "0123456789".map { (String($0) as NSString).size(withAttributes: [.font: font]).width }
+    return ceil(widths.max() ?? size * 0.6)
   }
 }
 
