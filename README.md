@@ -34,7 +34,7 @@ The UI is styled after Notion: Inter + Instrument Serif, the Notion tag palette,
 
 ## How it works
 
-![How LarpLess works: screen and webcam are analysed on your Mac, fused into one label per chunk, and only the post you choose leaves the device](docs/images/how-it-works.png)
+![How LarpLess works: screen and webcam are analysed on your Mac or PC, fused into one label per chunk, and only the post you choose leaves the device](docs/images/how-it-works.png)
 
 ```mermaid
 flowchart LR
