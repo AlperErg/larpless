@@ -60,9 +60,10 @@ describe('acknowledgements data (scripts/acknowledgements.mjs)', () => {
   it('each build lists only what it ships', () => {
     expect(names('macos')).not.toContain('react-native-windows');
     expect(names('macos')).not.toContain('ONNX Runtime');
+    expect(names('macos')).not.toContain('Hermes');
     expect(names('macos')).toContain('Qwen3-VL 2B');
     expect(names('windows')).toEqual(
-      expect.arrayContaining(['react-native-windows', 'Inter', 'Ultralytics YOLO11n', 'Qwen3-VL 2B', 'ONNX Runtime']),
+      expect.arrayContaining(['react-native-windows', 'Inter', 'Ultralytics YOLO11n', 'Qwen3-VL 2B', 'ONNX Runtime', 'Hermes', 'Folly']),
     );
     expect(names('windows')).not.toContain('react-native-macos');
     expect(names('windows')).not.toContain('mediaremote-adapter');

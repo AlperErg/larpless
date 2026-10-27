@@ -11,8 +11,8 @@
  *     source maps), not the whole dependency tree, most of which is build tooling that never ships.
  *   - macOS native: the acknowledgements CocoaPods writes on `pod install` (so run that first), and
  *     vendored code under macos/vendor/.
- *   - Fonts, models and ONNX Runtime: EXTRAS below, with licence texts kept in licenses/.
- * Not covered yet: the Windows build's other NuGet packages (Hermes, Windows App SDK…).
+ *   - Fonts, models and the Windows build's native libraries (NuGet packages and what react-native-windows
+ *     compiles in): EXTRAS below, with licence texts kept in licenses/. Update their versions by hand.
  */
 import { spawn, execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -73,8 +73,66 @@ const EXTRAS = [
     license: 'MIT',
     notice:
       'https://github.com/microsoft/onnxruntime\n' +
-      'Third-party notices: https://github.com/microsoft/onnxruntime/blob/v1.22.1/ThirdPartyNotices.txt',
+      'The licences of the libraries it includes ship with the app as ThirdPartyNotices-onnxruntime.txt, next to\n' +
+      'LarpLess.exe, and are at https://github.com/microsoft/onnxruntime/blob/v1.22.1/ThirdPartyNotices.txt',
     file: 'licenses/MIT-onnxruntime.txt',
+    platforms: ['windows'],
+  },
+  // Windows NuGet packages and the C++ libraries react-native-windows compiles into Microsoft.ReactNative.dll.
+  // Versions follow windows/LarpLess/obj/project.assets.json and react-native-windows' external/*/cgmanifest.json.
+  // The Windows App SDK and VCLibs are framework packages Windows installs, not files in the app.
+  {
+    group: 'Native libraries',
+    name: 'Hermes',
+    version: '0.0.0-2608.12001-35d34796',
+    license: 'MIT',
+    notice: 'JavaScript engine (Microsoft.JavaScript.Hermes): hermes.dll and hermes-icu.dll. https://github.com/microsoft/hermes-windows',
+    file: 'licenses/NOTICE-hermes.txt',
+    platforms: ['windows'],
+  },
+  {
+    group: 'Native libraries',
+    name: 'Microsoft Edge WebView2 SDK',
+    version: '1.0.3179.45',
+    license: 'BSD-3-Clause',
+    notice: 'Microsoft.Web.WebView2.Core.dll, loaded by react-native-windows.',
+    file: 'licenses/BSD-3-Clause-webview2.txt',
+    platforms: ['windows'],
+  },
+  {
+    group: 'Native libraries',
+    name: 'Folly',
+    version: 'ad90720',
+    license: 'Apache-2.0',
+    notice: 'Copyright (c) Meta Platforms, Inc. and affiliates. Built into Microsoft.ReactNative.dll. https://github.com/facebook/folly',
+    file: 'licenses/Apache-2.0-folly.txt',
+    platforms: ['windows'],
+  },
+  {
+    group: 'Native libraries',
+    name: 'fmt',
+    version: '0c9fce2',
+    license: 'MIT',
+    notice: 'Built into Microsoft.ReactNative.dll. https://github.com/fmtlib/fmt',
+    file: 'licenses/MIT-fmt.txt',
+    platforms: ['windows'],
+  },
+  {
+    group: 'Native libraries',
+    name: 'fast_float',
+    version: '77cc847',
+    license: 'MIT',
+    notice: 'Built into Microsoft.ReactNative.dll; also available under Apache-2.0 or BSL-1.0. https://github.com/fastfloat/fast_float',
+    file: 'licenses/MIT-fast_float.txt',
+    platforms: ['windows'],
+  },
+  {
+    group: 'Native libraries',
+    name: 'VC++ runtime forwarders',
+    version: '1.0.2-rc',
+    license: 'MIT',
+    notice: 'Microsoft.VCRTForwarders.140: the *_app.dll forwarders next to LarpLess.exe. https://github.com/microsoft/vcrt-forwarders',
+    file: 'licenses/MIT-vcrt-forwarders.txt',
     platforms: ['windows'],
   },
   {
