@@ -11,8 +11,8 @@
  *     source maps), not the whole dependency tree, most of which is build tooling that never ships.
  *   - macOS native: the acknowledgements CocoaPods writes on `pod install` (so run that first), and
  *     vendored code under macos/vendor/.
- *   - Fonts and models: EXTRAS below, with licence texts kept in licenses/.
- * Not covered yet: the Windows build's NuGet packages (ONNX Runtime, Hermes, Windows App SDK…).
+ *   - Fonts, models and ONNX Runtime: EXTRAS below, with licence texts kept in licenses/.
+ * Not covered yet: the Windows build's other NuGet packages (Hermes, Windows App SDK…).
  */
 import { spawn, execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -26,7 +26,10 @@ const PODS_PLIST = join(ROOT, 'macos/Pods/Target Support Files/Pods-Focusline-ma
 const PODFILE_LOCK = join(ROOT, 'macos/Podfile.lock');
 const PLATFORMS = ['macos', 'windows'];
 
-/** Bundled by hand rather than through npm or CocoaPods. `notice` goes above the licence text. */
+/**
+ * Bundled by hand rather than through npm or CocoaPods, or downloaded by the app at onboarding (the models).
+ * `notice` goes above the licence text.
+ */
 const EXTRAS = [
   {
     group: 'Fonts',
@@ -53,6 +56,26 @@ const EXTRAS = [
       'Licensed under the GNU Affero General Public License v3.0 (https://ultralytics.com/license).\n' +
       'Source: https://github.com/ultralytics/ultralytics',
     file: 'licenses/AGPL-3.0.txt',
+  },
+  {
+    group: 'Models',
+    name: 'Qwen3-VL 2B',
+    license: 'Apache-2.0',
+    notice:
+      'Screen classification: qwen3-vl:2b, by the Qwen team (Alibaba Cloud). Not bundled: Ollama downloads it at onboarding.\n' +
+      'Source: https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct',
+    file: 'licenses/Apache-2.0.txt',
+  },
+  {
+    group: 'Native libraries',
+    name: 'ONNX Runtime',
+    version: '1.22.1',
+    license: 'MIT',
+    notice:
+      'https://github.com/microsoft/onnxruntime\n' +
+      'Third-party notices: https://github.com/microsoft/onnxruntime/blob/v1.22.1/ThirdPartyNotices.txt',
+    file: 'licenses/MIT-onnxruntime.txt',
+    platforms: ['windows'],
   },
   {
     group: 'Native libraries',
