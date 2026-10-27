@@ -18,12 +18,12 @@ It was started in one hackathon day with **react-native-macos**. It also runs on
 | --- | --- |
 | **Subjects out of the box** | A built-in library of subjects with keywords sets the labels automatically. Adding your own courses is optional. |
 | **Screen classification** | The frontmost app, the window title and (when needed) a screenshot go to a local vision model (`qwen3-vl:2b` via Ollama). It judges the *content*: a YouTube lecture counts as study, YouTube Shorts doesn't. |
-| **Rules + cache fast path** | Known distractions (Instagram, TikTok, Reddit, Netflix, Discord, …) are flagged from the window title alone, and an unchanged window reuses the last verdict. Most checks need no screenshot. |
+| **Rules + cache fast path** | Known distractions (Instagram, TikTok, Reddit, Netflix, Discord, …) are flagged from the app or window title alone, known study tools (Vivado, ModelSim, Quartus, GTKWave, Logisim, RARS) are labelled with their subject the same way, and an unchanged window reuses the last verdict. Most checks need no screenshot. |
 | **Power profiles** | Eco, Medium or High sets how often the screen is checked and how big the screenshot is. A session that falls behind steps down on its own, so slower Macs still get answers. |
 | **Webcam presence & phone detection** | **YOLO11n** detects whether you are there and spots a phone, at 1 fps. CoreML on Mac, ONNX Runtime on Windows. |
 | **Floating timer** | A SwiftUI `NSPanel` that floats over every app and Space. It shows green when you're studying, red when you're distracted, grey when you're away and blue on breaks. Hover it for Pomodoro, sound and session controls. |
-| **Now playing** | A strip under the timer shows the current song, the time left, and previous / play / next. The title is shown, never saved. |
-| **Pomodoro** | An optional study format of 25 minutes of focus and a subsequent 5 minute break or 50/10 is available. |
+| **Now playing** | A strip under the timer shows the current song with its album art, the time left, and previous / play / next. The title is shown, never saved. |
+| **Pomodoro** | Optional: 25 minutes of focus and a 5 minute break (with a 15 minute break after every fourth round), or 50/10. |
 | **Escalating alerts** | Panel turns red → notification + soft chime → second notification + pulse. A "Back on track" flash when you return. Strictness: 2 / 5 / 10 min. |
 | **Ambient sound** | White, pink and brown noise generated with `AVAudioEngine`, ducked during breaks. |
 | **Session Summary** | Duration, focus %, subject breakdown bar, streaks and a heatmap. |
@@ -43,8 +43,10 @@ flowchart LR
     WC[FLWebcam: YOLO 1 fps] -->|samples| F
     PN[FLFloatingPanel NSPanel] -->|panel actions| F
     AS[FLAppShell: menu, App Nap] -->|menu commands| F
+    NP[FLNowPlaying] -->|song, Swift only| PN
     NT[FLNotifications]
     SD[FLSound]
+    OH[FLOllama: open / restart Ollama.app]
   end
   F[src/native facades] --> CTRL[core/sessionController]
   CTRL --> CLS[core/classifier: rules → cache → VLM]
@@ -53,6 +55,7 @@ flowchart LR
   CTRL --> AL[core/alerts] --> NT
   CTRL --> PN
   CTRL --> SD
+  CTRL -->|session start| OH
   CTRL --> DB[core/db → AsyncStorage, labels only]
   ST --> UI[React Native UI]
   UI -->|store actions| CTRL
@@ -65,8 +68,8 @@ The session controller runs two cycles: a **live** one every second that keeps t
 The classifier stops at the cheapest step that gives an answer:
 
 1. **LarpLess in front:** reuse the previous verdict.
-2. **Rules:** a distraction keyword in the app or window title → `distracted`. No screenshot.
-3. **Cache:** same app and title as a verdict less than 2 min old → reuse it. No screenshot.
+2. **Rules:** a distraction keyword in the app or window title → `distracted`; a known study tool (Vivado, Quartus, RARS, …) → its subject. No screenshot.
+3. **Cache:** same app and title as a recent verdict → reuse it. Verdicts last as long as the profile's cache time (2–3 min), "not study" verdicts at most 1 min so a wrong label doesn't stick. No screenshot.
 4. **VLM:** take a screenshot and classify it with the vision model in Ollama (about 3 s on a fast Mac). Only one vision call runs at a time, and it is allowed to finish. A check for the same window shares its result. If you switched windows meanwhile, one follow-up reads whatever is in front when the call returns, so windows you only passed through are never captured.
 
 ### Live: what the panel shows
@@ -100,7 +103,7 @@ The saved profile is a ceiling. If a vision call takes longer than a chunk, or y
 
 Starting a session opens Ollama in the background if it isn't running, then warms the model up, which takes about 3 s while the first window settles, so the first check doesn't also wait for the model to load. LarpLess asks for a 4K context. The subject list sits in the system prompt, which is identical on every check, so Ollama reuses it and only processes the new screenshot and window line. Ending a session unloads the model to free its memory right away instead of waiting out the keep-alive.
 
-**Memory saver.** Ollama 0.30+ runs models in llama.cpp's server, which keeps old prompts in a RAM cache of up to 8 GB. LarpLess never reuses one, so the cache only grows (about 340 MB per screenshot) and can push a 16–24 GB Mac into swap. Only `LLAMA_ARG_CACHE_RAM=0` in Ollama's environment at launch turns it off, so LarpLess applies it itself. It opens Ollama.app with that variable, and at app launch and session start it restarts an Ollama.app running without it, as long as no other model is loaded. Your own `OLLAMA_*` settings carry over. **Settings → Local AI → Memory saver** shows the state and has a **Restart Ollama** button. If you run the server yourself (a terminal or Homebrew), start it with `LLAMA_ARG_CACHE_RAM=0 ollama serve`.
+**Memory saver.** Ollama 0.30+ runs models in llama.cpp's server, which keeps old prompts in a RAM cache of up to 8 GB. LarpLess never reuses one, so the cache only grows (about 340 MB per screenshot) and can push a 16–24 GB Mac into swap. Only `LLAMA_ARG_CACHE_RAM=0` in Ollama's environment at launch turns it off, so LarpLess applies it itself. It opens Ollama.app with that variable, and at app launch and session start it restarts an Ollama.app running without it, as long as no other model is loaded. Your own `OLLAMA_*` and `LLAMA_*` settings carry over. **Settings → Local AI → Memory saver** shows the state and has a **Restart Ollama** button. If you run the server yourself (a terminal or Homebrew), start it with `LLAMA_ARG_CACHE_RAM=0 ollama serve`.
 
 **Layering:** `ui → store → core → native facades → Swift`. `src/core` is pure TypeScript with injected dependencies, so the whole session loop runs under Jest with fake timers.
 
@@ -108,7 +111,7 @@ Starting a session opens Ollama in the background if it isn't running, then warm
 
 - **App:** react-native 0.81.6 + react-native-macos 0.81.9, TypeScript, Hermes. It runs Fabric + bridgeless; the legacy-style native modules work through the interop layer.
 - **State / storage:** zustand 5, AsyncStorage 2.2.0 (pinned), date-fns 4.
-- **Native (Swift 5, macOS 14+):** ScreenCaptureKit, AVFoundation, Vision, CoreML, UserNotifications, AppKit, SwiftUI.
+- **Native (Swift 5, macOS 14+):** ScreenCaptureKit, AVFoundation, Vision, CoreML, UserNotifications, AppKit, SwiftUI, and the Keychain for the Supabase sign-in.
 - **Now playing:** a vendored [mediaremote-adapter](https://github.com/ungive/mediaremote-adapter) (BSD-3-Clause) run through `/usr/bin/perl`. Since macOS 15.4, a Developer ID app can't read MediaRemote itself.
 - **Models:** Ollama `qwen3-vl:2b` and YOLO11n (`nms=True`, bundled; presence and phone). CoreML on Mac, ONNX Runtime on Windows.
 - **Social:** `@supabase/supabase-js` + `react-native-url-polyfill`.
@@ -219,7 +222,7 @@ The Windows build uses the same TypeScript and the same JS ↔ native contract; 
 powershell -ExecutionPolicy Bypass -File scripts\run-windows.ps1
 ```
 
-This starts Metro on port 8081 if it isn't already running (log in `.logs/metro-8081.log`), restores the local PowerShell 7 tool the deploy step needs, then builds, deploys and launches the Debug app. The first build takes several minutes. No admin terminal is needed. Allow the camera when Windows asks; there is no Screen Recording permission on Windows. The first launch is mostly the same apart from those.
+This stops a running LarpLess and removes the installed package, bundles the JS into the app (so it runs without Metro, also from Start), restores the local PowerShell 7 tool the deploy step needs, then builds, deploys and launches the Debug app. Re-run it after JS changes. While developing, add `-Metro` to load the JS from Metro on port 8081 instead; it starts Metro if it isn't already running (log in `.logs/metro-8081.log`). The first build takes several minutes. No admin terminal is needed. Allow the camera when Windows asks; there is no Screen Recording permission on Windows. The first launch is mostly the same apart from those.
 
 **Differences from the Mac app**
 
@@ -312,7 +315,7 @@ On Windows each module is one header in `windows/LarpLess/Native/` (`REACT_MODUL
 - Snapshots, base64 strings, pixel buffers and `CGImage`s are never logged. Logs carry sizes and timings only.
 - Only labels are persisted. Window titles are never stored.
 - The now-playing title and artist stay inside the Swift panel. They are never sent to JS, logged or stored, and the debug OCR scan skips the media strip. Settings keep only the on/off toggle and drop any key they don't know on load and on save.
-- The now-playing helper is started with `--no-artwork`, so no album art passes through the app.
+- Album art for the now-playing strip is scaled to 96 px and kept in memory in the Swift panel only; it is never logged, stored or sent to JS.
 - `privacy.framesStored` is the constant `0`.
 - Nothing is captured during Pomodoro breaks or while you're away.
 
@@ -320,4 +323,4 @@ On Windows each module is one header in `windows/LarpLess/Native/` (`REACT_MODUL
 
 Copyright (C) 2026 the LarpLess contributors.
 
-LarpLess is free software under the [GNU Affero General Public License v3.0](LICENSE). The webcam model, Ultralytics YOLO11n, is AGPL-3.0, so the app as a whole is too. The screen model, Qwen3-VL through Ollama, is Apache-2.0, and the fonts are OFL-1.1. Third-party notices are listed in the app under Settings → Acknowledgements, generated by `larpless/scripts/acknowledgements.mjs` from the texts in [`larpless/licenses/`](larpless/licenses/).
+LarpLess is free software under the [GNU Affero General Public License v3.0](LICENSE). The webcam model, Ultralytics YOLO11n, is AGPL-3.0, so the app as a whole is too. The screen model, Qwen3-VL through Ollama, is Apache-2.0, and the fonts are OFL-1.1. Third-party notices are listed in the app under Settings → About → Acknowledgements, generated by `larpless/scripts/acknowledgements.mjs` from the texts in [`larpless/licenses/`](larpless/licenses/).
