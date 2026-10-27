@@ -185,9 +185,19 @@
   <ItemGroup>
   </ItemGroup>
   <!-- The NuGet props already add onnxruntime.dll as None (OutDir only). Replace that item so the
-       package gets one copy, next to the exe, instead of two entries for the same target path. -->
+       package gets one copy, next to the exe, instead of two entries for the same target path.
+       ONNX Runtime's ThirdPartyNotices.txt (the licences of what it compiles in) ships next to it;
+       the Acknowledgements page points to it. -->
   <Target Name="PackageOnnxRuntimeDll" BeforeTargets="AssignTargetPaths">
+    <PropertyGroup>
+      <OnnxRuntimeNotices>$([System.IO.Path]::GetFullPath('$(OnnxRuntimeBinary)\..\..\..\..\ThirdPartyNotices.txt'))</OnnxRuntimeNotices>
+    </PropertyGroup>
     <ItemGroup>
+      <None Include="$(OnnxRuntimeNotices)" Condition="'$(OnnxRuntimeBinary)' != '' and Exists('$(OnnxRuntimeNotices)')">
+        <Link>ThirdPartyNotices-onnxruntime.txt</Link>
+        <DeploymentContent>true</DeploymentContent>
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </None>
       <None Remove="@(None)" Condition="'%(None.Filename)' == 'onnxruntime' and '%(None.Extension)' == '.dll' and '$(OnnxRuntimeBinary)' != '' and Exists('$(OnnxRuntimeBinary)')" />
       <None Include="$(OnnxRuntimeBinary)" Condition="'$(OnnxRuntimeBinary)' != '' and Exists('$(OnnxRuntimeBinary)')">
         <Link>onnxruntime.dll</Link>
