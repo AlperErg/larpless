@@ -30,11 +30,13 @@ final class FLShellHoverTracker: NSResponder {
 @MainActor
 final class FLShellPanelController {
   static let shared = FLShellPanelController()
-  static let width: CGFloat = 300
+  /// The panel is `minWidth` wide and widens up to `maxWidth` when the pill's text would otherwise truncate.
+  static let minWidth: CGFloat = 300
+  static let maxWidth: CGFloat = 480
   static let mediaStripHeight: CGFloat = 56
   /// Window size: the study card (fitted to its content) plus the media strip when a track is showing.
   var currentSize: NSSize {
-    NSSize(width: Self.width,
+    NSSize(width: min(Self.maxWidth, max(Self.minWidth, model.compactWidth)),
            height: model.cardHeight + (FLNowPlaying.shared.track != nil ? Self.mediaStripHeight : 0))
   }
   static let inset: CGFloat = 16
@@ -55,7 +57,7 @@ final class FLShellPanelController {
   private init() {
     model.dragHandler = { [weak self] point in self?.handleDrag(point) }
     FLNowPlaying.shared.onTrackChanged = { [weak self] in self?.syncFrame() }
-    model.onCardHeightChange = { [weak self] in self?.syncFrame(animated: true) }
+    model.onCardSizeChange = { [weak self] in self?.syncFrame(animated: true) }
   }
 
   // MARK: Lifecycle
@@ -173,13 +175,16 @@ final class FLShellPanelController {
   }
 
   /// Resizes the window to the card (and media strip). The top edge stays put, so it grows and shrinks downward.
+  /// Horizontally the edge nearer its screen's side stays put, so a panel in the top-right corner widens leftward.
   private func syncFrame(animated: Bool = false) {
     guard let p = panel, let host = hostingView else { return }
     let next = currentSize
     let current = p.frame
     if abs(current.width - next.width) < 0.5, abs(current.height - next.height) < 0.5,
-       abs(host.frame.height - next.height) < 0.5 { return }
-    let frame = NSRect(x: current.origin.x, y: current.maxY - next.height, width: next.width, height: next.height)
+       abs(host.frame.width - next.width) < 0.5, abs(host.frame.height - next.height) < 0.5 { return }
+    let screenMidX = (p.screen ?? NSScreen.main)?.visibleFrame.midX ?? current.midX
+    let x = current.midX > screenMidX ? current.maxX - next.width : current.minX
+    let frame = NSRect(x: x, y: current.maxY - next.height, width: next.width, height: next.height)
     guard animated, p.isVisible else {
       programmaticMove = true
       p.setFrame(frame, display: true)

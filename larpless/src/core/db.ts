@@ -67,6 +67,9 @@ export function cleanSettings(raw: unknown): Settings {
   const savedRev = typeof src.modelDefaultRev === 'number' ? src.modelDefaultRev : 1;
   if (savedRev < MODEL_DEFAULT_REV && out.model === 'qwen3-vl:4b') out.model = DEFAULT_SETTINGS.model;
   out.modelDefaultRev = MODEL_DEFAULT_REV;
+  out.disabledSubjects = Array.isArray(out.disabledSubjects)
+    ? Array.from(new Set(out.disabledSubjects.filter((id): id is string => typeof id === 'string')))
+    : [];
   if (out.appearance !== 'system' && out.appearance !== 'light' && out.appearance !== 'dark') {
     out.appearance = DEFAULT_SETTINGS.appearance;
   }

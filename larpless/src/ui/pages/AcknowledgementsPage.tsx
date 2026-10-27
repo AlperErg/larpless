@@ -1,7 +1,7 @@
 /** Open-source notices: Settings → About → Acknowledgements, and LarpLess → Acknowledgements on macOS. */
 import { StyleSheet, View } from 'react-native';
-import { noticeGroups } from '../../legal/acknowledgements';
-import type { Notice } from '../../legal/acknowledgements';
+import { noticeGroups } from '../../legal/notices';
+import type { Notice } from '../../legal/notices';
 import { Tag, Text, ToggleList } from '../components';
 import { Page } from '../layout/Page';
 import { IS_WINDOWS } from '../platform';
