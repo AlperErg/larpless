@@ -67,6 +67,28 @@ const EXTRAS = [
     file: 'licenses/Apache-2.0.txt',
   },
   {
+    group: 'Models',
+    name: 'SigLIP 2',
+    license: 'Apache-2.0',
+    notice:
+      'On-device screen classifier: siglip2-base-patch16-224 vision tower, by Google; ONNX export by onnx-community.\n' +
+      'Downloaded at onboarding (pinned commit, SHA-256 checked). FLScreenModelPrompts.json holds prompt embeddings from its text tower.\n' +
+      'Source: https://huggingface.co/google/siglip2-base-patch16-224',
+    file: 'licenses/Apache-2.0.txt',
+    platforms: ['windows'],
+  },
+  {
+    group: 'Models',
+    name: 'all-MiniLM-L6-v2',
+    license: 'Apache-2.0',
+    notice:
+      'On-device screen classifier: text embeddings, by sentence-transformers; ONNX export by Xenova.\n' +
+      'Downloaded at onboarding (pinned commit, SHA-256 checked).\n' +
+      'Source: https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2',
+    file: 'licenses/Apache-2.0.txt',
+    platforms: ['windows'],
+  },
+  {
     group: 'Native libraries',
     name: 'ONNX Runtime',
     version: '1.22.1',
