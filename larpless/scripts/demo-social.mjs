@@ -7,14 +7,17 @@
  *   node scripts/demo-social.mjs request <user>    every demo account sends a friend request to <user>
  *   node scripts/demo-social.mjs status            friends, pending requests and post counts per demo account
  *
+ * Needs SUPABASE_URL and SUPABASE_ANON_KEY in the environment (the values entered in Settings → Friends).
  * Refuses to run while "Confirm email" is on, so it never makes Supabase send mail.
  */
-import { readFileSync } from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
 
-const env = readFileSync(new URL('../src/social/env.ts', import.meta.url), 'utf8');
-const URL_ = env.match(/SUPABASE_URL = '([^']+)'/)[1];
-const KEY = env.match(/'(eyJ[^']+)'/)[1];
+const URL_ = process.env.SUPABASE_URL;
+const KEY = process.env.SUPABASE_ANON_KEY;
+if (!URL_ || !KEY) {
+  console.error('Set SUPABASE_URL and SUPABASE_ANON_KEY first.');
+  process.exit(1);
+}
 
 export const PASSWORD = 'larpless-demo';
 /** Existing demo accounts were created under the old name. */

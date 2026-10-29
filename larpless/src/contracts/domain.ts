@@ -111,8 +111,8 @@ export interface Settings {
   disabledSubjects: string[];
   onboarded: boolean;
   appearance: Appearance;
-  /** Supabase project URL. Empty uses the keys bundled in src/social/env.ts. */
+  /** Supabase project URL from Settings → Friends. Empty (with the key) runs fully local. */
   supabaseUrl: string;
-  /** Supabase anon key. Empty uses the keys bundled in src/social/env.ts. */
+  /** Supabase anon key from Settings → Friends. Empty (with the URL) runs fully local. */
   supabaseAnonKey: string;
 }

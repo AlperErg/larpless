@@ -22,7 +22,7 @@ powershell -ExecutionPolicy Bypass -File scripts\launch-windows.ps1        # Met
 Get-Process LarpLess -EA SilentlyContinue | Stop-Process; npx @react-native-community/cli run-windows --no-packager --logging *> .logs\build-windows.log   # rebuild only
 ```
 
-Default installs embed `windows/LarpLess/Bundle/index.windows.bundle` (`EmbedJsBundle=true` → `BUNDLE` in `LarpLess.cpp`). Re-run `run-windows.ps1` after JS changes. `src/social/env.ts` is read at bundle time, so recreate the bundle when those keys change.
+Default installs embed `windows/LarpLess/Bundle/index.windows.bundle` (`EmbedJsBundle=true` → `BUNDLE` in `LarpLess.cpp`). Re-run `run-windows.ps1` after JS changes.
 
 - Stop the running app before rebuilding. A first build takes several minutes; incremental ones about one.
 - Debug builds set `UseDeveloperSupport(false)` so RNW does not paint its green Metro **Loading** bar (that is not `BootScreen`). Themed launch is `BootScreen.tsx` after JS loads. `LarpLess.cpp` also sets the Win32 window canvas to match `theme.ts` before React paints.

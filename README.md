@@ -155,12 +155,7 @@ This runs `npm ci` and then `pod install` with the UTF-8 locale CocoaPods needs.
 
 ### Supabase Setup
 
-The social layer reads `larpless/src/social/env.ts`, which is gitignored. The file has to exist so the app can build. Put the project URL and anon key there, or leave both empty and enter them in **Settings → Friends**. Settings override this file when both fields are filled in. If both are empty everywhere, the app skips Supabase and runs fully local.
-
-```ts
-export const SUPABASE_URL = 'https://<project>.supabase.co';
-export const SUPABASE_ANON_KEY = '<anon key>';
-```
+Enter your project URL (`https://<project>.supabase.co`) and anon key in **Settings → Friends**. They are saved with the rest of the settings, so they survive rebuilds and relaunches. Leave both empty and the app skips Supabase and runs fully local.
 
 Then, in the Supabase dashboard, run [`larpless/supabase/schema.sql`](larpless/supabase/schema.sql) in the SQL editor and turn off **Authentication → Providers → Email → Confirm email** (accounts use a username + password; you can also sign in with the email of an account made outside the app). The script is safe to re-run; run it again whenever it changes (for example, **Settings → Account → Delete account** needs its `delete_account` function).
 
@@ -216,7 +211,7 @@ The Windows build uses the same TypeScript and the same JS ↔ native contract; 
 - **Developer Mode** on and **long paths** enabled (Settings → System → For developers).
 - **[Ollama for Windows](https://ollama.com)** with `qwen3-vl:2b` pulled, as on the Mac.
 
-**Install and run.** From `larpless/`, run `npm ci`, create `src/social/env.ts` as in [Supabase Setup](#supabase-setup), then:
+**Install and run.** From `larpless/`, run `npm ci`, then:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\run-windows.ps1
