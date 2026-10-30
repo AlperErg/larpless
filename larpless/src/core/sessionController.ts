@@ -17,7 +17,7 @@
  * PRIVACY: snapshots never pass through here (the classifier drops them); nothing image-like is logged.
  */
 import type { Chunk, PomodoroPreset, SessionSummary, Settings, SoundId, StudyModule } from '../contracts/domain';
-import type { NativeApis, PanelAction, PanelState, Unsubscribe, WebcamSample } from '../contracts/native';
+import type { NativeApis, PanelAction, PanelState, PermissionKind, Unsubscribe, WebcamSample } from '../contracts/native';
 import type { CurrentCheck, SessionStoreActions, SessionStoreState, StartOptions } from '../contracts/store';
 import { evaluate, INITIAL_ALERT } from './alerts';
 import type { AlertEffect, AlertState } from './alerts';
@@ -250,6 +250,48 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
     }
   }
 
+  function notifyScreenPermission() {
+    if (permissionNotified) return;
+    permissionNotified = true;
+    native.notifications
+      .post({
+        id: 'fl-screen-permission',
+        title: 'Screen Recording permission needed',
+        body: 'Allow LarpLess in System Settings → Privacy & Security → Screen Recording, then relaunch.',
+        sound: false,
+      })
+      .catch(noop);
+  }
+
+  /**
+   * Screen Recording and camera status are two instant system lookups. They run beside start,
+   * never before it, so the timer and panel don't wait; a missing one shows up a moment later.
+   */
+  function checkPermissions(sid: string, wantCamera: boolean) {
+    native.permissions
+      .status()
+      .then((p) => {
+        if (sid !== sessionId) return;
+        const missing: PermissionKind[] = [];
+        if (p.screen !== 'granted') missing.push('screen');
+        if (wantCamera && p.camera !== 'granted') missing.push('camera');
+        if (!missing.length) return;
+        set({ missingPermissions: missing });
+        if (missing.includes('screen')) notifyScreenPermission();
+        else {
+          native.notifications
+            .post({
+              id: 'fl-camera-permission',
+              title: 'Camera permission needed',
+              body: 'This session runs without the webcam. Allow LarpLess in System Settings → Privacy & Security → Camera.',
+              sound: false,
+            })
+            .catch(noop);
+        }
+      })
+      .catch(noop);
+  }
+
   async function startWebcam(): Promise<void> {
     if (demo || webcamRunning || !get().webcam.enabled) return;
     if (!unsubSample) unsubSample = native.webcam.onSample(onSample);
@@ -419,17 +461,7 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
       tookScreenshot = r.tookScreenshot;
       // Keep a newer live label if the window changed while this check ran.
       if (seenKey === null || r.key === null || r.key === seenKey) screen = screenLabel(r);
-      if (r.error === 'permission' && !permissionNotified) {
-        permissionNotified = true;
-        native.notifications
-          .post({
-            id: 'fl-screen-permission',
-            title: 'Screen Recording permission needed',
-            body: 'Allow LarpLess in System Settings → Privacy & Security → Screen Recording, then relaunch.',
-            sound: false,
-          })
-          .catch(noop);
-      }
+      if (r.error === 'permission') notifyScreenPermission();
     }
     if (sid !== sessionId) return;
     if (screen) screenNow = screen;
@@ -602,6 +634,7 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
         chunks: [],
         current: { kind: 'starting', moduleId: null, activity: '', appName: null, at: t },
         webcam: { enabled: !demo && settings.webcamEnabled, personPresent: true, phoneVisible: false },
+        missingPermissions: [],
         privacy: { framesAnalysed: 0, checksWithoutScreenshot: 0, framesStored: 0 },
         pomodoro: preset ? initPomodoro(preset, t) : null,
         alert: { level: 0, distractedSinceMs: null },
@@ -612,6 +645,7 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
       // Get Ollama up (without its prompt cache), then load the model and its system prompt now, so the
       // first check doesn't pay for it. A session that ended meanwhile skips the warm-up.
       if (!demo) {
+        checkPermissions(sid, settings.webcamEnabled);
         (deps.prepareOllama?.() ?? Promise.resolve())
           .catch(noop)
           .then(() => (sessionId === sid ? deps.classifier.warmUp(detectModules()) : undefined))

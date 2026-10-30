@@ -92,6 +92,19 @@ describe('Session page', () => {
     act(() => r.unmount());
   });
 
+  it('missing permissions: says what is off and links to settings', () => {
+    act(() => applyFixture('running'));
+    act(() => useSessionStore.setState({ missingPermissions: ['screen', 'camera'] }));
+    const r = render(<SessionPage />);
+    const t = textOf(r);
+    expect(t).toContain('Screen Recording is off.');
+    expect(t).toContain('Camera is off.');
+    expect(r.root.findAll((n) => n.props.testID === 'permission-camera').length).toBeGreaterThan(0);
+    act(() => useSessionStore.setState({ missingPermissions: [] }));
+    expect(textOf(r)).not.toContain('is off.');
+    act(() => r.unmount());
+  });
+
   it('idle and ended states', () => {
     act(() => applyFixture('idle'));
     let r = render(<SessionPage />);

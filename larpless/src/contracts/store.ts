@@ -1,7 +1,7 @@
 import type {
   Chunk, ChunkKind, PomodoroPreset, PomodoroState, SessionSummary, Settings, SoundId, StudyModule,
 } from './domain';
-import type { OllamaHostInfo } from './native';
+import type { OllamaHostInfo, PermissionKind } from './native';
 
 export type SessionStatus = 'idle' | 'running' | 'paused' | 'break' | 'ended';
 export type OllamaStatus = 'unknown' | 'ok' | 'down' | 'modelMissing';
@@ -25,6 +25,8 @@ export interface SessionStoreState {
   chunks: Chunk[];
   current: CurrentCheck | null;
   webcam: { enabled: boolean; personPresent: boolean; phoneVisible: boolean };
+  /** Permissions this session needs but doesn't have, found when it starts. Camera only when the webcam is on. */
+  missingPermissions: PermissionKind[];
   privacy: { framesAnalysed: number; checksWithoutScreenshot: number; framesStored: 0 };
   pomodoro: PomodoroState | null;
   alert: { level: 0 | 1 | 2 | 3; distractedSinceMs: number | null };

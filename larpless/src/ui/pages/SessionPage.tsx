@@ -2,10 +2,12 @@ import { useMemo } from 'react';
 import type { ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import type { PomodoroState, StudyModule, TagColor } from '../../contracts/domain';
+import type { PermissionKind } from '../../contracts/native';
 import type { CurrentCheck, SessionStoreState, SessionStatus } from '../../contracts/store';
 import { useAppStore } from '../../store/appStore';
 import { useNavStore } from '../../store/navStore';
 import { useSessionStore } from '../../store/sessionStore';
+import { native } from '../../native';
 import {
   BreakdownBar,
   Button,
@@ -56,6 +58,7 @@ function LiveSession({ status }: { status: SessionStatus }) {
   const setSound = useSessionStore((s) => s.setSound);
   const skipPomodoroPhase = useSessionStore((s) => s.skipPomodoroPhase);
   const pausedForSleep = useSessionStore((s) => s.pausedForSleep);
+  const missingPermissions = useSessionStore((s) => s.missingPermissions);
   const modules = useAllModules();
 
   const breakdown = useMemo(() => breakdownFromChunks(chunks, modules), [chunks, modules]);
@@ -80,6 +83,7 @@ function LiveSession({ status }: { status: SessionStatus }) {
           </>
         ),
       }}>
+      {missingPermissions.length ? <PermissionCallout missing={missingPermissions} /> : null}
       {alert.level >= 2 && !onBreak ? <AlertBanner level={alert.level} since={alert.distractedSinceMs} /> : null}
 
       <SerifTimer testID="session-timer" timer={timer} size={88} style={styles.timer} />
@@ -161,6 +165,47 @@ function PomodoroChip({ p }: { p: PomodoroState }) {
       color={p.phase === 'focus' ? 'orange' : 'blue'}
       style={styles.subtitleChip}
     />
+  );
+}
+
+function PermissionCallout({ missing }: { missing: PermissionKind[] }) {
+  const screen = missing.includes('screen');
+  const camera = missing.includes('camera');
+  return (
+    <Callout testID="permission-callout" icon="lock" tone="orange" style={styles.alert}>
+      <Text>
+        {screen ? (
+          <>
+            <Strong>Screen Recording is off.</Strong> Checks can’t see your screen, so they count as unknown. Allow it, then
+            relaunch LarpLess after this session.{' '}
+          </>
+        ) : null}
+        {camera ? (
+          <>
+            <Strong>Camera is off.</Strong> This session runs without away and phone detection.
+          </>
+        ) : null}
+      </Text>
+      <View style={styles.permButtons}>
+        {screen ? (
+          <Button
+            testID="permission-screen"
+            title="Screen Recording settings"
+            variant="secondary"
+            onPress={() => native.permissions.openSettings('screen').catch(() => {})}
+          />
+        ) : null}
+        {camera ? (
+          <Button
+            testID="permission-camera"
+            title="Camera settings"
+            variant="secondary"
+            onPress={() => native.permissions.openSettings('camera').catch(() => {})}
+            style={screen ? styles.gapLeft : undefined}
+          />
+        ) : null}
+      </View>
+    </Callout>
   );
 }
 
@@ -341,4 +386,5 @@ const styles = StyleSheet.create({
   chip: { marginRight: space.sm, marginBottom: space.xs },
   buttons: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
   gapLeft: { marginLeft: space.md },
+  permButtons: { flexDirection: 'row', flexWrap: 'wrap', marginTop: space.sm },
 });

@@ -19,6 +19,7 @@ const INITIAL: SessionStoreState = {
   chunks: [],
   current: null,
   webcam: { enabled: true, personPresent: true, phoneVisible: false },
+  missingPermissions: [],
   privacy: { framesAnalysed: 0, checksWithoutScreenshot: 0, framesStored: 0 },
   pomodoro: null,
   alert: { level: 0, distractedSinceMs: null },
@@ -432,6 +433,40 @@ describe('sessionController', () => {
     const posts = (h.native.notifications.post as jest.Mock).mock.calls.filter((c) => c[0].title === 'Screen Recording permission needed');
     expect(posts).toHaveLength(1);
     expect(h.state.privacy.framesAnalysed).toBe(0);
+    await h.ctrl.end();
+  });
+
+  it('missing permissions are found at start without holding it up', async () => {
+    let resolveStatus: (v: { screen: 'notDetermined'; camera: 'denied' }) => void = () => {};
+    const status = jest.fn(() => new Promise<{ screen: 'notDetermined'; camera: 'denied' }>((r) => (resolveStatus = r)));
+    const h = setup({ native: { permissions: { ...mockApis.permissions, status } } });
+    await h.ctrl.start({ pomodoro: 'off' });
+    // Start finished while the check was still pending.
+    expect(h.state.status).toBe('running');
+    expect(h.state.missingPermissions).toEqual([]);
+    resolveStatus({ screen: 'notDetermined', camera: 'denied' });
+    await advance(0);
+    expect(h.state.missingPermissions).toEqual(['screen', 'camera']);
+    h.capture.mockRejectedValue(Object.assign(new Error('denied'), { code: 'E_PERMISSION' }));
+    await advance(30_000);
+    // The capture failure doesn't post a second Screen Recording notification.
+    const posts = (h.native.notifications.post as jest.Mock).mock.calls.filter((c) => c[0].title === 'Screen Recording permission needed');
+    expect(posts).toHaveLength(1);
+    await h.ctrl.end();
+  });
+
+  it('camera is not checked with the webcam off; demo checks nothing', async () => {
+    const status = jest.fn(async () => ({ screen: 'granted' as const, camera: 'denied' as const }));
+    const h = setup({ settings: { webcamEnabled: false }, native: { permissions: { ...mockApis.permissions, status } } });
+    await h.ctrl.start({ pomodoro: 'off' });
+    await advance(0);
+    expect(h.state.missingPermissions).toEqual([]);
+    expect(h.native.notifications.post).not.toHaveBeenCalled();
+    await h.ctrl.end();
+
+    status.mockClear();
+    await h.ctrl.start({ pomodoro: 'off', demo: true });
+    expect(status).not.toHaveBeenCalled();
     await h.ctrl.end();
   });
 
