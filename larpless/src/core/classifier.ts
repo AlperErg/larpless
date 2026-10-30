@@ -136,7 +136,11 @@ export function guessStudy(
   const vm = isVirtualMachineApp(appName, windowTitle) && !vmShowsDistraction(verdict.activity);
   const unreadChat = chat && genericChatCategory(verdict.activity);
   const work = WORK_ACTIVITY.test(blob) || chatWork || vm;
-  if (!work && !bogusShop && !unreadChat && verdict.confidence >= SURE_NOT_STUDY) return verdict;
+  if (!work && !bogusShop && !unreadChat && verdict.confidence >= SURE_NOT_STUDY) {
+    // "Chatting" itself is read as unread chat above, so a sure social chat comes back as another
+    // category (usually "Social media"). The app already says what kind of distraction it is.
+    return chat ? { ...verdict, activity: 'Chatting' } : verdict;
+  }
 
   const hay = lc(blob);
   // Longest keyword wins, so "info management" beats "management".
