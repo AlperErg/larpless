@@ -270,8 +270,20 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
   function checkPermissions(sid: string, wantCamera: boolean) {
     native.permissions
       .status()
-      .then((p) => {
+      .then(async (p) => {
         if (sid !== sessionId) return;
+        // Undecided camera (first run, or a grant made for a differently signed build): ask now, since
+        // System Settings can't add it by hand. On a yes, turn the webcam back on unless paused.
+        if (wantCamera && p.camera === 'notDetermined') {
+          const camera = await native.permissions.request('camera').catch(() => p.camera);
+          if (sid !== sessionId) return;
+          p = { ...p, camera };
+          if (camera === 'granted') {
+            set({ webcam: { ...get().webcam, enabled: true } });
+            if (get().status === 'running') startWebcam();
+            pushPanel();
+          }
+        }
         const missing: PermissionKind[] = [];
         if (p.screen !== 'granted') missing.push('screen');
         if (wantCamera && p.camera !== 'granted') missing.push('camera');

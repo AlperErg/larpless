@@ -455,6 +455,25 @@ describe('sessionController', () => {
     await h.ctrl.end();
   });
 
+  it('an undecided camera is asked for at start, and a yes turns the webcam back on', async () => {
+    const status = jest.fn(async () => ({ screen: 'granted' as const, camera: 'notDetermined' as const }));
+    const request = jest.fn(async () => 'granted' as const);
+    const webcamStart = jest
+      .fn()
+      .mockRejectedValueOnce(Object.assign(new Error('denied'), { code: 'E_PERMISSION' }))
+      .mockResolvedValue(undefined);
+    const h = setup({
+      native: { permissions: { ...mockApis.permissions, status, request }, webcam: { ...mockApis.webcam, start: webcamStart } },
+    });
+    await h.ctrl.start({ pomodoro: 'off' });
+    await advance(0);
+    expect(request).toHaveBeenCalledWith('camera');
+    expect(webcamStart).toHaveBeenCalledTimes(2);
+    expect(h.state.webcam.enabled).toBe(true);
+    expect(h.state.missingPermissions).toEqual([]);
+    await h.ctrl.end();
+  });
+
   it('camera is not checked with the webcam off; demo checks nothing', async () => {
     const status = jest.fn(async () => ({ screen: 'granted' as const, camera: 'denied' as const }));
     const h = setup({ settings: { webcamEnabled: false }, native: { permissions: { ...mockApis.permissions, status } } });

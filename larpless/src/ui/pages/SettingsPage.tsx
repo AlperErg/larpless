@@ -257,13 +257,15 @@ export function SettingsPage() {
       <Row label="Acknowledgements" hint="Open-source software, fonts and models in LarpLess.">
         <Button testID="settings-acknowledgements" title="View" icon="scale" variant="secondary" onPress={() => go('acknowledgements')} />
       </Row>
+      <Row label="Onboarding" hint="Set up modules, permissions, Ollama and the AI model again.">
+        <Button testID="settings-onboarding" title="Run again" variant="secondary" onPress={() => go('onboarding')} />
+      </Row>
 
       {config.SHOW_DEV_TOOLS ? (
         <>
           <SectionTitle>Developer</SectionTitle>
           <View style={styles.inline}>
             <Button testID="settings-devtools" title="Dev tools" icon="wrench" variant="secondary" onPress={() => go('dev')} />
-            <Button title="Run onboarding again" variant="ghost" onPress={() => go('onboarding')} style={styles.gapLeft} />
           </View>
         </>
       ) : null}
