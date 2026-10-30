@@ -18,6 +18,7 @@ const rnwPath = fs.realpathSync(
 const config = {
   //
   resolver: {
+    sourceExts: ['js', 'jsx', 'json', 'ts', 'tsx', 'cjs'],
     blockList: [
       // This stops "npx @react-native-community/cli run-windows" from causing the metro server to crash if its already running
       new RegExp(
