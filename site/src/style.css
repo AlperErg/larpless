@@ -83,11 +83,10 @@ h1 {
 
 h1 span {
   display: block;
-  animation: rise 900ms var(--ease) both;
 }
 
-h1 span:nth-child(2) {
-  animation-delay: 120ms;
+h1 > span:not(.lede) {
+  animation: rise 900ms var(--ease) both;
 }
 
 h2 {
@@ -615,8 +614,11 @@ a:hover {
   margin-top: 32px;
   max-width: 28rem;
   color: var(--muted);
+  font-family: var(--sans);
+  font-weight: 400;
   font-size: 1.05rem;
   line-height: 1.55;
+  letter-spacing: 0;
   text-wrap: balance;
 }
 
@@ -1391,8 +1393,40 @@ details p {
 
 .closer {
   padding-top: 8px;
-  padding-bottom: max(8vh, calc(env(safe-area-inset-bottom) + 48px));
+  padding-bottom: 64px;
   text-align: center;
+}
+
+.colophon {
+  border-top: 1px solid var(--line);
+  padding: 28px 0 max(36px, calc(env(safe-area-inset-bottom) + 28px));
+  text-align: center;
+}
+
+.colophon p {
+  margin: 0 auto;
+  max-width: 34rem;
+  color: var(--faint);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.colophon nav {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 18px;
+  margin-top: 16px;
+}
+
+.colophon a {
+  color: var(--muted);
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.colophon a:hover {
+  color: var(--ink);
 }
 
 .closer .soon {
