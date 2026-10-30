@@ -10,6 +10,8 @@ It was started in one hackathon day with **react-native-macos**. It also runs on
 
 > **Privacy first.** Frames are analysed in memory and dropped right away. Nothing is written to disk, and the only network call involving a frame goes to Ollama on `127.0.0.1`. Only labels such as "Biology, 10 s" are stored. The in-app privacy badge shows `Screenshots analysed: N · checks without a screenshot: M · stored: 0`, and on Pomodoro breaks the app stops capturing.
 
+**Demo Video**: [YouTube link](https://youtu.be/DoBBqkPa75E?si=IA6Z82f-tfn9QprD)
+
 ---
 
 ## Features
@@ -199,7 +201,7 @@ Onboarding takes four steps:
 
 You can finish without Ollama or the model and set them up later: **Settings → Local AI** has the same **Open Ollama** and **Download model** buttons, and demo mode works offline. In dev builds, Settings → **Run onboarding again** shows it again.
 
-### Getting Started on Windows
+## Getting Started on Windows
 
 The Windows build uses the same TypeScript and the same JS ↔ native contract; only the native modules (`larpless/windows/LarpLess/Native/`) are C++ instead of Swift.
 
@@ -227,12 +229,6 @@ This stops a running LarpLess and removes the installed package, bundles the JS 
 - Page transitions and other `Animated` effects are off on Windows (`ANIMATE` in `src/ui/platform.ts`): react-native-windows drops the content of a re-rendered `Animated.View`. The floating panel's tint, pulse and flash animations are native and unaffected.
 - Closing the main window quits the app (the Windows convention) instead of keeping it in the background.
 - During a session the app holds a Windows power request and opts out of EcoQoS, the counterpart of disabling App Nap.
-
-### Demo mode
-
-- **⌥-click Start** on Home, or ⌘K (Ctrl+K on Windows) → *Start demo session*: replays fixture chunks through the real store and floating panel.
-- ⌘K → *Toggle demo fast mode*: short alert thresholds (20 s / 50 s instead of minutes). How often the screen is checked still follows the power profile.
-- `node scripts/demo-social.mjs seed`: creates demo accounts with friendships and sample posts. Also `accept`, `request <user>` and `status`.
 
 ## Development
 
@@ -303,6 +299,12 @@ cd site && npm install && npm run dev
 `npm run build` type-checks and writes the static site.
 
 On Windows each module is one header in `windows/LarpLess/Native/` (`REACT_MODULE` / `REACT_METHOD` / `REACT_EVENT`). Include it in `LarpLess.cpp` and add a `ClInclude` to `LarpLess.vcxproj`. Files to ship with the app go in `windows/LarpLess/Assets/` as `<None … DeploymentContent="true">` items. To rebuild without the script (Metro already running), use `npx @react-native-community/cli run-windows --no-packager --logging`. Two quirks of the bridgeless runtime: `ReactContext::JSDispatcher()` is empty, so emit events directly (that's thread-safe), and blocking `.get()` on WinRT async calls must run off the UI (STA) thread.
+
+### Demo mode
+
+- **⌥-click Start** on Home, or ⌘K (Ctrl+K on Windows) → *Start demo session*: replays fixture chunks through the real store and floating panel.
+- ⌘K → *Toggle demo fast mode*: short alert thresholds (20 s / 50 s instead of minutes). How often the screen is checked still follows the power profile.
+- `node scripts/demo-social.mjs seed`: creates demo accounts with friendships and sample posts. Also `accept`, `request <user>` and `status`.
 
 ## Privacy
 
