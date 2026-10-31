@@ -1,7 +1,7 @@
 import { Linking } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
-import { config } from '../../src/config';
+import { OLLAMA_DOWNLOAD_URL } from '../../src/ui/platform';
 import type { OllamaHostInfo } from '../../src/contracts/native';
 import type { ModelPull, OllamaStatus } from '../../src/contracts/store';
 import { initialAppState, useAppStore } from '../../src/store/appStore';
@@ -86,7 +86,7 @@ describe('onboarding: Ollama step', () => {
     expect(textOf(r)).toContain('Not installed');
     expect(has(r, 'ollama-open')).toBe(false);
     act(() => byTestID(r, 'ollama-download').props.onPress());
-    expect(Linking.openURL).toHaveBeenCalledWith(config.OLLAMA_DOWNLOAD_URL);
+    expect(Linking.openURL).toHaveBeenCalledWith(OLLAMA_DOWNLOAD_URL);
 
     const polls = actions.refreshHost.mock.calls.length;
     act(() => {

@@ -10,7 +10,6 @@ export const config = {
   TITLE_CHECK: false,
   WEBCAM_FPS: 1,
   SHOW_DEV_TOOLS: __DEV__,
-  OLLAMA_DOWNLOAD_URL: 'https://ollama.com/download/Ollama.dmg',
   /** Shown before a model download starts; Ollama reports the real size once it begins. */
   MODEL_SIZES: { 'qwen3-vl:2b': '1.9 GB', 'qwen3-vl:4b': '3.3 GB' } as Record<string, string>,
 };

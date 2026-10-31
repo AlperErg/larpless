@@ -219,7 +219,7 @@ The Windows build uses the same TypeScript and the same JS ↔ native contract; 
 powershell -ExecutionPolicy Bypass -File scripts\run-windows.ps1
 ```
 
-This stops a running LarpLess and removes the installed package, bundles the JS into the app (so it runs without Metro, also from Start), restores the local PowerShell 7 tool the deploy step needs, then builds, deploys and launches the Debug app. Re-run it after JS changes. While developing, add `-Metro` to load the JS from Metro on port 8081 instead; it starts Metro if it isn't already running (log in `.logs/metro-8081.log`). The first build takes several minutes. No admin terminal is needed. Allow the camera when Windows asks; there is no Screen Recording permission on Windows. The first launch is mostly the same apart from those. [Supabase setup](#supabase-setup) is the same as on the Mac.
+This stops a running LarpLess and removes the installed package, bundles the JS into the app (so it runs without Metro, also from Start), restores the local PowerShell 7 tool the deploy step needs, then builds, deploys and launches the Debug app. Re-run it after JS changes. While developing, add `-Metro` to load the JS from Metro on port 8081 instead; it starts Metro if it isn't already running (log in `.logs/metro-8081.log`). The first build takes several minutes. No admin terminal is needed. Allow the camera when Windows asks; there is no Screen Recording permission on Windows. In onboarding, **Download Ollama** downloads `OllamaSetup.exe`; run it to install Ollama. The first launch is mostly the same apart from those. [Supabase setup](#supabase-setup) is the same as on the Mac.
 
 **Differences from the Mac app**
 
