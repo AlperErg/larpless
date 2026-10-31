@@ -7,7 +7,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Animated, Easing, Linking, ScrollView, StyleSheet, View } from 'react-native';
+import { Animated, Easing, Linking, StyleSheet, View } from 'react-native';
 import { config } from '../../config';
 import type { ClassifierMode, TagColor } from '../../contracts/domain';
 import type { PermissionKind, PermissionStatus } from '../../contracts/native';
@@ -21,7 +21,7 @@ import { useScreenModelStore } from '../../store/screenModelStore';
 import { useSessionStore } from '../../store/sessionStore';
 import { Button, Callout, CodeBlock, EditableTable, Icon, MacPressable, ModelDownload, Muted, ScreenModelDownload, SubjectLibrary, PageHeader, Strong, Tag, Text } from '../components';
 import type { IconName } from '../components';
-import { PageBody } from '../layout/Page';
+import { PageBody, PageScroll } from '../layout/Page';
 import { formatBytes } from '../lib/format';
 import { CLASSIFIER_OPTIONS } from '../lib/labels';
 import { courseNameProblem, draftsFromModules, modulesFromDrafts } from '../lib/modules';
@@ -72,8 +72,10 @@ export function OnboardingPage() {
   };
 
   return (
-    <ScrollView testID="page-onboarding" style={styles.scroll} contentContainerStyle={styles.scrollContent}>
-      <PageHeader icon="hand" title="Welcome to LarpLess" subtitle={<Text muted>{`Strava for studying. Everything is analysed on this ${DEVICE}.`}</Text>} />
+    <PageScroll
+      testID="page-onboarding"
+      contentContainerStyle={styles.scrollContent}
+      header={<PageHeader icon="hand" title="Welcome to LarpLess" subtitle={<Text muted>{`Strava for studying. Everything is analysed on this ${DEVICE}.`}</Text>} />}>
       <PageBody>
         <Progress steps={steps} current={current} />
         <MotionView style={ANIMATE ? { opacity: fade, transform: [{ translateY }] } : undefined}>
@@ -91,7 +93,7 @@ export function OnboardingPage() {
           </View>
         ) : null}
       </PageBody>
-    </ScrollView>
+    </PageScroll>
   );
 }
 
@@ -679,7 +681,6 @@ const styles = themed(() => StyleSheet.create({
   choiceSelected: { borderColor: colors.accent, backgroundColor: colors.accentSoft },
   choiceDisabled: { opacity: 0.5 },
   choiceModel: { color: colors.muted, marginBottom: 2 },
-  scroll: { flex: 1, backgroundColor: colors.bg },
   scrollContent: { paddingBottom: 96 },
   progress: { flexDirection: 'row', marginBottom: space.xl },
   progressItem: { flex: 1, marginRight: space.sm },

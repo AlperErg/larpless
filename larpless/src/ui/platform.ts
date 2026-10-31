@@ -22,6 +22,14 @@ export const DEVICE = IS_WINDOWS ? 'PC' : 'Mac';
 export const ANIMATE = !IS_WINDOWS;
 
 /**
+ * Keep the page cover and title outside the ScrollView. On react-native-windows the
+ * ScrollViewer clips anything that draws outside its slot, so the header icon (pulled
+ * up over the cover with a negative margin) tears and leaves streaks while scrolling.
+ * macOS scrolls the header away with the page, unchanged.
+ */
+export const PIN_PAGE_HEADER = IS_WINDOWS;
+
+/**
  * Animated.View on macOS, a plain View on Windows (see ANIMATE). When ANIMATE is false, pass only static style
  * values (numbers / strings), never Animated.Value or interpolations.
  */
