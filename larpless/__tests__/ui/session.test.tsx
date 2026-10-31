@@ -7,6 +7,7 @@ import { useAppStore } from '../../src/store/appStore';
 import { useNavStore } from '../../src/store/navStore';
 import { useSessionStore } from '../../src/store/sessionStore';
 import { SessionPage } from '../../src/ui/pages/SessionPage';
+import { DEVICE } from '../../src/ui/platform';
 
 export function textOf(r: ReactTestRenderer): string {
   const out: string[] = [];
@@ -85,7 +86,7 @@ describe('Session page', () => {
     act(() => useSessionStore.setState({ status: 'paused', pausedForSleep: true }));
     const r = render(<SessionPage />);
     const t = textOf(r);
-    expect(t).toContain('Paused while your Mac slept');
+    expect(t).toContain(`Paused while your ${DEVICE} slept`);
     expect(t).toContain('Resume');
     act(() => useSessionStore.setState({ pausedForSleep: false }));
     expect(textOf(r)).not.toContain('slept');
