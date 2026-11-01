@@ -26,7 +26,7 @@ Default installs embed `windows/LarpLess/Bundle/index.windows.bundle` (`EmbedJsB
 
 - Stop the running app before rebuilding. A first build takes several minutes; incremental ones about one.
 - **`run-windows.ps1` deletes the downloaded screen model.** It removes the installed package, and that deletes its `LocalState` (`%LOCALAPPDATA%\Packages\LarpLess_96wyba02c09cm\LocalState\Models`, ~460 MB). Use the rebuild-only command instead, which keeps the package: with `--msbuildprops EmbedJsBundle=true` after `scripts\bundle-windows.ps1` for an embedded install, without it for a Metro one. On a Metro install, JS-only changes need no rebuild: start Metro (`npx react-native start --port 8081`) and relaunch the installed build (command below). An embedded install ignores Metro, so it needs the bundle + rebuild.
-- **The installed build has to come from a branch with `FLScreenModel`** (`add-embeddings` and branches off it; `main` doesn't have it yet). A build from `main` has no `NativeModules.FLScreenModel`, so `native/index.ts` silently swaps in the mock, which always reports "not installed" even with the files in `LocalState\Models`: the `'classifier'` mode turns every chunk into `unknown`. Check with `js-eval "__FL.NativeModules.FLScreenModel"` (null = wrong build) and rebuild after switching branches.
+- **The installed build has to come from a commit with `FLScreenModel`** (`main` and `add-embeddings` both have it now; older branches don't). A build without it has no `NativeModules.FLScreenModel`, so `native/index.ts` silently swaps in the mock, which always reports "not installed" even with the files in `LocalState\Models`: the `'classifier'` mode turns every chunk into `unknown`. Check with `js-eval "__FL.NativeModules.FLScreenModel"` (null = wrong build) and rebuild after switching branches.
 - Debug builds set `UseDeveloperSupport(false)` so RNW does not paint its green Metro **Loading** bar (that is not `BootScreen`). Themed launch is `BootScreen.tsx` after JS loads. `LarpLess.cpp` also sets the Win32 window canvas to match `theme.ts` before React paints.
 - Compile errors: the newest `windows\msbuild_*.err`. The build log written with `*>` is UTF-16 — read it with `Get-Content`.
 - Relaunch the installed build without rebuilding: `Start-Process "shell:AppsFolder\$((Get-AppxPackage *LarpLess*).PackageFamilyName)!App"`.
@@ -113,7 +113,7 @@ Windows Defender (AMSI) blocks PowerShell scripts that capture the screen, base6
 
 ## On-device screen model (FLScreenModel)
 
-Branch `add-embeddings` (2026-10-12). Goal: stop needing Ollama for most screen checks on CPU-only PCs, where a qwen3-vl check takes 25–30 s.
+Started on branch `add-embeddings` (2026-10-12), now merged into `main`. Goal: stop needing Ollama for most screen checks on CPU-only PCs, where a qwen3-vl check takes 25–30 s.
 
 ### The plan and why
 
@@ -132,21 +132,21 @@ An LLM council compared the current generative VLM with a small "decision" model
 
 ### Classifier modes
 
-`Settings.classifierMode`, picked in Settings → Local AI → **Screen check** (Windows only; `isClassifierMode()` in `sessionStore.ts` is false on other platforms whatever is saved). The classifier reads it through its `screenModelOnly()` dep on every check, so a change applies from the next check without a restart. Exactly one model reads the screen:
+`Settings.classifierMode`, picked in Settings → Local AI → **Screen check** (Windows only; `isClassifierMode()` in `sessionStore.ts` is false on other platforms whatever is saved). The classifier reads it through its `screenModelOnly()` dep on every check, so a change applies from the next check without a restart. A change during a session also calls `readerChanged()` on the controller (subscribed in `sessionStore.ts`): it opens and warms up the reader now in use (Ollama for `'vlm'`) and unloads the other one (`unloadUnused()`). Exactly one model reads the screen:
 
 | | `'vlm'` (default, "Vision LLM (Ollama)") | `'classifier'` ("On-device classifier") |
 | --- | --- | --- |
 | For | powerful PCs (GPU or fast iGPU): ~3–7 s per check | any PC: ~0.3–0.6 s per check, ~1 GB RAM while loaded |
 | Reads the screen | Ollama's vision LLM on a JPEG, as on the Mac; the screen model is never run | the screen model alone (`runScreenModel`), no JPEG |
 | Study verdict | Ollama's answer (`guessStudy` turns an unsure "not study" into a subject) | always final (`isFinalAlone`) |
-| "Not study" verdict | Ollama's answer | final at ≥ `EMBED_NOT_STUDY_CONFIDENCE` 0.6, else `unknown` with no error |
+| "Not study" verdict | Ollama's answer | final at ≥ `EMBED_NOT_STUDY_CONFIDENCE` 0.6, else `unknown` with no error, marked `unsure`: an answer, not a failed live check, so the same window isn't captured and read again every settle period |
 | No verdict (not installed, error, timeout) | `unknown` (`error: 'vlm'`) | `unknown` (`error: 'vlm'`) |
-| Ollama | opened at boot/session start (`prepare`), warmed up, asked | never opened, warmed up or asked; still unloaded at session end in case the mode changed mid-session |
+| Ollama | opened at boot/session start (`prepare`), warmed up, asked | never opened, warmed up or asked; both models are still unloaded at session end in case the mode changed mid-session (the screen-model unload is awaited at most `UNLOAD_WAIT_MS` 3 s) |
 | Sidebar status | Ollama / model status | `screenModelLine()`: on-device classifier ready / not downloaded |
 
 Onboarding on Windows starts with **Your PC** (`PcStep` in `OnboardingPage.tsx`): two cards explain each model, what PC it suits, its speed and download, and the answer sets `classifierMode`. "On-device classifier" (recommended when unsure) replaces the Ollama and AI-model steps with its own download step; "Vision LLM" keeps them. `onboardingSteps()` builds the list; the Mac flow is unchanged. Settings disables "On-device classifier" until the model is downloaded (onboarding may pick it first, then downloads it). Older saves migrate in `cleanSettings` (`core/db.ts`): `'embed'` → `'classifier'`, the removed `'hybrid'` → `'vlm'`.
 
-Study calls have no bar because the subject guess is mostly right even when unsure. The 0.6 "not study" cutoff comes from P(study) on the bench: on 54 screenshots every distraction reaches confidence ≥ 0.6 and no study screen is called a distraction, so 0.6 flags 24/24 and turns only P(study) 0.4–0.5 into `unknown`. Re-pick it when the bench grows. The fusion weights (`FUSION`) were fitted for top-1 over every screen, which is what this mode needs.
+Study calls have no bar because the subject guess is mostly right even when unsure. The 0.6 "not study" cutoff comes from P(study) on the bench: on 54 screenshots every distraction reaches confidence ≥ 0.6 and no study screen is called a distraction, so 0.6 flags 24/24 and turns only P(study) 0.4–0.5 into `unknown`. Re-pick it when the bench grows. The fusion weights (`FUSION`) were fitted for top-1 over every screen, which is what this mode needs. The study/not-study gate in `fuseScores` uses every library subject's image prompt (`lib_*`), not only the subjects the user has on, as the bench's default run does, so a switched-off subject can't turn study screens into confident distractions. `bench.py --my-subjects` still gates on the selected subjects only, so with that flag the bench no longer matches the app.
 - Privacy: frame, OCR text and embeddings stay in native memory; JS gets scores and the OCR character count; logs carry timings and labels. The bench writes no images or text and prints character counts only.
 
 ### How well it works
@@ -173,7 +173,7 @@ On the 44-subject library (2026-10-14) the same set gave 95% with library subjec
 | + its 9 keywords (below) | 65% | 74% | 46% | **94%** (85–98) | 96% (52/54) |
 | study vs distraction | 54/54 | | | 54/54 | |
 
-- Every new hard case is right: the full-screen lecture, both AI chats, the travel vlog and the Spanish Disney+ page. `parity.mjs` 54/54. The remaining library misses are unsure (≤ 0.19): an Algorithms Blackboard page → Information Management, a batch-1 Information Management screen → Sociology, a Coding screen → Probability, a Systems Programming PDF → Computer Architecture.
+- Every new hard case is right: the full-screen lecture, both AI chats, the travel vlog and the Spanish Disney+ page. `parity.mjs` 54/54 (re-checked 2026-11-01 after the all-library gate in `fuseScores`: same numbers, app 50/54). The remaining library misses are unsure (≤ 0.19): an Algorithms Blackboard page → Information Management, a batch-1 Information Management screen → Sociology, a Coding screen → Probability, a Systems Programming PDF → Computer Architecture.
 - The classifier mode's "not study" bar (0.6) flags all 24 distractions. For the record, the removed hybrid bars also held: study at 0.2 answered 14 of 30, all right (a wrong one sat at 0.19), "not study" at 0.7 answered 21 of 24, all right.
 - **User keywords, measured:** the user's own Systems Programming list (`pointer, malloc, C, free(), Linux, Unix, Structure, shell, command`) scored the same top-1 (96% app) but `C` voted Systems Programming on 21 of the 49 other screens (drive letters, single-letter labels, Desmos, physics notes); `free()` never matches (code shows `free(s)`), and `Linux`/`Unix`/`shell` hit none of the user's screens. A list picked by counting each word's hits on the course's screens vs every other screen (`CSU22014, malloc, pointer, struct, Makefile, gcc, gdb, sizeof, segmentation fault`) keeps 96% and cuts wrong-course votes from 20 to 1 (the course name in an Obsidian sidebar). Top-1 hides keyword harm until a weak image flips an answer, so judge keywords by own vs other hits; this is what a course-keyword UI should warn about (single letters, punctuation, words never on screen).
 

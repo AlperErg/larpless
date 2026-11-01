@@ -89,7 +89,7 @@ On Windows, **Settings → Local AI → Screen check** chooses which one model r
 | Ollama | opened at session start, model warmed up | never opened, warmed up or asked |
 | Model not downloaded | not needed | every chunk is `unknown` (Settings only offers this mode once it's downloaded) |
 
-The on-device classifier is for PCs where Ollama is too slow or uses too much memory. On the 54-screenshot bench it gets 94% of subjects right and tells study from distraction 54/54. The Mac has no on-device model yet, so it always uses Ollama and the setting is hidden there.
+The on-device classifier is for PCs where Ollama is too slow or uses too much memory. On the 54-screenshot bench (30 study, 24 distractions) the shipped settings label 50 of 54 screens right (93%), and it tells study from distraction 54/54. The Mac has no on-device model yet, so it always uses Ollama and the setting is hidden there.
 
 ### Live: what the panel shows
 
@@ -130,7 +130,7 @@ Starting a session opens Ollama in the background if it isn't running, then warm
 
 - **App:** react-native 0.81.6 on react-native-macos 0.81.9 and react-native-windows 0.81.36, TypeScript, Hermes. Both run Fabric + bridgeless; on Mac the legacy-style native modules work through the interop layer.
 - **State / storage:** zustand 5, AsyncStorage 2.2.0 (pinned), date-fns 4.
-- **Native, Mac (Swift 5, macOS 14+):** ScreenCaptureKit, AVFoundation, Vision, CoreML, UserNotifications, AppKit, SwiftUI, and the Keychain for the Supabase sign-in.
+- **Native, Mac (Swift 5, macOS 14.5+):** ScreenCaptureKit, AVFoundation, Vision, CoreML, UserNotifications, AppKit, SwiftUI, and the Keychain for the Supabase sign-in.
 - **Now playing:** on Mac, a vendored [mediaremote-adapter](https://github.com/ungive/mediaremote-adapter) (BSD-3-Clause) run through `/usr/bin/perl`, because since macOS 15.4 a Developer ID app can't read MediaRemote itself. On Windows, the system media transport controls.
 - **Models:** Ollama `qwen3-vl:2b` and YOLO11n (`nms=True`, bundled; presence and phone). CoreML on Mac, ONNX Runtime on Windows. On Windows also SigLIP 2 base/16 (vision tower) and all-MiniLM-L6-v2 in ONNX Runtime for the on-device screen model.
 - **Social:** `@supabase/supabase-js` + `react-native-url-polyfill`.
@@ -236,7 +236,7 @@ The Windows build uses the same TypeScript and the same JS ↔ native contract; 
 powershell -ExecutionPolicy Bypass -File scripts\run-windows.ps1
 ```
 
-This stops a running LarpLess and removes the installed package, bundles the JS into the app (so it runs without Metro, also from Start), restores the local PowerShell 7 tool the deploy step needs, then builds, deploys and launches the Debug app. Re-run it after JS changes. While developing, add `-Metro` to load the JS from Metro on port 8081 instead; it starts Metro if it isn't already running (log in `.logs/metro-8081.log`). The first build takes several minutes. No admin terminal is needed. Allow the camera when Windows asks; there is no Screen Recording permission on Windows. In onboarding, **Download Ollama** downloads `OllamaSetup.exe`; run it to install Ollama. The first launch is mostly the same apart from those. [Supabase setup](#supabase-setup) is the same as on the Mac.
+This stops a running LarpLess and removes the installed package, bundles the JS into the app (so it runs without Metro, also from Start), restores the local PowerShell 7 tool the deploy step needs, then builds, deploys and launches the Debug app. Re-run it after JS changes. While developing, add `-Metro` to load the JS from Metro on port 8081 instead; it starts Metro if it isn't already running (log in `.logs/metro-8081.log`). The first build takes several minutes. No admin terminal is needed. Allow the camera when Windows asks; there is no Screen Recording permission on Windows. Onboarding starts with an extra step, **Your PC**, which asks how powerful the computer is and picks the [screen check mode](#screen-check-modes). Pick the **On-device classifier** and a single download step for it (about 460 MB) replaces the Ollama and AI-model steps; pick the **Vision LLM** and they stay, with **Download Ollama** downloading `OllamaSetup.exe` to run. The rest of the first launch is the same as on the Mac. [Supabase setup](#supabase-setup) is the same as on the Mac.
 
 The script uninstalls the old app package first, and that deletes the app's local data, including the downloaded on-device classifier. To keep it, rebuild without uninstalling (see `larpless/windows/CLAUDE.md`); on a `-Metro` install, JS-only changes need no rebuild at all, while the default install embeds the JS bundle and ignores Metro.
 
