@@ -1,9 +1,11 @@
+import { Platform } from 'react-native';
 import { create } from 'zustand';
 import { config, DEFAULT_SETTINGS } from '../config';
 import type { SessionStore, SessionStoreState } from '../contracts/store';
 import { createClassifier } from '../core/classifier';
 import { createOllama } from '../core/ollama';
 import { effectiveProfile } from '../core/powerProfile';
+import { createScreenModelStep } from '../core/screenModel';
 import { createSessionController } from '../core/sessionController';
 import type { SessionController } from '../core/sessionController';
 import { fixtureChunks } from '../fixtures/data';
@@ -31,6 +33,14 @@ export const initialSessionState: SessionStoreState = {
 
 const settings = () => useAppStore.getState().settings;
 
+/**
+ * The 'classifier' mode is in effect: the on-device screen model alone, no Ollama. Windows only, the one
+ * platform with the screen model; elsewhere the setting is ignored and Ollama's vision LLM reads the screen.
+ */
+export function isClassifierMode(s = settings()): boolean {
+  return Platform.OS === 'windows' && s.classifierMode === 'classifier';
+}
+
 let controller: SessionController | null = null;
 
 /** The session controller behind the store actions (created on first use). */
@@ -47,6 +57,8 @@ export function getSessionController(): SessionController {
       now: Date.now,
       config,
       getPower: () => effectiveProfile(settings().powerProfile),
+      screenModel: createScreenModelStep({ api: native.screenModel, now: Date.now }),
+      screenModelOnly: () => isClassifierMode(),
     });
     controller = createSessionController({
       native,
@@ -62,7 +74,8 @@ export function getSessionController(): SessionController {
       ollama,
       now: Date.now,
       config,
-      prepareOllama: () => useOllamaStore.getState().prepare({ launch: true }),
+      // 'classifier' mode never opens Ollama.
+      prepareOllama: () => (isClassifierMode() ? Promise.resolve() : useOllamaStore.getState().prepare({ launch: true })),
       onSessionSaved: upsertSessionSummary,
       demoChunks: fixtureChunks,
     });
@@ -83,6 +96,12 @@ export const useSessionStore = create<SessionStore>()(() => ({
   skipPomodoroPhase: () => getSessionController().skipPomodoroPhase(),
   refreshOllama: () => getSessionController().refreshOllama(),
 }));
+
+// The classifier reads the mode on every check; switching it mid-session must also open/warm Ollama (or free
+// the model no longer used), which start() only did for the mode the session began with.
+useAppStore.subscribe((s, prev) => {
+  if (controller && isClassifierMode(s.settings) !== isClassifierMode(prev.settings)) controller.readerChanged();
+});
 
 // A finished launch, restart or download changes what the health check reports (sidebar, settings).
 useOllamaStore.subscribe((s, prev) => {

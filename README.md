@@ -51,8 +51,9 @@ flowchart LR
     OH[FLOllama: open / restart Ollama]
   end
   F[src/native facades] --> CTRL[core/sessionController]
-  CTRL --> CLS[core/classifier: rules → cache → VLM]
-  CLS -->|POST /api/chat| OL[Ollama 127.0.0.1:11434]
+  CTRL --> CLS[core/classifier: rules → cache → VLM or screen model]
+  CLS -->|Windows classifier mode: scores only| SM[FLScreenModel: SigLIP 2 + OCR + MiniLM]
+  CLS -->|POST /api/chat, vision LLM mode| OL[Ollama 127.0.0.1:11434]
   CTRL --> FU[core/chunkFuser] --> ST[zustand stores]
   CTRL --> AL[core/alerts] --> NT
   CTRL --> PN
@@ -72,7 +73,23 @@ The classifier stops at the cheapest step that gives an answer:
 1. **LarpLess in front:** reuse the previous verdict.
 2. **Rules:** a distraction keyword in the app or window title → `distracted`; a known study tool (Vivado, Quartus, RARS, …) → its subject. No screenshot.
 3. **Cache:** same app and title as a recent verdict → reuse it. Verdicts last as long as the profile's cache time (2–3 min), "not study" verdicts at most 1 min so a wrong label doesn't stick. No screenshot.
-4. **VLM:** take a screenshot and classify it with the vision model in Ollama (about 3 s on a fast Mac). Only one vision call runs at a time, and it is allowed to finish. A check for the same window shares its result. If you switched windows meanwhile, one follow-up reads whatever is in front when the call returns, so windows you only passed through are never captured.
+4. **Read the screen** with one of two models, chosen by the [screen check mode](#screen-check-modes) (Windows; the Mac always uses the VLM):
+   - **On-device classifier (Windows):** SigLIP 2 image embeddings, Windows OCR and MiniLM text embeddings score the screen in about 0.5 s, with no Ollama involved.
+   - **VLM:** take a screenshot and classify it with the vision model in Ollama (about 3 s on a fast Mac). Only one vision call runs at a time, and it is allowed to finish. A check for the same window shares its result. If you switched windows meanwhile, one follow-up reads whatever is in front when the call returns, so windows you only passed through are never captured.
+
+### Screen check modes
+
+On Windows, **Settings → Local AI → Screen check** chooses which one model reads the screen (onboarding asks how powerful the PC is and picks it). The change applies from the next check, with no restart.
+
+| | **Vision LLM (Ollama)** (default) | **On-device classifier** |
+| --- | --- | --- |
+| Reads the screen | Ollama's vision model, as on the Mac; the on-device model is never run | the on-device model alone |
+| Study verdict | Ollama's answer | always used |
+| "Not study" verdict | Ollama's answer | used at ≥ 0.6; below that the chunk is `unknown` (no alert) |
+| Ollama | opened at session start, model warmed up | never opened, warmed up or asked |
+| Model not downloaded | not needed | every chunk is `unknown` (Settings only offers this mode once it's downloaded) |
+
+The on-device classifier is for PCs where Ollama is too slow or uses too much memory. On the 54-screenshot bench it gets 94% of subjects right and tells study from distraction 54/54. The Mac has no on-device model yet, so it always uses Ollama and the setting is hidden there.
 
 ### Live: what the panel shows
 
@@ -115,7 +132,7 @@ Starting a session opens Ollama in the background if it isn't running, then warm
 - **State / storage:** zustand 5, AsyncStorage 2.2.0 (pinned), date-fns 4.
 - **Native, Mac (Swift 5, macOS 14+):** ScreenCaptureKit, AVFoundation, Vision, CoreML, UserNotifications, AppKit, SwiftUI, and the Keychain for the Supabase sign-in.
 - **Now playing:** on Mac, a vendored [mediaremote-adapter](https://github.com/ungive/mediaremote-adapter) (BSD-3-Clause) run through `/usr/bin/perl`, because since macOS 15.4 a Developer ID app can't read MediaRemote itself. On Windows, the system media transport controls.
-- **Models:** Ollama `qwen3-vl:2b` and YOLO11n (`nms=True`, bundled; presence and phone). CoreML on Mac, ONNX Runtime on Windows.
+- **Models:** Ollama `qwen3-vl:2b` and YOLO11n (`nms=True`, bundled; presence and phone). CoreML on Mac, ONNX Runtime on Windows. On Windows also SigLIP 2 base/16 (vision tower) and all-MiniLM-L6-v2 in ONNX Runtime for the on-device screen model.
 - **Social:** `@supabase/supabase-js` + `react-native-url-polyfill`.
 - **Website:** Vite + TypeScript in `site/`.
 - **Native, Windows (C++ app, WinAppSDK 1.8):** C++/WinRT modules with Direct2D + DirectWrite, XAudio2, MediaCapture, ONNX Runtime, WIC, toast notifications, and DPAPI for the Supabase sign-in.
@@ -192,7 +209,7 @@ xcodebuild -workspace macos/Focusline.xcworkspace -scheme Focusline-macOS -confi
 
 Onboarding takes four steps:
 
-1. **Your modules.** Optional. LarpLess recognises the built-in subjects on its own; add your own courses (course codes, topics, lecturer names) for sharper labels. For each course, add 6–10 distinctive keywords that actually show up on your screen while you study it (malloc, ER diagram, CS2010). Skip short or common words and anything shared with your other courses
+1. **Your modules.** Optional. LarpLess recognises the built-in subjects on its own; add your own courses (course codes, topics, lecturer names) for sharper labels. For each course, add 6–10 distinctive keywords that actually show up on your screen while you study it (malloc, ER diagram, CS2010). Skip short or common words and anything shared with your other courses.
 2. **Permissions.** **Screen Recording** (macOS only applies it after a relaunch; the **Relaunch** button does that), **Camera** (optional: presence and phone detection) and **Notifications**.
 3. **Ollama.** LarpLess checks whether Ollama is installed and running, and the page updates by itself.
    - Not installed: **Download Ollama** downloads `Ollama.dmg`. Open it and drag Ollama into Applications.
@@ -211,7 +228,7 @@ The Windows build uses the same TypeScript and the same JS ↔ native contract; 
 - **Visual Studio 2026** (Community is fine) with the *Desktop development with C++* and *WinUI application development* workloads, the *MSIX Packaging Tools* component and the **Windows 11 SDK 10.0.22621**.
 - **.NET SDK 10**, **Node 22** or above.
 - **Developer Mode** on and **long paths** enabled (Settings → System → For developers).
-- **[Ollama for Windows](https://ollama.com)** with `qwen3-vl:2b` pulled, as on the Mac. Ollama skips integrated GPUs unless the user environment variable `OLLAMA_IGPU_ENABLE=1` is set (restart Ollama afterwards); with it, AMD iGPUs run through Vulkan. On the CPU alone a screenshot check can take 30 s or more.
+- **[Ollama for Windows](https://ollama.com)** with `qwen3-vl:2b` pulled, as on the Mac. Ollama skips integrated GPUs unless the user environment variable `OLLAMA_IGPU_ENABLE=1` is set (restart Ollama afterwards); with it, AMD iGPUs run through Vulkan. On the CPU alone a screenshot check can take 30 s or more. Not needed in the **On-device classifier** [screen check mode](#screen-check-modes), which only needs the on-device classifier (a one-time download of about 460 MB from onboarding or Settings → Local AI).
 
 **Install and run.** From `larpless/`, run `npm ci`, then:
 
@@ -221,9 +238,12 @@ powershell -ExecutionPolicy Bypass -File scripts\run-windows.ps1
 
 This stops a running LarpLess and removes the installed package, bundles the JS into the app (so it runs without Metro, also from Start), restores the local PowerShell 7 tool the deploy step needs, then builds, deploys and launches the Debug app. Re-run it after JS changes. While developing, add `-Metro` to load the JS from Metro on port 8081 instead; it starts Metro if it isn't already running (log in `.logs/metro-8081.log`). The first build takes several minutes. No admin terminal is needed. Allow the camera when Windows asks; there is no Screen Recording permission on Windows. In onboarding, **Download Ollama** downloads `OllamaSetup.exe`; run it to install Ollama. The first launch is mostly the same apart from those. [Supabase setup](#supabase-setup) is the same as on the Mac.
 
+The script uninstalls the old app package first, and that deletes the app's local data, including the downloaded on-device classifier. To keep it, rebuild without uninstalling (see `larpless/windows/CLAUDE.md`); on a `-Metro` install, JS-only changes need no rebuild at all, while the default install embeds the JS bundle and ignores Metro.
+
 **Differences from the Mac app**
 
 - Shortcuts use **Ctrl** instead of ⌘ (Ctrl+K palette, Ctrl+Enter start, Ctrl+. end).
+- The on-device screen model and the [screen check modes](#screen-check-modes) exist only on Windows for now.
 - The webcam uses the same YOLO11n rules as Mac (`person` above 0.5, `cell phone` above 0.4), through ONNX Runtime instead of CoreML. Samples start once the model has loaded.
 - The main window uses Segoe UI, Georgia and Consolas, because react-native-windows can't load bundled fonts yet. The floating panel draws its own text and keeps Inter + Instrument Serif.
 - Page transitions and other `Animated` effects are off on Windows (`ANIMATE` in `src/ui/platform.ts`): react-native-windows drops the content of a re-rendered `Animated.View`. The floating panel's tint, pulse and flash animations are native and unaffected.
@@ -326,4 +346,4 @@ cd site && npm install && npm run dev
 
 Copyright (C) 2026 the LarpLess contributors.
 
-LarpLess is free software under the [GNU Affero General Public License v3.0](LICENSE). The webcam model, Ultralytics YOLO11n, is AGPL-3.0, so the app as a whole is too. The screen model, Qwen3-VL through Ollama, is Apache-2.0, and the fonts are OFL-1.1. Third-party notices are listed in the app under Settings → About → Acknowledgements, generated by `larpless/scripts/acknowledgements.mjs` from the texts in [`larpless/licenses/`](larpless/licenses/).
+LarpLess is free software under the [GNU Affero General Public License v3.0](LICENSE). The webcam model, Ultralytics YOLO11n, is AGPL-3.0, so the app as a whole is too. The screen models (Qwen3-VL through Ollama; SigLIP 2 and all-MiniLM-L6-v2 in the on-device classifier on Windows) are Apache-2.0, and the fonts are OFL-1.1. Third-party notices are listed in the app under Settings → About → Acknowledgements, generated by `larpless/scripts/acknowledgements.mjs` from the texts in [`larpless/licenses/`](larpless/licenses/).

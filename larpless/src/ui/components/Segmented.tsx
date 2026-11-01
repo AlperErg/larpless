@@ -9,6 +9,8 @@ export interface SegmentedOption<T extends string | number> {
   value: T;
   label: string;
   icon?: IconName;
+  /** Shown dimmed and can't be picked. */
+  disabled?: boolean;
 }
 
 export interface SegmentedProps<T extends string | number> {
@@ -35,8 +37,8 @@ export function Segmented<T extends string | number>({ options, value, onChange,
             icon={o.icon}
             color={selected ? color : 'gray'}
             selected={selected}
-            onPress={() => onChange(o.value)}
-            style={styles.chip}
+            onPress={o.disabled ? undefined : () => onChange(o.value)}
+            style={[styles.chip, o.disabled && styles.disabled]}
           />
         );
       })}
@@ -47,4 +49,5 @@ export function Segmented<T extends string | number>({ options, value, onChange,
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center' },
   chip: { marginRight: space.xs + 2, marginVertical: 2 },
+  disabled: { opacity: 0.45 },
 });

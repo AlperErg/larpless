@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { StyleSheet, Text as NativeText, View } from 'react-native';
+import { IS_WINDOWS } from '../platform';
 import { colors, fonts, layout, radius, space, themed } from '../theme';
 import { MacTextInput } from './mac';
 import type { MacTextInputProps } from './mac';
@@ -17,7 +18,9 @@ export function TextField({ style, onFocus, onBlur, ...props }: MacTextInputProp
     onBlur?.(e);
   };
 
-  if (props.secureTextEntry) {
+  // Windows draws `color: 'transparent'` text, so the overlay mask would show the value through;
+  // its native password box is fine there.
+  if (props.secureTextEntry && !IS_WINDOWS) {
     return <MaskedTextField style={[style, border]} {...props} onFocus={handleFocus} onBlur={handleBlur} />;
   }
 

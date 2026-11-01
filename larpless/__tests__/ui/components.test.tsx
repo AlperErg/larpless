@@ -127,6 +127,24 @@ describe('UI primitives', () => {
     act(() => r.unmount());
   });
 
+  it('Segmented: a disabled option shows but cannot be picked', () => {
+    const onChange = jest.fn();
+    const r = render(
+      <Segmented
+        testID="mode"
+        options={[{ value: 'vlm', label: 'Vision LLM' }, { value: 'classifier', label: 'Classifier', disabled: true }]}
+        value="vlm"
+        onChange={onChange}
+      />,
+    );
+    expect(textOf(r)).toContain('Classifier');
+    const pressable = (id: string) => r.root.findAll((n) => n.props.testID === id && typeof n.props.onPress === 'function');
+    expect(pressable('mode-classifier')).toHaveLength(0);
+    act(() => pressable('mode-vlm')[0].props.onPress());
+    expect(onChange).toHaveBeenCalledWith('vlm');
+    act(() => r.unmount());
+  });
+
   it('SerifTimer ticks from its anchor', () => {
     jest.useFakeTimers();
     const start = Date.now();

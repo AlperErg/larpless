@@ -30,7 +30,8 @@ export type ActivityCategory = (typeof ACTIVITY_CATEGORIES)[number];
 
 export type ChunkKind = 'subject' | 'distracted' | 'away' | 'unknown';
 export type DistractionReason = 'phone' | 'screen' | 'rule';
-export type ChunkSource = 'vlm' | 'rule' | 'cache' | 'webcam' | 'none' | 'user' | 'title';
+/** 'embed': the on-device screen model (FLScreenModel, Windows), before Ollama. */
+export type ChunkSource = 'vlm' | 'rule' | 'cache' | 'webcam' | 'none' | 'user' | 'title' | 'embed';
 
 export interface Chunk {
   id: string;
@@ -71,11 +72,16 @@ export interface ScreenVerdict {
   moduleId: string | null;
   activity: string;
   confidence: number;
-  source: 'vlm' | 'rule' | 'cache' | 'title';
+  source: 'vlm' | 'rule' | 'cache' | 'title' | 'embed';
 }
 
 export type Strictness = 2 | 5 | 10;               // minutes until the first notification
 export type PowerProfile = 'eco' | 'medium' | 'high';
+/**
+ * Who reads the screen. 'vlm': the vision language model in Ollama, alone (the screen model is never used).
+ * 'classifier': the on-device screen model alone (Windows only); Ollama is never started or asked.
+ */
+export type ClassifierMode = 'vlm' | 'classifier';
 export type PomodoroPreset = '25/5' | '50/10' | 'demo';
 export type PomodoroPhase = 'focus' | 'break' | 'longBreak';
 
@@ -99,7 +105,9 @@ export interface Settings {
   strictness: Strictness;
   /** How often the screen is read. A session may step down from this; that step is not saved. */
   powerProfile: PowerProfile;
-  demoFast: boolean;                    // shorter alerts; check rate comes from powerProfile
+  /** Ollama's vision LLM or the on-device screen model. Ignored (always 'vlm') where the screen model is unsupported. */
+  classifierMode: ClassifierMode;
+  demoFast: boolean;                   // shorter alerts; check rate comes from powerProfile
   webcamEnabled: boolean;
   /** System now-playing strip on the floating panel. The track title is never stored. */
   nowPlayingEnabled: boolean;

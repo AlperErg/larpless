@@ -19,6 +19,7 @@
 #include "Native/FLPermissions.h"
 #include "Native/FLPing.h"
 #include "Native/FLScreenCapture.h"
+#include "Native/FLScreenModel.h"
 #include "Native/FLSound.h"
 #include "Native/FLWebcam.h"
 #include "Native/FLWindow.h"

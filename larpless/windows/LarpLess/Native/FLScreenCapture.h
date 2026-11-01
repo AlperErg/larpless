@@ -83,7 +83,7 @@ struct FLScreenCapture {
     result.Resolve(JSValue{JSValueObject{{"runs", runs}, {"avgMs", total / runs}, {"maxMs", worst}}});
   }
 
- private:
+  // The helpers below are also used by FLScreenModel.h (same window snapshot and capture rules).
   struct ActiveWindow {
     std::wstring appName, exeName, title;
     bool isSelf{false};
@@ -199,9 +199,13 @@ struct FLScreenCapture {
     return w;
   }
 
-  // The monitor showing the foreground window (else the primary one), so the screenshot matches the app name and
-  // title. Scaled to at most maxWidth (never upscaled), JPEG-encoded in memory.
-  static bool CaptureFrame(int maxWidth, float quality, Frame &frame) {
+  // Screen-DC rectangle of the monitor showing the foreground window (else the primary one), so the screenshot
+  // matches the app name and title, and the output size: at most maxWidth wide, never upscaled.
+  struct Target {
+    int x{0}, y{0}, screenW{0}, screenH{0}, w{0}, h{0};
+  };
+
+  static bool FindTarget(int maxWidth, Target &t) {
     MONITORINFO monitor{};
     monitor.cbSize = sizeof(monitor);
     const HMONITOR target{MonitorFromWindow(GetForegroundWindow(), MONITOR_DEFAULTTOPRIMARY)};
@@ -209,44 +213,95 @@ struct FLScreenCapture {
       return false;
     }
     // Screen-DC coordinates: the primary monitor starts at 0,0; others can be negative.
-    const int screenX{monitor.rcMonitor.left};
-    const int screenY{monitor.rcMonitor.top};
-    const int screenW{monitor.rcMonitor.right - monitor.rcMonitor.left};
-    const int screenH{monitor.rcMonitor.bottom - monitor.rcMonitor.top};
-    if (screenW <= 0 || screenH <= 0) {
+    t.x = monitor.rcMonitor.left;
+    t.y = monitor.rcMonitor.top;
+    t.screenW = monitor.rcMonitor.right - monitor.rcMonitor.left;
+    t.screenH = monitor.rcMonitor.bottom - monitor.rcMonitor.top;
+    if (t.screenW <= 0 || t.screenH <= 0) {
       return false;
     }
-    const int w{(std::min)(maxWidth, screenW)};
-    const int h{(std::max)(1, static_cast<int>(std::lround(static_cast<double>(w) * screenH / screenW)))};
+    t.w = (std::min)(maxWidth, t.screenW);
+    t.h = (std::max)(1, static_cast<int>(std::lround(static_cast<double>(t.w) * t.screenH / t.screenW)));
+    return true;
+  }
 
-    // Hide the main window from this capture only (the floating panel is excluded permanently).
+  // StretchBlts the target into `bitmap` (t.w x t.h) with the main window hidden from this capture only (the
+  // floating panel is excluded permanently).
+  static bool Blit(Target const &t, HDC screen, HBITMAP bitmap) {
     const HWND main{MainWindow()};
     const bool hideMain{main && IsWindowVisible(main) && SetWindowDisplayAffinity(main, WDA_EXCLUDEFROMCAPTURE)};
     if (hideMain) {
       DwmFlush(); // let DWM compose a frame without it
     }
-
     bool ok{false};
-    const HDC screen{GetDC(nullptr)};
-    const HDC memory{CreateCompatibleDC(screen)};
-    const HBITMAP bitmap{CreateCompatibleBitmap(screen, w, h)};
-    if (screen && memory && bitmap) {
+    if (const HDC memory{CreateCompatibleDC(screen)}) {
       const HGDIOBJ previous{SelectObject(memory, bitmap)};
       SetStretchBltMode(memory, HALFTONE);
       SetBrushOrgEx(memory, 0, 0, nullptr);
-      ok = StretchBlt(memory, 0, 0, w, h, screen, screenX, screenY, screenW, screenH, SRCCOPY | CAPTUREBLT) != FALSE;
+      ok = StretchBlt(memory, 0, 0, t.w, t.h, screen, t.x, t.y, t.screenW, t.screenH, SRCCOPY | CAPTUREBLT) != FALSE;
       SelectObject(memory, previous);
+      DeleteDC(memory);
     }
     if (hideMain) {
       SetWindowDisplayAffinity(main, WDA_NONE);
     }
+    return ok;
+  }
+
+  // JPEG-encoded in memory, for the Ollama path.
+  static bool CaptureFrame(int maxWidth, float quality, Frame &frame) {
+    Target t;
+    if (!FindTarget(maxWidth, t)) {
+      return false;
+    }
+    bool ok{false};
+    const HDC screen{GetDC(nullptr)};
+    const HBITMAP bitmap{screen ? CreateCompatibleBitmap(screen, t.w, t.h) : nullptr};
+    if (screen && bitmap) {
+      ok = Blit(t, screen, bitmap);
+    }
     if (ok) {
       ok = EncodeJpeg(bitmap, quality, frame.jpeg);
-      frame.width = w;
-      frame.height = h;
+      frame.width = t.w;
+      frame.height = t.h;
     }
     if (bitmap) DeleteObject(bitmap);
-    if (memory) DeleteDC(memory);
+    if (screen) ReleaseDC(nullptr, screen);
+    return ok;
+  }
+
+  // Top-down BGRA pixels (alpha forced to 255), in memory, for FLScreenModel: its models run natively, so the
+  // frame never reaches JS.
+  static bool CaptureBgra(int maxWidth, std::vector<uint8_t> &bgra, int &width, int &height) {
+    Target t;
+    if (!FindTarget(maxWidth, t)) {
+      return false;
+    }
+    BITMAPINFO info{};
+    info.bmiHeader.biSize = sizeof(info.bmiHeader);
+    info.bmiHeader.biWidth = t.w;
+    info.bmiHeader.biHeight = -t.h; // top-down
+    info.bmiHeader.biPlanes = 1;
+    info.bmiHeader.biBitCount = 32;
+    info.bmiHeader.biCompression = BI_RGB;
+    void *bits{nullptr};
+    bool ok{false};
+    const HDC screen{GetDC(nullptr)};
+    const HBITMAP bitmap{screen ? CreateDIBSection(screen, &info, DIB_RGB_COLORS, &bits, nullptr, 0) : nullptr};
+    if (screen && bitmap && bits) {
+      ok = Blit(t, screen, bitmap);
+      if (ok) {
+        GdiFlush();
+        const size_t size{static_cast<size_t>(t.w) * t.h * 4};
+        bgra.assign(static_cast<uint8_t const *>(bits), static_cast<uint8_t const *>(bits) + size);
+        for (size_t i = 3; i < size; i += 4) {
+          bgra[i] = 255;
+        }
+        width = t.w;
+        height = t.h;
+      }
+    }
+    if (bitmap) DeleteObject(bitmap);
     if (screen) ReleaseDC(nullptr, screen);
     return ok;
   }

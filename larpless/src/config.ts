@@ -26,6 +26,7 @@ export const DEFAULT_SETTINGS: Settings = {
   ollamaUrl: 'http://127.0.0.1:11434',
   strictness: 2,
   powerProfile: 'medium',
+  classifierMode: 'vlm',
   demoFast: false,
   webcamEnabled: true,
   nowPlayingEnabled: true,

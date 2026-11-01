@@ -8,17 +8,18 @@ import { isLocalUrl } from '../../core/ollamaHost';
 import { useAppStore } from '../../store/appStore';
 import { useNavStore } from '../../store/navStore';
 import { useOllamaStore } from '../../store/ollamaStore';
+import { useScreenModelStore } from '../../store/screenModelStore';
 import { useSessionStore } from '../../store/sessionStore';
 import { normalizeSupabaseProjectUrl } from '../../social/supabase';
 import { useSocialStore } from '../../store/socialStore';
-import { Button, CodeBlock, MacPressable, MacTextInput, ModelDownload, Segmented, Switch, Text } from '../components';
+import { Button, CodeBlock, MacPressable, MacTextInput, ModelDownload, ScreenModelDownload, Segmented, Switch, Text } from '../components';
 import { TextField } from '../components/TextField';
 import { Page } from '../layout/Page';
 import { isLive } from '../lib/actions';
 import { errorText } from '../lib/social';
-import { APPEARANCE_OPTIONS, POMODORO_OPTIONS, POWER_OPTIONS, SOUNDS, SOUND_ICON, SOUND_LABEL, STRICTNESS_OPTIONS } from '../lib/labels';
+import { APPEARANCE_OPTIONS, CLASSIFIER_OPTIONS, POMODORO_OPTIONS, POWER_OPTIONS, SOUNDS, SOUND_ICON, SOUND_LABEL, STRICTNESS_OPTIONS } from '../lib/labels';
 import { ollamaLine } from '../layout/Sidebar';
-import { DEVICE } from '../platform';
+import { DEVICE, IS_WINDOWS } from '../platform';
 import { colors, fonts, layout, radius, space, tag, themed } from '../theme';
 
 /** Local mirror of settings so controls respond instantly; every change also goes to updateSettings. */
@@ -41,6 +42,8 @@ export function SettingsPage() {
   const status = useSessionStore((st) => st.status);
   const setVolume = useSessionStore((st) => st.setVolume);
   const go = useNavStore((st) => st.go);
+  // ScreenModelDownload (in the "Screen check" row) refreshes this on mount and after a download.
+  const screenModelInstalled = useScreenModelStore((st) => st.status?.installed === true);
   const [model, setModel] = useState(s.model);
   const [url, setUrl] = useState(s.ollamaUrl);
   const [urlRejected, setUrlRejected] = useState(false);
@@ -141,6 +144,31 @@ export function SettingsPage() {
       </Row>
       <AccountSection />
       <SectionTitle>Local AI</SectionTitle>
+      {IS_WINDOWS ? (
+        <Row
+          label="Screen check"
+          hint={
+            s.classifierMode === 'classifier'
+              ? 'A small on-device classifier reads the screen in under a second, on any PC. Ollama is never opened; unsure screens count as unknown.'
+              : screenModelInstalled
+                ? 'A vision language model in Ollama reads each screenshot. Best on powerful PCs with a GPU; on CPU alone a check can take 30 s.'
+                : 'A vision language model in Ollama reads each screenshot. Best on powerful PCs with a GPU. On a slower PC, download the on-device classifier below and use it instead.'
+          }>
+          <Segmented
+            testID="settings-classifier"
+            // The classifier with no model would make every check unknown. Already chosen, it stays selectable
+            // so it can be switched back.
+            options={CLASSIFIER_OPTIONS.map((o) =>
+              o.value === 'classifier' && !screenModelInstalled && s.classifierMode !== 'classifier' ? { ...o, disabled: true } : o,
+            )}
+            value={s.classifierMode}
+            onChange={(v) => update({ classifierMode: v })}
+          />
+          <View style={styles.screenModel}>
+            <ScreenModelDownload testID="settings-screen-model" />
+          </View>
+        </Row>
+      ) : null}
       <Row label="Model" hint="Ollama vision model used to read the screen.">
         <MacTextInput
           testID="settings-model"
@@ -446,5 +474,6 @@ const styles = themed(() => StyleSheet.create({
   volPct: { marginLeft: space.sm, width: 36 },
   gapLeft: { marginLeft: space.md },
   code: { alignSelf: 'stretch', maxWidth: 420, marginTop: space.xs },
+  screenModel: { alignSelf: 'stretch', maxWidth: 420, marginTop: space.sm },
   supabaseKey: { alignSelf: 'stretch', maxWidth: 420 },
 }));

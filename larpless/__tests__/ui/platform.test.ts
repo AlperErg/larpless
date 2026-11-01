@@ -33,6 +33,7 @@ describe.each(['macos', 'ios'])('on %s', (os) => {
     expect(`${platform.MOD}K`).toBe('⌘K');
     expect(`${platform.ALT}click`).toBe('⌥click');
     expect(platform.DEVICE).toBe('Mac');
+    expect(platform.PIN_PAGE_HEADER).toBe(false);
   });
 
   it('links the macOS Ollama installer', () => {
@@ -59,6 +60,7 @@ describe('on windows', () => {
     expect(`${platform.MOD}K`).toBe('Ctrl+K');
     expect(`${platform.ALT}click`).toBe('Alt+click');
     expect(platform.DEVICE).toBe('PC');
+    expect(platform.PIN_PAGE_HEADER).toBe(true);
   });
 
   it('links the Windows Ollama installer', () => {
