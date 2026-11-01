@@ -49,8 +49,10 @@
 
 namespace LarpLess {
 
-REACT_MODULE(FLScreenModel)
-struct FLScreenModel {
+// The work and state live in FLScreenModelCore, held by shared_ptr: every background thread keeps its own
+// reference, so a thread still blocked in a download read or an ONNX run after the module is destroyed (window
+// closed, JS reload) never touches freed memory. The module only forwards (see FLScreenModel at the end).
+struct FLScreenModelCore : std::enable_shared_from_this<FLScreenModelCore> {
   using JSValue = winrt::Microsoft::ReactNative::JSValue;
   using JSValueArray = winrt::Microsoft::ReactNative::JSValueArray;
   using JSValueObject = winrt::Microsoft::ReactNative::JSValueObject;
@@ -63,14 +65,25 @@ struct FLScreenModel {
   static constexpr wchar_t kText[]{L"minilm.onnx"};
   static constexpr wchar_t kVocab[]{L"minilm-vocab.txt"};
 
-  ~FLScreenModel() noexcept {
+  // Called by the module's destructor: stop emitting events, cancel a download, and make queued classify calls
+  // bail out without loading or capturing.
+  void Detach() noexcept {
+    {
+      std::lock_guard<std::mutex> lock{m_emitMutex};
+      m_progress = nullptr;
+    }
     m_cancel = true;
+    ++m_generation;
+  }
+
+  void SetEmitter(std::function<void(JSValueObject const &)> const &progress) noexcept {
+    std::lock_guard<std::mutex> lock{m_emitMutex};
+    m_progress = progress;
   }
 
   // files = [{ name, size }]. Resolves { supported, installed, missing: [name], loaded }.
-  REACT_METHOD(Status, L"status")
   void Status(JSValueArray &&files, ReactPromise<JSValue> &&result) noexcept {
-    std::thread([this, files = std::move(files), result = std::move(result)]() mutable noexcept {
+    std::thread([this, self = shared_from_this(), files = std::move(files), result = std::move(result)]() mutable noexcept {
       winrt::init_apartment(winrt::apartment_type::multi_threaded);
       JSValueArray missing;
       try {
@@ -101,7 +114,6 @@ struct FLScreenModel {
 
   // files = [{ name, url, sha256, size }]: downloads each missing or wrong-sized file to LocalFolder\Models,
   // emitting FLScreenModelProgress. Rejects E_INVALID_ARG / E_BUSY / E_DOWNLOAD / E_CHECKSUM / E_CANCELLED.
-  REACT_METHOD(Download, L"download")
   void Download(JSValueArray &&files, ReactPromise<void> &&result) noexcept {
     std::vector<FileSpec> specs;
     for (auto const &f : files) {
@@ -123,7 +135,7 @@ struct FLScreenModel {
       return;
     }
     m_cancel = false;
-    std::thread([this, specs = std::move(specs), result = std::move(result)]() mutable noexcept {
+    std::thread([this, self = shared_from_this(), specs = std::move(specs), result = std::move(result)]() mutable noexcept {
       winrt::init_apartment(winrt::apartment_type::multi_threaded);
       std::string code, message;
       try {
@@ -136,8 +148,19 @@ struct FLScreenModel {
           if (std::filesystem::is_regular_file(path, ec) && std::filesystem::file_size(path, ec) == s.size) {
             continue;
           }
-          code = Fetch(s, path, i, specs.size(), message);
+          try {
+            code = Fetch(s, path, i, specs.size(), message);
+          } catch (...) {
+            // A dropped connection throws out of Fetch: don't leave up to 372 MB of .part behind.
+            auto part{path};
+            part += L".part";
+            std::filesystem::remove(part, ec);
+            throw;
+          }
         }
+      } catch (winrt::hresult_error const &e) {
+        code = "E_DOWNLOAD";
+        message = "download failed: " + winrt::to_string(e.message());
       } catch (...) {
         code = "E_DOWNLOAD";
         message = "download failed";
@@ -151,7 +174,6 @@ struct FLScreenModel {
     }).detach();
   }
 
-  REACT_METHOD(CancelDownload, L"cancelDownload")
   void CancelDownload(ReactPromise<void> &&result) noexcept {
     m_cancel = true;
     result.Resolve();
@@ -161,7 +183,6 @@ struct FLScreenModel {
   // bundleId, windowTitle, isSelf) plus { width, height, capturedAt, image: {promptId: logit}, text: {id: cosine}
   // | null, keywords: {id: whole-word hits} | null, ocrChars, timings: { captureMs, ocrMs, imageMs, textMs } }.
   // Rejects E_NOT_INSTALLED / E_MODEL / E_CAPTURE.
-  REACT_METHOD(Classify, L"classify")
   void Classify(JSValueObject &&opts, ReactPromise<JSValue> &&result) noexcept {
     const int maxWidth{static_cast<int>(Number(opts, "maxWidth", 1024))};
     std::wstring language{winrt::to_hstring(Text(opts, "ocrLanguage")).c_str()};
@@ -189,10 +210,17 @@ struct FLScreenModel {
       result.Reject(ReactError{"E_INVALID_ARG", "maxWidth must be 224-8192", {}});
       return;
     }
-    std::thread([this, maxWidth, language = std::move(language), texts = std::move(texts),
-                 result = std::move(result)]() mutable noexcept {
+    const uint64_t generation{m_generation.load()};
+    std::thread([this, self = shared_from_this(), generation, maxWidth, language = std::move(language),
+                 texts = std::move(texts), result = std::move(result)]() mutable noexcept {
       winrt::init_apartment(winrt::apartment_type::multi_threaded);
       std::lock_guard<std::mutex> lock{m_runMutex};
+      // Issued before an unload (the session ended while this call waited for the lock): don't reload the
+      // models or capture the screen outside the session that asked.
+      if (generation != m_generation.load()) {
+        result.Reject(ReactError{"E_CANCELLED", "the screen model was unloaded", {}});
+        return;
+      }
       std::string code, message;
       JSValueObject out;
       try {
@@ -229,9 +257,9 @@ struct FLScreenModel {
   }
 
   // Frees the sessions (about 1 GB) between study sessions.
-  REACT_METHOD(Unload, L"unload")
   void Unload(ReactPromise<void> &&result) noexcept {
-    std::thread([this, result = std::move(result)]() mutable noexcept {
+    ++m_generation;  // classify calls already queued behind m_runMutex give up (see Classify)
+    std::thread([this, self = shared_from_this(), result = std::move(result)]() mutable noexcept {
       std::lock_guard<std::mutex> lock{m_runMutex};
       m_vision = nullptr;
       m_text = nullptr;
@@ -242,18 +270,13 @@ struct FLScreenModel {
     }).detach();
   }
 
-  REACT_METHOD(AddListener, L"addListener")
-  void AddListener(std::string) noexcept {
+  void AddListener() noexcept {
     ++m_listeners;
   }
 
-  REACT_METHOD(RemoveListeners, L"removeListeners")
   void RemoveListeners(double count) noexcept {
     m_listeners = (std::max)(0, m_listeners - static_cast<int>(count));
   }
-
-  REACT_EVENT(Progress, L"FLScreenModelProgress")
-  std::function<void(JSValueObject const &)> Progress;
 
  private:
   struct FileSpec {
@@ -277,6 +300,9 @@ struct FLScreenModel {
   std::atomic<int> m_listeners{0};
   std::atomic<bool> m_downloading{false}, m_cancel{false}, m_loaded{false};
   std::mutex m_runMutex;  // one classify / load / unload at a time
+  std::atomic<uint64_t> m_generation{0};  // bumped by Unload / Detach
+  std::mutex m_emitMutex;
+  std::function<void(JSValueObject const &)> m_progress;  // guarded by m_emitMutex; null once detached
 
   // Guarded by m_runMutex.
   std::unique_ptr<Ort::Env> m_env;
@@ -333,8 +359,9 @@ struct FLScreenModel {
   }
 
   void Emit(JSValueObject payload) noexcept {
-    if (m_listeners > 0 && Progress) {
-      Progress(payload);
+    std::lock_guard<std::mutex> lock{m_emitMutex};
+    if (m_listeners > 0 && m_progress) {
+      m_progress(payload);
     }
   }
 
@@ -384,6 +411,14 @@ struct FLScreenModel {
         break;
       }
       file.write(reinterpret_cast<char const *>(chunk.data()), n);
+      if (!file) {
+        // The hash below covers the network bytes, not the disk: a short write (disk full) must fail here.
+        file.close();
+        std::error_code ec;
+        std::filesystem::remove(part, ec);
+        message = "cannot write the model file (is the disk full?)";
+        return "E_DOWNLOAD";
+      }
       hash.Update(chunk.data(), n);
       received += n;
       if (std::chrono::steady_clock::now() - lastEmit > std::chrono::milliseconds{250}) {
@@ -392,8 +427,13 @@ struct FLScreenModel {
       }
     }
     file.close();
-    Emit(ProgressPayload(s, index, count, received));
     std::error_code ec;
+    if (!file) {
+      std::filesystem::remove(part, ec);
+      message = "cannot write the model file (is the disk full?)";
+      return "E_DOWNLOAD";
+    }
+    Emit(ProgressPayload(s, index, count, received));
     if (received != s.size || hash.Hex() != s.sha256) {
       std::filesystem::remove(part, ec);
       message = winrt::to_string(s.name) + " failed its size/SHA-256 check";
@@ -401,6 +441,7 @@ struct FLScreenModel {
     }
     std::filesystem::rename(part, path, ec);
     if (ec) {
+      std::filesystem::remove(part, ec);
       message = "cannot move the model into place";
       return "E_DOWNLOAD";
     }
@@ -767,6 +808,61 @@ struct FLScreenModel {
     }
     return static_cast<float>(sum);
   }
+};
+
+REACT_MODULE(FLScreenModel)
+struct FLScreenModel {
+  using JSValue = winrt::Microsoft::ReactNative::JSValue;
+  using JSValueArray = winrt::Microsoft::ReactNative::JSValueArray;
+  using JSValueObject = winrt::Microsoft::ReactNative::JSValueObject;
+  template <typename T>
+  using ReactPromise = winrt::Microsoft::ReactNative::ReactPromise<T>;
+
+  ~FLScreenModel() noexcept {
+    m_core->Detach();
+  }
+
+  REACT_METHOD(Status, L"status")
+  void Status(JSValueArray &&files, ReactPromise<JSValue> &&result) noexcept {
+    m_core->Status(std::move(files), std::move(result));
+  }
+
+  REACT_METHOD(Download, L"download")
+  void Download(JSValueArray &&files, ReactPromise<void> &&result) noexcept {
+    m_core->SetEmitter(Progress);
+    m_core->Download(std::move(files), std::move(result));
+  }
+
+  REACT_METHOD(CancelDownload, L"cancelDownload")
+  void CancelDownload(ReactPromise<void> &&result) noexcept {
+    m_core->CancelDownload(std::move(result));
+  }
+
+  REACT_METHOD(Classify, L"classify")
+  void Classify(JSValueObject &&opts, ReactPromise<JSValue> &&result) noexcept {
+    m_core->Classify(std::move(opts), std::move(result));
+  }
+
+  REACT_METHOD(Unload, L"unload")
+  void Unload(ReactPromise<void> &&result) noexcept {
+    m_core->Unload(std::move(result));
+  }
+
+  REACT_METHOD(AddListener, L"addListener")
+  void AddListener(std::string) noexcept {
+    m_core->AddListener();
+  }
+
+  REACT_METHOD(RemoveListeners, L"removeListeners")
+  void RemoveListeners(double count) noexcept {
+    m_core->RemoveListeners(count);
+  }
+
+  REACT_EVENT(Progress, L"FLScreenModelProgress")
+  std::function<void(JSValueObject const &)> Progress;
+
+ private:
+  std::shared_ptr<FLScreenModelCore> m_core{std::make_shared<FLScreenModelCore>()};
 };
 
 } // namespace LarpLess

@@ -116,7 +116,10 @@ export function fuseScores(
   const imgSubj = modules.map((m) => scores.image[m.id]);
   const imgKnown = imgSubj.filter((v): v is number => typeof v === 'number');
   if (!Number.isFinite(distract)) return null;
-  const imageMargin = Math.max(study, maxOf(imgKnown)) - distract;
+  // The gate (study or not) uses every library subject's prompt, as the bench validated it, not only the subjects
+  // the user has turned on: a subject switched off (or shadowed by a same-name course) still looks like study.
+  const library = maxOf(entries.filter(([k]) => k.startsWith('lib_')).map(([, v]) => v));
+  const imageMargin = Math.max(study, library, maxOf(imgKnown)) - distract;
 
   const text = scores.text;
   const hasText = text !== null && scores.ocrChars >= MIN_OCR_CHARS;
@@ -173,6 +176,8 @@ export interface ScreenModelStep {
 }
 
 const STATUS_RECHECK_MS = 60_000;
+/** Longest a session end waits for the native unload. */
+export const UNLOAD_WAIT_MS = 3_000;
 
 export function createScreenModelStep(deps: {
   api: ScreenModelApi;
@@ -215,7 +220,14 @@ export function createScreenModelStep(deps: {
       return { verdict, window: { appName, bundleId, windowTitle, isSelf }, ocrChars: scores.ocrChars, tookMs };
     },
     async unload() {
-      await deps.api.unload().catch(() => {});
+      // Native unload waits for a classify still running after its JS deadline; don't let that hold up the
+      // end of a session (the native side drops the models once it gets the lock).
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      const bound = new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, UNLOAD_WAIT_MS);
+      });
+      await Promise.race([deps.api.unload().catch(() => {}), bound]);
+      if (timer !== null) clearTimeout(timer);
     },
   };
 }

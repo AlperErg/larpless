@@ -96,6 +96,12 @@ export const useSessionStore = create<SessionStore>()(() => ({
   refreshOllama: () => getSessionController().refreshOllama(),
 }));
 
+// The classifier reads the mode on every check; switching it mid-session must also open/warm Ollama (or free
+// the model no longer used), which start() only did for the mode the session began with.
+useAppStore.subscribe((s, prev) => {
+  if (controller && isClassifierMode(s.settings) !== isClassifierMode(prev.settings)) controller.readerChanged();
+});
+
 // A finished launch, restart or download changes what the health check reports (sidebar, settings).
 useOllamaStore.subscribe((s, prev) => {
   const started = prev.starting && !s.starting;

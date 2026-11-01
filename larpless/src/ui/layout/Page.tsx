@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { StyleSheet, ScrollView, View } from 'react-native';
 import type { LayoutChangeEvent, StyleProp, ViewStyle } from 'react-native';
@@ -81,6 +81,12 @@ function FittedScroll({
   const [viewport, setViewport] = useState(0);
   const [contentH, setContentH] = useState(0);
   const scrollable = viewport === 0 || contentH === 0 || contentH - END_PAD > viewport + 1;
+  const ref = useRef<ScrollView>(null);
+  // Turning scrolling off keeps the current offset (up to END_PAD + 1 px once content shrinks or the window grows),
+  // and Windows then blocks every way to scroll back: return to the top.
+  useEffect(() => {
+    if (!scrollable) ref.current?.scrollTo({ y: 0, animated: false });
+  }, [scrollable]);
   const onLayout = (e: LayoutChangeEvent) => {
     const h = Math.round(e.nativeEvent.layout.height);
     setViewport((prev) => (prev === h ? prev : h));
@@ -91,13 +97,15 @@ function FittedScroll({
   };
   return (
     <ScrollView
+      ref={ref}
       testID={testID}
       style={style}
       contentContainerStyle={contentContainerStyle}
       scrollEnabled={scrollable}
       showsVerticalScrollIndicator={scrollable}
       bounces={scrollable}
-      alwaysBounceVertical={false}
+      // react-native-macos maps this to NSScrollView elasticity for every page; leave the Mac's rubber band alone.
+      alwaysBounceVertical={PIN_PAGE_HEADER ? false : undefined}
       overScrollMode={scrollable ? 'auto' : 'never'}
       keyboardShouldPersistTaps={PIN_PAGE_HEADER ? 'handled' : undefined}
       onLayout={onLayout}

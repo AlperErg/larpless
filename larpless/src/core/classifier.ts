@@ -79,6 +79,11 @@ export interface ClassifyResult {
   fellBehind?: boolean;
   /** One id per vision call. Same-window sharers copy it; a follow-up shot gets its own. */
   gen?: number;
+  /**
+   * The screen model read this window and wasn't sure ('classifier' mode). Not a failure: the window has an
+   * answer (`unknown`), so callers shouldn't re-check it until it changes.
+   */
+  unsure?: boolean;
 }
 
 /** Identity of a window for "has it changed?" checks. Contains the title: in memory only. */
@@ -99,6 +104,8 @@ export interface Classifier {
   unload(): Promise<void>;
   /** Forget the previous verdict and the cache (call at session start). */
   reset(): void;
+  /** Free whichever model the current mode doesn't use (after a mid-session mode switch). Never rejects. */
+  unloadUnused(): Promise<void>;
 }
 
 interface CacheEntry {
@@ -282,7 +289,14 @@ export function createClassifier({ native, ollama, now, config, getPower, screen
       if (verdict && r.window.windowTitle !== null) {
         cache = { appName: snapApp, windowTitle: r.window.windowTitle, verdict, at: now(), ttlMs: cacheTtl() };
       }
-      return { verdict: remember(verdict, snapApp, snapKey), tookScreenshot: true, appName: snapApp, key: snapKey, tookMs: Math.max(0, now() - started) };
+      return {
+        verdict: remember(verdict, snapApp, snapKey),
+        tookScreenshot: true,
+        appName: snapApp,
+        key: snapKey,
+        tookMs: Math.max(0, now() - started),
+        ...(verdict ? {} : { unsure: true }),
+      };
     } catch {
       return failed();
     } finally {
@@ -468,6 +482,12 @@ export function createClassifier({ native, ollama, now, config, getPower, screen
       const keepAlive = power()?.keepAlive;
       if (keepAlive) await ollama.warmUp(modules, { keepAlive });
       else await ollama.warmUp(modules);
+    },
+
+    async unloadUnused() {
+      if (config.USE_MOCK_CLASSIFIER) return;
+      if (embedOnly()) await ollama.unload();
+      else await screenModel?.unload();
     },
 
     async unload() {

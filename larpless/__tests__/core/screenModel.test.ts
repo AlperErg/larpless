@@ -6,6 +6,7 @@ import {
   fuseScores,
   MIN_OCR_CHARS,
   SCREEN_MODEL_FILES,
+  UNLOAD_WAIT_MS,
   createScreenModelStep,
   screenModelTexts,
 } from '../../src/core/screenModel';
@@ -77,6 +78,17 @@ describe('fuseScores', () => {
     expect(v.moduleId).toBe('lib_calculus');
   });
 
+  it('decides study vs not study from every library prompt, not only the subjects turned on', () => {
+    const codeScreen = scores({
+      image: { lib_calculus: -1.5, lib_history: -7, 'study:0': -7, 'distract:0': -5.5 },
+      text: null,
+      ocrChars: 0,
+    });
+    expect(fuseScores(codeScreen, MODULES)).toMatchObject({ studying: true, moduleId: 'lib_calculus' });
+    // Calculus switched off (or shadowed by a same-name course): still study, just another subject.
+    expect(fuseScores(codeScreen, MODULES.filter((m) => m.id !== 'lib_calculus'))).toMatchObject({ studying: true });
+  });
+
   it('returns null when no module has an image prompt and there is no text', () => {
     expect(fuseScores(scores({ text: null }), [MODULES[2]])).toBeNull();
   });
@@ -124,6 +136,21 @@ describe('createScreenModelStep', () => {
       log: () => {},
     });
     expect(await step.ready()).toBe(false);
+  });
+
+  it('does not let a stuck native unload hold up the end of a session', async () => {
+    jest.useFakeTimers();
+    try {
+      const step = createScreenModelStep({ api: api({ unload: jest.fn(() => new Promise<void>(() => {})) }), now: () => 0, log: () => {} });
+      let done = false;
+      step.unload().then(() => {
+        done = true;
+      });
+      await jest.advanceTimersByTimeAsync(UNLOAD_WAIT_MS);
+      expect(done).toBe(true);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('logs timings and the label, never the window title', async () => {

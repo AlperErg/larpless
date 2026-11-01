@@ -73,7 +73,7 @@ export interface SessionControllerDeps {
   /** The subjects the classifier may pick. Defaults to getModules(). */
   getDetectModules?(): StudyModule[];
   getSettings(): Settings;
-  classifier: Pick<Classifier, 'classifyCurrent' | 'reset' | 'warmUp' | 'unload'>;
+  classifier: Pick<Classifier, 'classifyCurrent' | 'reset' | 'warmUp' | 'unload'> & Partial<Pick<Classifier, 'unloadUnused'>>;
   ollama: Pick<OllamaClient, 'checkHealth'>;
   /** Runs before the warm-up of a real session: starts Ollama, or restarts it without its prompt cache. */
   prepareOllama?(): Promise<unknown>;
@@ -93,6 +93,11 @@ export interface SessionController extends SessionStoreActions {
   setPomodoroPreset(preset: PomodoroPreset): void;
   /** Clear every timer and subscription (tests, hot reload). */
   dispose(): void;
+  /**
+   * The screen reader (classifier mode) changed: in a live session, prepare and warm up the reader now in use
+   * (start() only did that for the old one) and free the one no longer used.
+   */
+  readerChanged(): void;
 }
 
 /* ------------------------------------------------------------------ */
@@ -343,8 +348,10 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
     // Paused, away, a different window, or no verdict: drop it. Clear checkedKey so the
     // same window can be tried again; a failure waits out a fresh settle instead of every tick.
     const stale = r.key !== null && r.key !== seenKey;
-    const failed = !r.verdict;
-    if (get().status !== 'running' || camLive === 'away' || stale || failed) {
+    // An unsure on-device answer is an answer (`unknown`), not a failure: keep checkedKey so the same window
+    // isn't captured and read again every settle period.
+    const failed = !r.verdict && !r.unsure;
+    if (get().status !== 'running' || camLive === 'away' || stale || !r.verdict) {
       if (stale || failed || camLive === 'away') checkedKey = null;
       if (failed && !stale) seenSince = now();
       return;
@@ -805,6 +812,16 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
       set({ pomodoro: st.status === 'paused' ? freeze(next, t) : next });
       if (st.status === 'break') leaveBreak(t);
       pushPanel();
+    },
+
+    readerChanged() {
+      if (!sessionId || demo || ending) return;
+      const sid = sessionId;
+      deps.classifier.unloadUnused?.().catch(noop);
+      (deps.prepareOllama?.() ?? Promise.resolve())
+        .catch(noop)
+        .then(() => (sessionId === sid ? deps.classifier.warmUp(detectModules()) : undefined))
+        .catch(noop);
     },
 
     async refreshOllama() {

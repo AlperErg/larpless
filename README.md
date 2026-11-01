@@ -68,21 +68,23 @@ The classifier stops at the cheapest step that gives an answer:
 1. **LarpLess in front:** reuse the previous verdict.
 2. **Rules:** a distraction keyword in the app or window title → `distracted`. No screenshot.
 3. **Cache:** same app and title as a verdict less than 2 min old → reuse it. No screenshot.
-4. **On-device screen model (Windows):** when it's downloaded, SigLIP 2 image embeddings, Windows OCR and MiniLM text embeddings score the screen in about 0.5 s, with no Ollama involved. What happens next depends on the [screen check mode](#screen-check-modes).
-5. **VLM:** take a screenshot and classify it with the vision model in Ollama (about 3 s on a fast Mac). Only one vision call runs at a time, and it is allowed to finish. A check for the same window shares its result. If you switched windows meanwhile, one follow-up reads whatever is in front when the call returns, so windows you only passed through are never captured.
+4. **Read the screen** with one of two models, chosen by the [screen check mode](#screen-check-modes) (Windows; the Mac always uses the VLM):
+   - **On-device classifier (Windows):** SigLIP 2 image embeddings, Windows OCR and MiniLM text embeddings score the screen in about 0.5 s, with no Ollama involved.
+   - **VLM:** take a screenshot and classify it with the vision model in Ollama (about 3 s on a fast Mac). Only one vision call runs at a time, and it is allowed to finish. A check for the same window shares its result. If you switched windows meanwhile, one follow-up reads whatever is in front when the call returns, so windows you only passed through are never captured.
 
 ### Screen check modes
 
-On Windows, **Settings → Local AI → Screen check** chooses who reads the screen. The change applies from the next check, with no restart.
+On Windows, **Settings → Local AI → Screen check** chooses which one model reads the screen (onboarding asks how powerful the PC is and picks it). The change applies from the next check, with no restart.
 
-| | **On-device + Ollama** (default) | **On-device only** |
+| | **Vision LLM (Ollama)** (default) | **On-device classifier** |
 | --- | --- | --- |
-| Study verdict | used at confidence ≥ 0.2, otherwise Ollama checks it | always used |
-| "Not study" verdict | used at confidence ≥ 0.7, otherwise Ollama checks it | used at ≥ 0.6; below that the chunk is `unknown` (no alert) |
+| Reads the screen | Ollama's vision model, as on the Mac; the on-device model is never run | the on-device model alone |
+| Study verdict | Ollama's answer | always used |
+| "Not study" verdict | Ollama's answer | used at ≥ 0.6; below that the chunk is `unknown` (no alert) |
 | Ollama | opened at session start, model warmed up | never opened, warmed up or asked |
-| Model not downloaded | Ollama does every check | every chunk is `unknown` |
+| Model not downloaded | not needed | every chunk is `unknown` (Settings only offers this mode once it's downloaded) |
 
-On-device only is for PCs where Ollama is too slow or uses too much memory. On the 39-screenshot bench the on-device model gets 95% of subjects right and tells study from distraction 39/39. The Mac has no on-device model yet, so it always uses Ollama and the setting is hidden there.
+The on-device classifier is for PCs where Ollama is too slow or uses too much memory. On the 54-screenshot bench it gets 94% of subjects right and tells study from distraction 54/54. The Mac has no on-device model yet, so it always uses Ollama and the setting is hidden there.
 
 ### Live: what the panel shows
 
@@ -174,7 +176,7 @@ export const SUPABASE_URL = 'https://<project>.supabase.co';
 export const SUPABASE_ANON_KEY = '<anon key>';
 ```
 
-Then, in the Supabase dashboard, run [`larpless/supabase/schema.sql`](larpless/supabase/schema.sql) in the SQL editor and turn off **Authentication → Providers → Email → Confirm email** (accounts use a username + password; you can also sign in with the email of an account made outside the app).
+Then, in the Supabase dashboard, run [`larpless/supabase/schema.sql`](larpless/supabase/schema.sql) in the SQL editor and turn off **Authentication → Providers → Email → Confirm email** (accounts use a username + password; you can also sign in with the email of an account made outside the app). The script is safe to re-run; run it again whenever it changes (for example, **Settings → Account → Delete account** needs its `delete_account` function).
 
 ### Run
 
@@ -226,7 +228,7 @@ The Windows build uses the same TypeScript and the same JS ↔ native contract; 
 - **Visual Studio 2026** (Community is fine) with the *Desktop development with C++* and *WinUI application development* workloads, the *MSIX Packaging Tools* component and the **Windows 11 SDK 10.0.22621**.
 - **.NET SDK 10**, **Node 22** or above.
 - **Developer Mode** on and **long paths** enabled (Settings → System → For developers).
-- **[Ollama for Windows](https://ollama.com)** with `qwen3-vl:2b` pulled, as on the Mac. Not needed in the **On-device only** [screen check mode](#screen-check-modes), which only needs the on-device classifier (a one-time download of about 460 MB from onboarding or Settings → Local AI).
+- **[Ollama for Windows](https://ollama.com)** with `qwen3-vl:2b` pulled, as on the Mac. Not needed in the **On-device classifier** [screen check mode](#screen-check-modes), which only needs the on-device classifier (a one-time download of about 460 MB from onboarding or Settings → Local AI).
 
 **Install and run.** From `larpless/`, run `npm ci`, create `src/social/env.ts` as in [Supabase Setup](#supabase-setup), then:
 
@@ -236,7 +238,7 @@ powershell -ExecutionPolicy Bypass -File scripts\run-windows.ps1
 
 This starts Metro on port 8081 if it isn't already running (log in `.logs/metro-8081.log`), restores the local PowerShell 7 tool the deploy step needs, then builds, deploys and launches the Debug app. The first build takes several minutes. No admin terminal is needed. Allow the camera when Windows asks; there is no Screen Recording permission on Windows. The first launch is mostly the same apart from those.
 
-The script uninstalls the old app package first, and that deletes the app's local data, including the downloaded on-device classifier. After a JS-only change, don't rebuild: start Metro and relaunch the installed app (see `larpless/windows/CLAUDE.md`).
+The script uninstalls the old app package first, and that deletes the app's local data, including the downloaded on-device classifier. To keep it, rebuild without uninstalling (see `larpless/windows/CLAUDE.md`); on a `-Metro` install, JS-only changes need no rebuild at all, while the default install embeds the JS bundle and ignores Metro.
 
 **Differences from the Mac app**
 
@@ -303,6 +305,14 @@ log show --last 5m --style compact --predicate 'subsystem == "com.larpless.app"'
 ```
 
 **Classifier bench.** `node scripts/bench-classifier.ts --model qwen3-vl:2b` scores the prompt against `bench/<expected>__<desc>.png`. If that folder is empty it renders 10 synthetic mock-ups instead and never captures the real screen. Add `--clean` to delete the images afterwards.
+
+**Acknowledgements.** The in-app Acknowledgements page (Settings → About, and LarpLess → Acknowledgements on macOS) shows the licences of everything third-party the app ships. After changing npm dependencies, pods, fonts, models or vendored code, run `pod install` and then:
+
+```bash
+node scripts/acknowledgements.mjs
+```
+
+It reads the packages Metro actually bundles for macOS and Windows, the notices CocoaPods generates, and the hand-kept texts in `licenses/`, and writes `src/legal/acknowledgements.json`. The macOS CI build runs it with `--check` and fails when the file is out of date. The Windows build's native libraries (NuGet packages and what react-native-windows compiles in) are listed by hand in the script's `EXTRAS`, so update their versions there.
 
 **Adding native code.** `macos/Focusline-macOS/Native/` is an Xcode *synchronized folder*: drop files in and they join the target, with no `project.pbxproj` edits. Resources are flattened into the bundle, so prefix every type and file name (`FLCapture…`, `FLShell…`). The one exception is the **Bundle MediaRemote adapter** run-script phase in `project.pbxproj`: it calls `macos/scripts/build-mediaremote-adapter.sh`, which builds `macos/vendor/mediaremote-adapter` with CMake and copies the framework and the perl launcher into the app's Resources.
 
