@@ -162,32 +162,26 @@ It is also worth considering that performance may degrade over time for MacBook 
 - **CMake** (`brew install cmake`).
 - **[Ollama](https://ollama.com)** to run the vision model. Onboarding installs it and downloads the model for you (see [First launch](#first-launch)); from a terminal it's `ollama pull qwen3-vl:2b`.
 
-### Install
+### Installation
 
-From `/larpless/`:
+Start by downloading/cloning this repository to your device. Then navigate to the root of the repository.
+
+After that you only need to run this script to get started:
 
 ```bash
-scripts/setup-worktree.sh
+./larpless/scripts/fresh-run-mac.sh 8081
 ```
 
-This runs `npm ci` and then `pod install` with the UTF-8 locale CocoaPods needs. If you run `pod install` yourself, `export LANG=en_US.UTF-8` first.
+It runs three scripts in order:
 
-### Supabase Setup
+1. `clean-build.sh` quits any running LarpLess, deletes `larpless/macos/build` and removes the `Focusline-*` folders from Xcode's DerivedData, so the build starts from scratch.
+2. `setup-worktree.sh` runs `npm ci`, then `pod install` in `larpless/macos` with the UTF-8 locale CocoaPods needs. If you run `pod install` yourself, `export LANG=en_US.UTF-8` first.
+3. `run-mac.sh 8081` starts Metro on port 8081 in the background unless something is already listening there (log in `larpless/.logs/metro-8081.log`), builds the Debug app with that port baked in, and opens it.
 
-Enter your project URL (`https://<project>.supabase.co`) and anon key in **Settings → Friends**. They are saved with the rest of the settings, so they survive rebuilds and relaunches. Leave both empty and the app skips Supabase and runs fully local.
-
-Then, in the Supabase dashboard, run [`larpless/supabase/schema.sql`](larpless/supabase/schema.sql) in the SQL editor and turn off **Authentication → Providers → Email → Confirm email** (accounts use a username + password; you can also sign in with the email of an account made outside the app). The script is safe to re-run; run it again whenever it changes (for example, **Settings → Account → Delete account** needs its `delete_account` function).
-
-### Run
+After the first run, when dependencies haven't changed, `./larpless/scripts/run-mac.sh 8081` skips the clean and reinstall. It opens a **new** app instance each time, so quit the previous one first:
 
 ```bash
-scripts/run-mac.sh 8081
-```
-
-This starts Metro on the port, builds the Debug app with that port baked in, and launches it. Each run opens a **new** app instance, so quit the previous one first:
-
-```bash
-pkill -f "$PWD/macos/build/Build/Products/Debug/LarpLess.app"
+pkill -f "$PWD/larpless/macos/build/Build/Products/Debug/LarpLess.app"
 ```
 
 The Debug app is signed ad-hoc, so no Apple ID is needed, but macOS forgets its Screen Recording and Camera permissions after every rebuild. To keep them, sign with your own Apple Development certificate (**any Apple ID works**, via Xcode → Settings → Accounts → Manage Certificates). Create `larpless/macos/signing.local` (gitignored) and `run-mac.sh` picks it up:
@@ -202,7 +196,7 @@ DEVELOPMENT_TEAM=YOURTEAMID
 The Release configuration is set up for distribution: Developer ID signing for the LarpLess team, hardened runtime, and the camera entitlement from `LarpLess.entitlements`. Building it needs that team's **Developer ID Application** certificate. To build Release locally without it, override the identity:
 
 ```bash
-xcodebuild -workspace macos/Focusline.xcworkspace -scheme Focusline-macOS -configuration Release -derivedDataPath macos/build CODE_SIGN_IDENTITY="Apple Development: Your Name (XXXXXXXXXX)" DEVELOPMENT_TEAM=YOURTEAMID build
+xcodebuild -workspace larpless/macos/Focusline.xcworkspace -scheme Focusline-macOS -configuration Release -derivedDataPath larpless/macos/build CODE_SIGN_IDENTITY="Apple Development: Your Name (XXXXXXXXXX)" DEVELOPMENT_TEAM=YOURTEAMID build
 ```
 
 ### First launch
@@ -249,6 +243,17 @@ The script uninstalls the old app package first, and that deletes the app's loca
 - Page transitions and other `Animated` effects are off on Windows (`ANIMATE` in `src/ui/platform.ts`): react-native-windows drops the content of a re-rendered `Animated.View`. The floating panel's tint, pulse and flash animations are native and unaffected.
 - Closing the main window quits the app (the Windows convention) instead of keeping it in the background.
 - During a session the app holds a Windows power request and opts out of EcoQoS, the counterpart of disabling App Nap.
+
+## Supabase Setup for the Friends Tab
+
+Supabase is optional: it powers accounts, friends and the feed. Leave it unconfigured and the app runs fully local.
+
+1. **Create a project.** Sign up at [supabase.com](https://supabase.com) (the free plan is enough), click **New project**, pick a name, a database password and a region, and wait a minute or two for it to finish provisioning.
+2. **Create the tables.** Open **SQL Editor** in the project's sidebar, paste the whole of [`larpless/supabase/schema.sql`](larpless/supabase/schema.sql) into a new query and click **Run**. It creates the profiles, friendships and posts tables with their row-level security policies. It is safe to re-run; run it again whenever it changes (for example, **Settings → Account → Delete account** needs its `delete_account` function).
+3. **Turn off email confirmation.** Go to **Authentication → Sign In / Providers → Email** and switch off **Confirm email**, then save. Accounts use a username + password with a placeholder address that can't receive mail, so a confirmation email would never arrive. You can also sign in with the email of an account made outside the app.
+4. **Copy the URL and key.** Open **Project Settings → API Keys** (on some dashboards just **API**) and copy the **anon** public key; newer projects list it under **Legacy API keys**. The project URL is `https://<project-ref>.supabase.co`, where `<project-ref>` is the ID in the dashboard's address bar (`supabase.com/dashboard/project/<project-ref>`). Use the bare URL, not the `/rest/v1/` path. Never use the **service_role** key: it bypasses row-level security.
+5. **Connect the app.** In LarpLess, open **Settings → Friends** and paste the URL into **Project URL** and the key into **Anon key**. They are saved with the rest of the settings, so they survive rebuilds and relaunches. Clear both fields to go back to fully local.
+6. **Create an account.** Click **Friends** in the sidebar, choose **Create an account** and pick a username (3–20 letters, digits or underscores; it is saved in lowercase) and a password.
 
 ## Development
 
