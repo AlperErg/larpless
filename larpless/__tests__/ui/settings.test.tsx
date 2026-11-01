@@ -265,11 +265,11 @@ describe('Settings page', () => {
     act(() => r.unmount());
   });
 
-  it('developer buttons open Dev tools and onboarding', async () => {
+  it('Dev tools and onboarding open from Settings', async () => {
     const r = render();
     await press(byTestID(r, 'settings-devtools'));
     expect(useNavStore.getState().route).toBe('dev');
-    await press(byLabel(r.root, 'Run onboarding again'));
+    await press(byTestID(r, 'settings-onboarding'));
     expect(useNavStore.getState().route).toBe('onboarding');
     act(() => r.unmount());
   });

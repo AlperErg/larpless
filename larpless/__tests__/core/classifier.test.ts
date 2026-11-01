@@ -246,7 +246,15 @@ describe('classifier', () => {
       'WhatsApp',
       'Alex',
     );
-    expect(plans).toMatchObject({ studying: false, activity: 'Planning dinner' });
+    expect(plans).toMatchObject({ studying: false, activity: 'Chatting' });
+
+    const social = guessStudy(
+      { studying: false, moduleId: null, activity: 'Social media', confidence: 0.95, source: 'vlm' },
+      modules,
+      'WhatsApp',
+      'Alex',
+    );
+    expect(social).toMatchObject({ studying: false, activity: 'Chatting', confidence: 0.95 });
 
     const assistant = guessStudy(
       { studying: false, moduleId: null, activity: 'Messaging', confidence: 0.95, source: 'vlm' },

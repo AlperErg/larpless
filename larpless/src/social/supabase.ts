@@ -5,7 +5,6 @@ import { createClient } from '@supabase/supabase-js';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { KeychainApi } from '../contracts/native';
 import { native } from '../native';
-import { SUPABASE_ANON_KEY, SUPABASE_URL } from './env';
 
 type AuthStorage = Pick<KeychainApi, 'getItem' | 'setItem' | 'removeItem'>;
 
@@ -44,10 +43,9 @@ export function keychainAuthStorage(keychain: AuthStorage, legacy: AuthStorage):
   };
 }
 
-/** Settings override. Empty means "use env.ts". A half-filled pair is ignored until both are set. */
+/** Credentials from Settings → Friends, the only source. A half-filled pair is ignored until both are set. */
 let runtimeUrl = '';
 let runtimeKey = '';
-let useRuntime = false;
 
 let client: SupabaseClient | null = null;
 let clientId = '';
@@ -62,10 +60,8 @@ export function normalizeSupabaseProjectUrl(raw: string): string {
 }
 
 function pair(): { url: string; key: string } | null {
-  const url = normalizeSupabaseProjectUrl(useRuntime ? runtimeUrl : SUPABASE_URL);
-  const key = (useRuntime ? runtimeKey : SUPABASE_ANON_KEY).trim();
-  if (!url || !key) return null;
-  return { url, key };
+  if (!runtimeUrl || !runtimeKey) return null;
+  return { url: runtimeUrl, key: runtimeKey };
 }
 
 function fingerprint(): string {
@@ -86,15 +82,8 @@ export function setSupabaseCredentials(url: string, key: string): boolean {
   if (!complete && !cleared) return false;
 
   const before = fingerprint();
-  if (cleared) {
-    useRuntime = false;
-    runtimeUrl = '';
-    runtimeKey = '';
-  } else {
-    useRuntime = true;
-    runtimeUrl = nextUrl;
-    runtimeKey = nextKey;
-  }
+  runtimeUrl = nextUrl;
+  runtimeKey = nextKey;
   if (fingerprint() === before) return false;
   client = null;
   clientId = '';

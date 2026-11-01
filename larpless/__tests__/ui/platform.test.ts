@@ -36,6 +36,10 @@ describe.each(['macos', 'ios'])('on %s', (os) => {
     expect(platform.PIN_PAGE_HEADER).toBe(false);
   });
 
+  it('links the macOS Ollama installer', () => {
+    expect(platform.OLLAMA_DOWNLOAD_URL).toBe('https://ollama.com/download/Ollama.dmg');
+  });
+
   it('passes keyDownEvents through unchanged', () => {
     const keys = [{ key: 'Escape' }, { key: 'k', metaKey: true }];
     expect(mac.handledKeys(keys)).toBe(keys);
@@ -57,6 +61,10 @@ describe('on windows', () => {
     expect(`${platform.ALT}click`).toBe('Alt+click');
     expect(platform.DEVICE).toBe('PC');
     expect(platform.PIN_PAGE_HEADER).toBe(true);
+  });
+
+  it('links the Windows Ollama installer', () => {
+    expect(platform.OLLAMA_DOWNLOAD_URL).toBe('https://ollama.com/download/OllamaSetup.exe');
   });
 
   it('maps keyDownEvents to the react-native-windows `code` shape', () => {

@@ -21,6 +21,7 @@ const INITIAL: SessionStoreState = {
   chunks: [],
   current: null,
   webcam: { enabled: true, personPresent: true, phoneVisible: false },
+  missingPermissions: [],
   privacy: { framesAnalysed: 0, checksWithoutScreenshot: 0, framesStored: 0 },
   pomodoro: null,
   alert: { level: 0, distractedSinceMs: null },

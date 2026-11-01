@@ -13,6 +13,10 @@ export const MOD = IS_WINDOWS ? 'Ctrl+' : '⌘';
 export const ALT = IS_WINDOWS ? 'Alt+' : '⌥';
 /** What to call the user's computer in copy ("Everything stays on this Mac"). */
 export const DEVICE = IS_WINDOWS ? 'PC' : 'Mac';
+/** Ollama's installer for onboarding's Download Ollama button: the disk image on macOS, the setup program on Windows. */
+export const OLLAMA_DOWNLOAD_URL = IS_WINDOWS
+  ? 'https://ollama.com/download/OllamaSetup.exe'
+  : 'https://ollama.com/download/Ollama.dmg';
 
 /**
  * Whether to run Animated transitions. On react-native-windows (Fabric) an Animated.View loses its painted

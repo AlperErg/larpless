@@ -7,6 +7,7 @@ import { useAppStore } from '../../src/store/appStore';
 import { useNavStore } from '../../src/store/navStore';
 import { useSessionStore } from '../../src/store/sessionStore';
 import { SessionPage } from '../../src/ui/pages/SessionPage';
+import { DEVICE } from '../../src/ui/platform';
 
 export function textOf(r: ReactTestRenderer): string {
   const out: string[] = [];
@@ -85,10 +86,23 @@ describe('Session page', () => {
     act(() => useSessionStore.setState({ status: 'paused', pausedForSleep: true }));
     const r = render(<SessionPage />);
     const t = textOf(r);
-    expect(t).toContain('Paused while your Mac slept');
+    expect(t).toContain(`Paused while your ${DEVICE} slept`);
     expect(t).toContain('Resume');
     act(() => useSessionStore.setState({ pausedForSleep: false }));
     expect(textOf(r)).not.toContain('slept');
+    act(() => r.unmount());
+  });
+
+  it('missing permissions: says what is off and links to settings', () => {
+    act(() => applyFixture('running'));
+    act(() => useSessionStore.setState({ missingPermissions: ['screen', 'camera'] }));
+    const r = render(<SessionPage />);
+    const t = textOf(r);
+    expect(t).toContain('Screen Recording is off.');
+    expect(t).toContain('Camera is off.');
+    expect(r.root.findAll((n) => n.props.testID === 'permission-camera').length).toBeGreaterThan(0);
+    act(() => useSessionStore.setState({ missingPermissions: [] }));
+    expect(textOf(r)).not.toContain('is off.');
     act(() => r.unmount());
   });
 

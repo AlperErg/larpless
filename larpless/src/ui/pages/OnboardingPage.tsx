@@ -27,7 +27,7 @@ import { CLASSIFIER_OPTIONS } from '../lib/labels';
 import { courseNameProblem, draftsFromModules, modulesFromDrafts } from '../lib/modules';
 import type { ModuleDraft } from '../lib/modules';
 import { colors, motion, radius, space, tag, themed } from '../theme';
-import { ANIMATE, DEVICE, IS_WINDOWS, MotionView } from '../platform';
+import { ANIMATE, DEVICE, IS_WINDOWS, MotionView, OLLAMA_DOWNLOAD_URL } from '../platform';
 import { LIBRARY_MODULES } from '../../core/subjectLibrary';
 
 export type OnboardingStep = 'pc' | 'modules' | 'permissions' | 'ollama' | 'model' | 'classifier';
@@ -514,7 +514,7 @@ function OllamaStep({ onBack, onNext }: { onBack: () => void; onNext: () => void
               icon="download"
               variant="secondary"
               onPress={() => {
-                Linking.openURL(config.OLLAMA_DOWNLOAD_URL).catch(() => {});
+                Linking.openURL(OLLAMA_DOWNLOAD_URL).catch(() => {});
               }}
               style={styles.gapLeft}
             />

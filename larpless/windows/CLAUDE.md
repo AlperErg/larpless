@@ -22,7 +22,7 @@ powershell -ExecutionPolicy Bypass -File scripts\launch-windows.ps1        # Met
 Get-Process LarpLess -EA SilentlyContinue | Stop-Process; npx @react-native-community/cli run-windows --no-packager --logging *> .logs\build-windows.log   # rebuild only
 ```
 
-Default installs embed `windows/LarpLess/Bundle/index.windows.bundle` (`EmbedJsBundle=true` → `BUNDLE` in `LarpLess.cpp`). Re-run `run-windows.ps1` after JS changes. `src/social/env.ts` is read at bundle time, so recreate the bundle when those keys change.
+Default installs embed `windows/LarpLess/Bundle/index.windows.bundle` (`EmbedJsBundle=true` → `BUNDLE` in `LarpLess.cpp`). Re-run `run-windows.ps1` after JS changes.
 
 - Stop the running app before rebuilding. A first build takes several minutes; incremental ones about one.
 - **`run-windows.ps1` deletes the downloaded screen model.** It removes the installed package, and that deletes its `LocalState` (`%LOCALAPPDATA%\Packages\LarpLess_96wyba02c09cm\LocalState\Models`, ~460 MB). Use the rebuild-only command instead, which keeps the package: with `--msbuildprops EmbedJsBundle=true` after `scripts\bundle-windows.ps1` for an embedded install, without it for a Metro one. On a Metro install, JS-only changes need no rebuild: start Metro (`npx react-native start --port 8081`) and relaunch the installed build (command below). An embedded install ignores Metro, so it needs the bundle + rebuild.

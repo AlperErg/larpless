@@ -78,7 +78,6 @@ yarn-error.log
 bench/
 .logs/
 macos/build/
-src/social/env.ts
 macos/signing.local
 windows/packages/
 windows/LarpLess/Bundle/*
