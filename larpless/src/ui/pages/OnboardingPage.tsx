@@ -48,10 +48,18 @@ export function onboardingSteps(windows: boolean, mode: ClassifierMode): Onboard
 }
 
 export function OnboardingPage() {
-  const [step, setStep] = useState(0);
   const mode = useAppStore((s) => s.settings.classifierMode);
   const steps = onboardingSteps(IS_WINDOWS, mode);
+  // Reopen at the saved step: granting Screen Recording relaunches the app mid-onboarding.
+  const [step, setStep] = useState(() => Math.max(0, steps.indexOf(useAppStore.getState().settings.onboardingStep as OnboardingStep)));
   const current = steps[Math.min(step, steps.length - 1)];
+  useEffect(() => {
+    if (useAppStore.getState().settings.onboardingStep === current) return;
+    useAppStore
+      .getState()
+      .updateSettings({ onboardingStep: current })
+      .catch(() => {});
+  }, [current]);
   const next = () => setStep((i) => i + 1);
   const back = () => setStep((i) => Math.max(0, i - 1));
   const fade = useRef(new Animated.Value(1)).current;
@@ -66,7 +74,7 @@ export function OnboardingPage() {
   const finish = () => {
     useAppStore
       .getState()
-      .updateSettings({ onboarded: true })
+      .updateSettings({ onboarded: true, onboardingStep: '' })
       .catch(() => {});
     useNavStore.getState().go('home');
   };

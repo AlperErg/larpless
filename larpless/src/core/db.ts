@@ -76,6 +76,7 @@ export function cleanSettings(raw: unknown): Settings {
   // Screenshots go to this URL, so only this machine is allowed.
   if (typeof out.ollamaUrl !== 'string' || !isLocalUrl(out.ollamaUrl)) out.ollamaUrl = DEFAULT_SETTINGS.ollamaUrl;
   out.ollamaUrl = out.ollamaUrl.trim();
+  if (typeof out.onboardingStep !== 'string') out.onboardingStep = '';
   out.supabaseUrl = typeof out.supabaseUrl === 'string' ? out.supabaseUrl.trim() : '';
   out.supabaseAnonKey = typeof out.supabaseAnonKey === 'string' ? out.supabaseAnonKey.trim() : '';
   return out;

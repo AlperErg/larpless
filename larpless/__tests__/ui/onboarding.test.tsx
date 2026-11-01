@@ -172,3 +172,31 @@ describe('onboarding: AI model step', () => {
     act(() => r.unmount());
   });
 });
+
+describe('onboarding: resume after a relaunch', () => {
+  it('saves the current step and reopens at it', () => {
+    seed(RUNNING, 'down');
+    const r = renderAt('ollama');
+    expect(useAppStore.getState().settings.onboardingStep).toBe('ollama');
+    act(() => r.unmount());
+
+    act(() => useAppStore.setState({ settings: { ...useAppStore.getState().settings, onboardingStep: 'permissions' } }));
+    let again: ReactTestRenderer;
+    act(() => {
+      again = create(<OnboardingPage />);
+    });
+    expect(has(again!, 'onboarding-permissions')).toBe(true);
+    act(() => again!.unmount());
+  });
+
+  it('starts at the first step for an unknown saved step', () => {
+    act(() => useAppStore.setState({ settings: { ...useAppStore.getState().settings, onboardingStep: 'gone' } }));
+    let r: ReactTestRenderer;
+    act(() => {
+      r = create(<OnboardingPage />);
+    });
+    expect(has(r!, 'onboarding-permissions')).toBe(false);
+    expect(useAppStore.getState().settings.onboardingStep).toBe('modules');
+    act(() => r!.unmount());
+  });
+});

@@ -265,12 +265,14 @@ describe('Settings page', () => {
     act(() => r.unmount());
   });
 
-  it('Dev tools and onboarding open from Settings', async () => {
+  it('Dev tools and onboarding open from Settings, and a rerun clears onboarded', async () => {
+    useAppStore.setState({ settings: { ...useAppStore.getState().settings, onboarded: true } });
     const r = render();
     await press(byTestID(r, 'settings-devtools'));
     expect(useNavStore.getState().route).toBe('dev');
     await press(byTestID(r, 'settings-onboarding'));
     expect(useNavStore.getState().route).toBe('onboarding');
+    expect(useAppStore.getState().settings.onboarded).toBe(false);
     act(() => r.unmount());
   });
 

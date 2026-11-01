@@ -286,7 +286,16 @@ export function SettingsPage() {
         <Button testID="settings-acknowledgements" title="View" icon="scale" variant="secondary" onPress={() => go('acknowledgements')} />
       </Row>
       <Row label="Onboarding" hint="Set up modules, permissions, Ollama and the AI model again.">
-        <Button testID="settings-onboarding" title="Run again" variant="secondary" onPress={() => go('onboarding')} />
+        <Button
+          testID="settings-onboarding"
+          title="Run again"
+          variant="secondary"
+          onPress={() => {
+            // A real rerun: quitting partway brings onboarding back on the next launch.
+            update({ onboarded: false, onboardingStep: '' });
+            go('onboarding');
+          }}
+        />
       </Row>
 
       {config.SHOW_DEV_TOOLS ? (

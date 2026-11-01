@@ -118,6 +118,8 @@ export interface Settings {
   /** Ids of subjects (built-in or own courses) the classifier may not pick. New subjects start on. */
   disabledSubjects: string[];
   onboarded: boolean;
+  /** The onboarding step to reopen at after a relaunch (Screen Recording needs one). Empty starts at the first. */
+  onboardingStep: string;
   appearance: Appearance;
   /** Supabase project URL from Settings → Friends. Empty (with the key) runs fully local. */
   supabaseUrl: string;
