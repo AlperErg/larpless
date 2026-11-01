@@ -12,21 +12,7 @@ private enum FLShellFont {
   static func semibold(_ size: CGFloat) -> Font { .custom(FLNotionFonts.interSemiBold, fixedSize: size) }
 }
 
-/// Collects hub control frames so the debug click synthesizer can hit them.
-struct FLShellButtonFramesKey: PreferenceKey {
-  static let defaultValue: [String: CGRect] = [:]
-  static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
-    value.merge(nextValue(), uniquingKeysWith: { $1 })
-  }
-}
-
 private extension View {
-  func flTrackFrame(_ id: String) -> some View {
-    background(GeometryReader { g in
-      Color.clear.preference(key: FLShellButtonFramesKey.self, value: [id: g.frame(in: .named("flpanel"))])
-    })
-  }
-
   /// Reports this view's natural height (call before any frame that stretches it).
   func flMeasureHeight(_ report: @escaping (CGFloat) -> Void) -> some View {
     fixedSize(horizontal: false, vertical: true)
@@ -99,10 +85,6 @@ struct FLShellPanelView: View {
       RoundedRectangle(cornerRadius: 10, style: .continuous)
         .strokeBorder(s.pulse ? tag.text.opacity(0.45) : FLNotionColors.border, lineWidth: 1)
     )
-    .coordinateSpace(name: "flpanel")
-    .onPreferenceChange(FLShellButtonFramesKey.self) { frames in
-      MainActor.assumeIsolated { model.buttonFrames = frames }
-    }
     .id(model.colorScheme)
   }
 }
@@ -230,7 +212,6 @@ private struct FLShellCompactView: View {
     TimelineView(.periodic(from: state.tickAnchor(now: Date()), by: 1)) { ctx in
       let timer = state.timerText(at: ctx.date)
       let pill = state.pillText(at: ctx.date)
-      let _ = model.noteRender(timer: timer, pill: pill)
       VStack(alignment: .leading, spacing: 0) {
         // The timer never shrinks (it widens past an hour). The panel widens to fit the whole pill, up to its
         // maximum width; past that the pill takes what is left and truncates.
@@ -500,7 +481,6 @@ private struct FLShellChip: View {
         )
     }
     .buttonStyle(FLShellPressStyle())
-    .flTrackFrame(id)
   }
 }
 
@@ -520,7 +500,6 @@ private struct FLShellIconButton: View {
         .background(RoundedRectangle(cornerRadius: 4).fill(active ? tag.bg : FLNotionColors.hover))
     }
     .buttonStyle(FLShellPressStyle())
-    .flTrackFrame(id)
   }
 }
 
@@ -543,7 +522,6 @@ private struct FLShellTextButton: View {
       .background(RoundedRectangle(cornerRadius: 4).fill(FLNotionColors.hover))
     }
     .buttonStyle(FLShellPressStyle())
-    .flTrackFrame(id)
   }
 }
 
@@ -592,7 +570,6 @@ private struct FLShellVolumeSlider: View {
       )
     }
     .frame(height: 16)
-    .flTrackFrame("volume")
     .onChange(of: value) { _, _ in dragValue = nil }
   }
 }

@@ -28,19 +28,4 @@ final class FLSound: NSObject {
   @objc func chime(_ kind: String) {
     FLShellSoundEngine.shared.chime(kind)
   }
-
-  // MARK: Debug (dev harness only)
-
-  @objc func debugState(_ resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
-    FLShellSoundEngine.shared.debugState { resolve($0) }
-  }
-
-  @objc func debugSetMuted(_ on: Bool) {
-    FLShellSoundEngine.shared.debugSetMuted(on)
-  }
-
-  @objc func debugMeter(_ durationMs: Double, resolve: @escaping RCTPromiseResolveBlock,
-                        reject: @escaping RCTPromiseRejectBlock) {
-    FLShellSoundEngine.shared.debugMeter(durationMs: min(10_000, max(50, durationMs))) { resolve($0) }
-  }
 }

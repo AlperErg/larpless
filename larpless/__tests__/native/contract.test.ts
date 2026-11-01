@@ -78,13 +78,12 @@ function loadFacades(fakes: Record<string, FakeModule>): Record<string, Record<s
 const jsType = (v: unknown) => (v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v);
 
 /** Problems with one call a facade made to its native module. */
-function checkCall(label: string, moduleName: string, ext: ExternModule, calls: Call[], checkTypes: boolean): string[] {
+function checkCall(label: string, moduleName: string, ext: ExternModule, calls: Call[]): string[] {
   if (calls.length !== 1) return [`${label}: expected one call into ${moduleName}, got ${calls.length}`];
   const { method, args } = calls[0];
   const decl = ext.methods.get(method)!;
   const where = `${moduleName}.${method} (${ext.file})`;
   if (args.length !== decl.jsArity) return [`${label}: passes ${args.length} argument(s) to ${where}, which takes ${decl.jsArity}`];
-  if (!checkTypes) return [];
   const jsTypes = decl.types.filter((t) => !t.startsWith('RCTPromise'));
   return args.flatMap((a, i) => {
     const want = JS_TYPE_FOR[jsTypes[i]];
@@ -190,7 +189,7 @@ describe('JS facades ↔ native modules', () => {
           problems.push(`${label}: ${(e as Error).message} (is it declared in ${ext.file}?)`);
           continue;
         }
-        problems.push(...checkCall(`${label}(${args.length} args)`, moduleName, ext, fake.__calls, true));
+        problems.push(...checkCall(`${label}(${args.length} args)`, moduleName, ext, fake.__calls));
         const decl = fake.__calls.length === 1 ? ext.methods.get(fake.__calls[0].method)! : null;
         if (!decl) continue;
         if (m.returns === 'promise' && !decl.promise) problems.push(`${label}: returns a Promise but ${decl.decl} has no resolve/reject`);
@@ -199,38 +198,6 @@ describe('JS facades ↔ native modules', () => {
       }
     }
     expect(problems).toEqual([]);
-  });
-
-  it('dev-only debug helpers call declared methods with the right number of arguments', () => {
-    const fakes = Object.fromEntries([...moduleNames.values()].map((n) => [n, fakeModule(externs.get(n)!)]));
-    const facades = loadFacades(fakes);
-    const problems: string[] = [];
-    let checked = 0;
-    for (const [key, exports] of Object.entries(facades)) {
-      const moduleName = moduleNames.get(key)!;
-      const fake = fakes[moduleName];
-      for (const [exportName, helpers] of Object.entries(exports)) {
-        if (!exportName.endsWith('Debug')) continue;
-        for (const [fnName, fn] of Object.entries(helpers)) {
-          const label = `${exportName}.${fnName}`;
-          if (fnName === 'available') {
-            if (fn() !== true) problems.push(`${label}: reports false although the module is present`);
-            continue;
-          }
-          fake.__calls.length = 0;
-          try {
-            fn(...Array.from({ length: fn.length }, () => 0));
-          } catch (e) {
-            problems.push(`${label}: ${(e as Error).message} (is it declared in ${externs.get(moduleName)!.file}?)`);
-            continue;
-          }
-          problems.push(...checkCall(label, moduleName, externs.get(moduleName)!, fake.__calls, false));
-          checked++;
-        }
-      }
-    }
-    expect(problems).toEqual([]);
-    expect(checked).toBeGreaterThan(10);
   });
 
   it('windows REACT_METHOD names match the contract when that tree is present', () => {

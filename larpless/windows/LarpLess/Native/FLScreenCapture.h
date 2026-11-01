@@ -68,21 +68,6 @@ struct FLScreenCapture {
     }).detach();
   }
 
-  // Dev harness only (HarnessA): cost of getActiveWindow over n runs.
-  REACT_METHOD(BenchActiveWindow, L"benchActiveWindow")
-  void BenchActiveWindow(double n, ReactPromise<JSValue> &&result) noexcept {
-    const int runs{(std::max)(1, static_cast<int>(n))};
-    double total{0}, worst{0};
-    for (int i = 0; i < runs; ++i) {
-      const auto start{std::chrono::steady_clock::now()};
-      (void)QueryActiveWindow();
-      const double ms{std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count()};
-      total += ms;
-      worst = (std::max)(worst, ms);
-    }
-    result.Resolve(JSValue{JSValueObject{{"runs", runs}, {"avgMs", total / runs}, {"maxMs", worst}}});
-  }
-
   // The helpers below are also used by FLScreenModel.h (same window snapshot and capture rules).
   struct ActiveWindow {
     std::wstring appName, exeName, title;

@@ -141,12 +141,8 @@ describe('⌘K palette', () => {
     act(() => r.unmount());
   });
 
-  it('opens from the Dev tools button and the sidebar search row', async () => {
+  it('opens from the sidebar search row', async () => {
     const r = await mountApp();
-    act(() => useNavStore.getState().go('dev'));
-    act(() => byTestID(r, 'dev-open-palette').props.onPress());
-    expect(useNavStore.getState().paletteOpen).toBe(true);
-    act(() => useNavStore.getState().setPaletteOpen(false));
     act(() => useNavStore.getState().go('home'));
     act(() => byTestID(r, 'nav-search').props.onPress());
     expect(useNavStore.getState().paletteOpen).toBe(true);

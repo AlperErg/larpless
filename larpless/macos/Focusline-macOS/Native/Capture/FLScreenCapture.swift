@@ -79,23 +79,6 @@ final class FLScreenCapture: NSObject {
     resolve(Self.activeWindowInfo())
   }
 
-  /// Dev only (not part of the contract): native timing of `activeWindowInfo()` over `n` runs.
-  @objc func benchActiveWindow(_ n: NSNumber,
-                               resolve: @escaping RCTPromiseResolveBlock,
-                               reject: @escaping RCTPromiseRejectBlock) {
-    let runs = max(1, min(200, n.intValue))
-    var total = 0.0
-    var maxMs = 0.0
-    for _ in 0..<runs {
-      let t0 = CACurrentMediaTime()
-      _ = Self.activeWindowInfo()
-      let ms = (CACurrentMediaTime() - t0) * 1000
-      total += ms
-      maxMs = max(maxMs, ms)
-    }
-    resolve(["runs": runs, "avgMs": total / Double(runs), "maxMs": maxMs])
-  }
-
   // MARK: capture
 
   @objc func capture(_ opts: NSDictionary,

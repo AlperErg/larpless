@@ -31,7 +31,7 @@ xcodebuild -workspace macos/Focusline.xcworkspace -scheme Focusline-macOS -confi
 
 ### Driving the running app (dev builds)
 
-- `node scripts/js-eval.mjs 8081 "<expr>"` evaluates JS in the app via Metro's inspector (promises awaited, JSON printed; it may disconnect an open RN DevTools window). `globalThis.__FL` (`src/dev/devGlobals.ts`) exposes `NativeModules`, `native`, `config`, `useSessionStore`/`useAppStore`/`useOllamaStore`, `storage` (AsyncStorage), `applyFixture`, `harness` (runners such as `harness.A()`, `harness['A.capture']()`, `harness.Bpanel()` from `src/dev/Harness*.tsx`), `ping()`/`pingRoundTrip()`, and `__FL.ui.text/measure/overflow` for reading the rendered UI (`src/ui/dev/introspect.ts`).
+- `node scripts/js-eval.mjs 8081 "<expr>"` evaluates JS in the app via Metro's inspector (promises awaited, JSON printed; it may disconnect an open RN DevTools window). `globalThis.__FL` (`src/dev/devGlobals.ts`) exposes `NativeModules`, `native`, `config`, `useSessionStore`/`useAppStore`/`useOllamaStore`, `storage` (AsyncStorage), `applyFixture`, `ping()`/`pingRoundTrip()`, and `__FL.ui` (`src/ui/dev/introspect.ts`): `text/measure/overflow` for reading the rendered UI, `state()`, `go(route)` and `fixture(name)`. The Dev tools page (`SHOW_DEV_TOOLS`, i.e. `__DEV__`) only loads fixture snapshots.
 - `node scripts/js-eval.mjs 8081 --console 20` streams the JS console (RN 0.81 no longer prints it in Metro).
 - Native logs: `log show --last 5m --style compact --predicate 'subsystem == "com.larpless.app"'`.
 - Demo mode (no Ollama/camera): ⌥-click Start, or ⌘K → "Start demo session"; replays `fixtureChunks` through the real controller and panel. ⌘K → "Toggle demo fast mode" shortens alert thresholds.
@@ -69,7 +69,7 @@ Layering is strict: **`ui` → `store` → `core` → `native` facades → Swift
 
 These are product guarantees; preserve them in any change:
 
-- Screenshots, webcam frames, base64 strings, pixel buffers and `CGImage`s stay in memory only: never written to disk/AsyncStorage/temp files, never logged (log sizes and timings only), never sent anywhere but local Ollama (`ollamaUrl` must stay local). This also applies to `__FL` harness results and `js-eval` output.
+- Screenshots, webcam frames, base64 strings, pixel buffers and `CGImage`s stay in memory only: never written to disk/AsyncStorage/temp files, never logged (log sizes and timings only), never sent anywhere but local Ollama (`ollamaUrl` must stay local). This also applies to `__FL` results and `js-eval` output.
 - Only labels are persisted; window titles are never stored. `privacy.framesStored` is the constant `0`.
 - A screenshot is taken only on the VLM path. Nothing is captured during Pomodoro breaks or while the user is away.
 - OCR text and image/text embeddings count as frame data: FLScreenModel (Windows) keeps them in native memory and returns only scores and the OCR character count to JS.
