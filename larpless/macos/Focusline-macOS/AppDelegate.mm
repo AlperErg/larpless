@@ -1,6 +1,7 @@
 #import "AppDelegate.h"
 
 #import <React/RCTBundleURLProvider.h>
+#import <React/RCTDevLoadingViewSetEnabled.h>
 #import <ReactAppDependencyProvider/RCTAppDependencyProvider.h>
 
 @implementation AppDelegate
@@ -12,6 +13,11 @@
   // They will be passed down to the ViewController used by React Native.
   self.initialProps = @{};
   self.dependencyProvider = [RCTAppDependencyProvider new];
+
+  // RN's "Downloading 100%" banner is a sheet on [NSApp keyWindow], and its hide only ends sheets on the
+  // key window at that moment. When the app isn't frontmost as the bundle loads, nothing is key, the
+  // sheet never closes and it blocks the main window. Metro's log already shows bundle progress.
+  RCTDevLoadingViewSetEnabled(NO);
 
   [super applicationDidFinishLaunching:notification];
 
