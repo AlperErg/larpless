@@ -5,8 +5,7 @@
  * like a clock running fast, and the serif name settles. The hands keep turning
  * until the cover has gone, so nothing snaps or stops on screen.
  * Plain views only: Windows Fabric drops painted content out of Animated.View, so
- * each arc is a row of short overlapping segments rather than an SVG path, and
- * each hand a row of discs (see `Hand`).
+ * the arcs and hands are rows of overlapping discs rather than SVG paths.
  */
 import { memo, useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, StyleSheet, View } from 'react-native';
@@ -27,9 +26,14 @@ const HAND = 9;
 /** Hand lengths include the round cap behind the pivot. */
 const HOUR_LEN = 29;
 const MINUTE_LEN = 36;
-const SEG_STEP = 2.5;
-/** Degrees over which a segment fades in behind the pen, so the front is soft. */
-const FEATHER = 12;
+/** Disc spacing along the ring's centre line, px. Small enough that the edge scallop is < 0.05 px. */
+const DISC_STEP = 1.2;
+/**
+ * How far each arc is trimmed at both ends, in degrees: most of the round cap's
+ * reach, so the caps land near the logo's cuts while the gaps stay open (a full
+ * trim made the gaps look wider than the logo's and shrank the gray arc to a dot).
+ */
+const CAP_DEG = 0.85 * (STROKE / 2 / RADIUS) * (180 / Math.PI);
 
 /** The hands appear here, then spin up to speed over `SPIN_RAMP_MS`. */
 const HANDS_AT = 380;
@@ -48,41 +52,58 @@ const ARCS: { color: ArcColor; start: number; sweep: number }[] = [
   { color: 'gray', start: -120, sweep: 23 },
 ];
 
+/** One disc of the ring, `STROKE` wide, centred on the ring's centre line. */
 interface Segment {
   color: ArcColor;
   deg: number;
   /** Clockwise distance from the start of the study arc, where the pen begins. */
   rel: number;
-  len: number;
+  x: number;
+  y: number;
 }
 
 function wrap(deg: number): number {
   return ((deg % 360) + 360) % 360;
 }
 
+/**
+ * The ring as overlapping discs. Their outline is an exact annulus with round ends,
+ * and nothing is rotated, so no edge is snapped to the pixel grid at an angle: the
+ * old row of tiny rotated rectangles came out ragged, with seams where they met.
+ */
 function buildSegments(): Segment[] {
   const origin = ARCS[0].start;
+  const stepDeg = (DISC_STEP / RADIUS) * (180 / Math.PI);
   const out: Segment[] = [];
   for (const arc of ARCS) {
-    const n = Math.max(1, Math.round(arc.sweep / SEG_STEP));
-    const step = arc.sweep / n;
-    // Long enough to close the gaps on the outer edge of the stroke.
-    const len = ((RADIUS + STROKE / 2) * step * Math.PI) / 180 + 0.6;
-    for (let k = 0; k < n; k++) {
-      const deg = arc.start + (k + 0.5) * step;
-      out.push({ color: arc.color, deg, rel: wrap(deg - origin), len });
+    const from = arc.start + CAP_DEG;
+    const sweep = Math.max(0, arc.sweep - 2 * CAP_DEG);
+    const n = Math.max(1, Math.ceil(sweep / stepDeg));
+    for (let k = 0; k <= n; k++) {
+      const deg = from + (sweep * k) / n;
+      const rad = (deg * Math.PI) / 180;
+      out.push({
+        color: arc.color,
+        deg,
+        rel: wrap(deg - origin),
+        x: CX + RADIUS * Math.cos(rad),
+        y: CY + RADIUS * Math.sin(rad),
+      });
     }
   }
   return out.sort((a, b) => a.rel - b.rel);
 }
 
 export const BOOT_SEGMENTS: Segment[] = buildSegments();
-/** Pen position (degrees from the start of the study arc) once every segment is drawn. */
-export const BOOT_PEN_END = BOOT_SEGMENTS[BOOT_SEGMENTS.length - 1].rel + FEATHER;
+/** Pen position (degrees from the start of the study arc) once every disc is drawn. */
+export const BOOT_PEN_END = BOOT_SEGMENTS[BOOT_SEGMENTS.length - 1].rel;
 
-/** 0 hidden → 1 drawn, for a segment with the pen at `pen` degrees. */
+/**
+ * 1 once the pen has reached a disc, else 0. No partial opacity: overlapping
+ * translucent discs would show as darker seams; the round front disc is the pen tip.
+ */
 export function segmentReveal(s: Segment, pen: number): number {
-  return clamp01((pen - s.rel) / FEATHER);
+  return pen >= s.rel ? 1 : 0;
 }
 
 function clamp01(t: number): number {
@@ -233,31 +254,23 @@ export function handDiscs(deg: number, length: number): { x: number; y: number }
 }
 
 export const BOOT_CENTER = { x: CX, y: CY };
-export const BOOT_HANDS = { hour: HOUR_LEN, minute: MINUTE_LEN, width: HAND, ringInner: RADIUS - STROKE / 2 };
+export const BOOT_HANDS = { hour: HOUR_LEN, minute: MINUTE_LEN, width: HAND, ringInner: RADIUS - STROKE / 2, ringStroke: STROKE };
 
-/** ~130 views; memoised on the pen so it stops re-rendering once the ring is drawn. */
+/** ~200 discs; memoised on the pen so it stops re-rendering once the ring is drawn. */
 const Ring = memo(function Ring({ pen }: { pen: number }) {
   return (
     <>
-      {BOOT_SEGMENTS.map((s, i) => {
-        const rad = (s.deg * Math.PI) / 180;
-        return (
+      {BOOT_SEGMENTS.map((s, i) =>
+        segmentReveal(s, pen) ? (
           <View
             key={i}
             style={[
               styles.segment,
-              {
-                left: CX + RADIUS * Math.cos(rad) - s.len / 2,
-                top: CY + RADIUS * Math.sin(rad) - STROKE / 2,
-                width: s.len,
-                backgroundColor: tag[s.color].text,
-                opacity: segmentReveal(s, pen),
-                transform: [{ rotate: `${s.deg + 90}deg` }],
-              },
+              { left: s.x - STROKE / 2, top: s.y - STROKE / 2, backgroundColor: tag[s.color].text },
             ]}
           />
-        );
-      })}
+        ) : null,
+      )}
     </>
   );
 });
@@ -353,7 +366,7 @@ const styles = themed(() =>
       left: CX - 9,
       top: CY - 55 - 4.5,
     },
-    segment: { position: 'absolute', height: STROKE },
+    segment: { position: 'absolute', width: STROKE, height: STROKE, borderRadius: STROKE / 2 },
     handDot: { position: 'absolute', width: HAND, height: HAND, borderRadius: HAND / 2 },
     dot: {
       position: 'absolute',

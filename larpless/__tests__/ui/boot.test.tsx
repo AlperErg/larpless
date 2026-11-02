@@ -62,6 +62,18 @@ describe('boot pose', () => {
     expect(still.hourDeg).toBe(0);
   });
 
+  it('leaves a visible gap between neighbouring arcs', () => {
+    const disc = BOOT_HANDS.ringStroke;
+    for (let i = 0; i < BOOT_SEGMENTS.length; i++) {
+      for (let j = i + 1; j < BOOT_SEGMENTS.length; j++) {
+        const a = BOOT_SEGMENTS[i];
+        const b = BOOT_SEGMENTS[j];
+        if (a.color === b.color) continue;
+        expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeGreaterThan(disc + 1.5);
+      }
+    }
+  });
+
   it('pivots both hands on the clock centre and keeps them inside the ring', () => {
     for (let deg = 0; deg < 360; deg += 5) {
       for (const len of [BOOT_HANDS.hour, BOOT_HANDS.minute]) {
