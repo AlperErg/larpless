@@ -143,16 +143,14 @@ Starting a session opens Ollama in the background if it isn't running, then warm
 
 #### Minimum Requirements
 
-- Mac with an apple silicon chip and 16 GB of RAM or more for the vision LLM. Any Mac (M1/M2/M3, or 8 GB) can use the [on-device classifier](#screen-check-modes) instead.
-- **macOS 14.5** Sonoma or above.
+- A Mac running **macOS 14.5** Sonoma or newer.
 
 #### Recommended Requirements
 
-This app relies on a VLM which is a GPU-intensive process. For a responsive experience, processors with strong GPU performance is needed. M-series chips that have more GPU cores which are the Pro, Max and Ultra lineups will perform much better than a regular M-series chip.
-It is also worth considering that performance may degrade over time for MacBook Airs since they have no active cooling.
+This app works best in its VLM mode, which is better at recognition but requires a powerful computer. For a responsive experience, Macs with strong GPU performance is needed. M-series chips that have enhanced GPU performance which are the Pro, Max and Ultra lineups will perform much better than a regular M-series chip in this mode. It is also worth considering that responsiveness in this mode may degrade over time for MacBook Airs since they have no active cooling.
 
-- Mac with Apple M4 or M1 Pro or M1 Max chip
-- 24 GB of RAM or more
+- A Mac with Apple M4 or M1 Pro or M1 Max chip
+- 24 GB of RAM
 
 ### Software Requirements
 
@@ -178,12 +176,6 @@ It runs three scripts in order:
 2. `setup-worktree.sh` runs `npm ci`, then `pod install` in `larpless/macos` with the UTF-8 locale CocoaPods needs. If you run `pod install` yourself, `export LANG=en_US.UTF-8` first.
 3. `run-mac.sh 8081` starts Metro on port 8081 in the background unless something is already listening there (log in `larpless/.logs/metro-8081.log`), builds the Debug app with that port baked in, and opens it.
 
-After the first run, when dependencies haven't changed, `./larpless/scripts/run-mac.sh 8081` skips the clean and reinstall. It opens a **new** app instance each time, so quit the previous one first:
-
-```bash
-pkill -f "$PWD/larpless/macos/build/Build/Products/Debug/LarpLess.app"
-```
-
 The Debug app is signed ad-hoc, so no Apple ID is needed, but macOS forgets its Screen Recording and Camera permissions after every rebuild. To keep them, sign with your own Apple Development certificate (**any Apple ID works**, via Xcode → Settings → Accounts → Manage Certificates). Create `larpless/macos/signing.local` (gitignored) and `run-mac.sh` picks it up:
 
 ```bash
@@ -193,7 +185,7 @@ DEVELOPMENT_TEAM=YOURTEAMID
 
 `security find-identity -v -p codesigning` lists your certificate names; the team ID is the Organizational Unit in the certificate's details.
 
-The Release configuration is set up for distribution: Developer ID signing for the LarpLess team, hardened runtime, and the camera entitlement from `LarpLess.entitlements`. Building it needs that team's **Developer ID Application** certificate. To build Release locally without it, override the identity:
+The Release configuration is set up for distribution: Developer ID signing, hardened runtime, and the camera entitlement from `LarpLess.entitlements`. Building it needs that team's **Developer ID Application** certificate. To build Release locally without it, override the identity:
 
 ```bash
 xcodebuild -workspace larpless/macos/Focusline.xcworkspace -scheme Focusline-macOS -configuration Release -derivedDataPath larpless/macos/build CODE_SIGN_IDENTITY="Apple Development: Your Name (XXXXXXXXXX)" DEVELOPMENT_TEAM=YOURTEAMID build
@@ -201,29 +193,47 @@ xcodebuild -workspace larpless/macos/Focusline.xcworkspace -scheme Focusline-mac
 
 ### First launch
 
-Onboarding takes four or five steps:
+Onboarding first asks which model should read your screen, and the steps that follow depend on the answer. Ollama is only needed for the vision LLM; with the on-device classifier you never install or open it.
 
-1. **Your Mac.** Pick which model reads the screen ([screen check modes](#screen-check-modes)): the vision LLM in Ollama for Apple silicon with 16 GB or more (except a base M1, M2 or M3, which are too slow for it; their Pro, Max and Ultra versions are fine), or the on-device classifier for any Mac. LarpLess reads the chip and memory (on Windows also the GPU) and preselects the one that fits, with the reason; you can pick the other. The hardware details aren't saved or sent anywhere. The classifier replaces steps 4 and 5 with its own download.
+1. **Your Mac.** Pick the [screen check mode](#screen-check-modes):
+   - **On-device classifier**, for any Mac, including Intel Macs, base M1–M3 chips and Macs with 8 GB. It's built into LarpLess and needs no other app.
+   - **Vision LLM (Ollama)**, for an M4 or newer, or a Pro, Max or Ultra chip, with 16 GB or more. It copes better with unusual screens but needs Ollama and a strong GPU.
+
+   LarpLess reads the chip and memory and preselects the mode that fits, showing why. You can pick the other one, and switch later in **Settings → Local AI → Screen check**. The hardware details aren't saved or sent anywhere.
 2. **Your modules.** Optional. LarpLess recognises the built-in subjects on its own; add your own courses (course codes, topics, lecturer names) for sharper labels. For each course, add 6–10 distinctive keywords that actually show up on your screen while you study it (malloc, ER diagram, CS2010). Skip short or common words and anything shared with your other courses.
 3. **Permissions.** **Screen Recording** (macOS only applies it after a relaunch; the **Relaunch** button does that), **Camera** (optional: presence and phone detection) and **Notifications**.
+
+**With the on-device classifier**, onboarding ends with one more step:
+
+4. **Classifier.** **Download classifier** fetches the model (about 460 MB, into `~/Library/Application Support/com.larpless.app/Models`) with a progress bar. If you finish before it's downloaded, you can get it later in **Settings → Local AI**; until then every screen check counts as `unknown`.
+
+**With the vision LLM**, two Ollama steps follow:
+
 4. **Ollama.** LarpLess checks whether Ollama is installed and running, and the page updates by itself.
    - Not installed: **Download Ollama** downloads `Ollama.dmg`. Open it and drag Ollama into Applications.
    - Installed but not running: **Open Ollama** starts it in the background, with the [memory saver](#the-model) on.
 5. **AI model.** **Download model** pulls `qwen3-vl:2b` (about 1.9 GB) through Ollama with a progress bar. Cancel stops it, and the next download picks up where it left off. The download keeps going if you finish onboarding, and the sidebar shows its progress.
 
-You can finish without Ollama or the model and set them up later: **Settings → Local AI** has the same **Open Ollama** and **Download model** buttons, and demo mode works offline. Settings → Onboarding → **Run again** shows it again.
+   You can finish without Ollama or the model and set them up later: **Settings → Local AI** has the same **Open Ollama** and **Download model** buttons.
+
+Demo mode works in both modes without any model. Settings → Onboarding → **Run again** shows onboarding again.
 
 ## Getting Started on Windows
 
 The Windows build uses the same TypeScript and the same JS ↔ native contract; only the native modules (`larpless/windows/LarpLess/Native/`) are C++ instead of Swift.
 
-**Requirements**
+### Windows Hardware Requirements
 
-- Windows 10/11 x64 with 16 GB of RAM or more.
+- A computer running Windows 10/11 x64 with 16 GB of RAM or more.
+
+### Windows Software Requirements
+
 - **Visual Studio 2026** (Community is fine) with the *Desktop development with C++* and *WinUI application development* workloads, the *MSIX Packaging Tools* component and the **Windows 11 SDK 10.0.22621**.
 - **.NET SDK 10**, **Node 22** or above.
 - **Developer Mode** on and **long paths** enabled (Settings → System → For developers).
-- **[Ollama for Windows](https://ollama.com)** with `qwen3-vl:2b` pulled, as on the Mac. Ollama skips integrated GPUs unless the user environment variable `OLLAMA_IGPU_ENABLE=1` is set (restart Ollama afterwards); with it, AMD iGPUs run through Vulkan. On the CPU alone a screenshot check can take 30 s or more. Not needed in the **On-device classifier** [screen check mode](#screen-check-modes), which only needs the on-device classifier (a one-time download of about 460 MB from onboarding or Settings → Local AI).
+- **[Ollama for Windows](https://ollama.com)**, only for the **Vision LLM** [screen check mode](#screen-check-modes). Onboarding installs it and downloads the model for you, as on the Mac (see [First launch](#first-launch)); from a terminal it's `ollama pull qwen3-vl:2b`. Ollama skips integrated GPUs unless the user environment variable `OLLAMA_IGPU_ENABLE=1` is set (restart Ollama afterwards); with it, AMD iGPUs run through Vulkan. On the CPU alone a screenshot check can take 30 s or more. Not needed in the **On-device classifier** mode, which only needs a one-time download of about 460 MB (into the app's `LocalState\Models`).
+
+### Windows Installation
 
 **Install and run.** From `larpless/`, run `npm ci`, then:
 
@@ -231,11 +241,13 @@ The Windows build uses the same TypeScript and the same JS ↔ native contract; 
 powershell -ExecutionPolicy Bypass -File scripts\run-windows.ps1
 ```
 
-This stops a running LarpLess and removes the installed package, bundles the JS into the app (so it runs without Metro, also from Start), restores the local PowerShell 7 tool the deploy step needs, then builds, deploys and launches the Debug app. Re-run it after JS changes. While developing, add `-Metro` to load the JS from Metro on port 8081 instead; it starts Metro if it isn't already running (log in `.logs/metro-8081.log`). The first build takes several minutes. No admin terminal is needed. Allow the camera when Windows asks; there is no Screen Recording permission on Windows. In onboarding, **Download Ollama** downloads `OllamaSetup.exe`; run it to install Ollama. The first launch is mostly the same apart from those. [Supabase setup](#supabase-setup) is the same as on the Mac.
+This stops a running LarpLess and removes the installed package, bundles the JS into the app (so it runs without Metro, also from Start), restores the local PowerShell 7 tool the deploy step needs, then builds, deploys and launches the Debug app. Re-run it after JS changes. While developing, add `-Metro` to load the JS from Metro on port 8081 instead; it starts Metro if it isn't already running (log in `.logs/metro-8081.log`). The first build takes several minutes. No admin terminal is needed. Allow the camera when Windows asks; there is no Screen Recording permission on Windows.
+
+The first launch is mostly the same apart from those. [Supabase setup](## Supabase Setup for the Friends Tab) is the same as on the Mac.
 
 The script uninstalls the old app package first, and that deletes the app's local data, including the downloaded on-device classifier. To keep it, rebuild without uninstalling (see `larpless/windows/CLAUDE.md`); on a `-Metro` install, JS-only changes need no rebuild at all, while the default install embeds the JS bundle and ignores Metro.
 
-**Differences from the Mac app**
+### Differences from the Mac app
 
 - Shortcuts use **Ctrl** instead of ⌘ (Ctrl+K palette, Ctrl+Enter start, Ctrl+. end).
 - The webcam uses the same YOLO11n rules as Mac (`person` above 0.5, `cell phone` above 0.4), through ONNX Runtime instead of CoreML. Samples start once the model has loaded.
