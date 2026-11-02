@@ -149,6 +149,19 @@ describe('onboarding: Your Mac', () => {
     act(() => intel.unmount());
   });
 
+  it('going back to the step shows the earlier pick, not the recommendation', async () => {
+    seed(RUNNING, 'down');
+    const r = await renderWith({ memoryBytes: 8 * GIB, appleSilicon: true, chip: 'Apple M1', gpu: null });
+    act(() => byTestID(r, 'onboarding-pc-vlm').props.onPress());
+    act(() => byTestID(r, 'onboarding-next').props.onPress());
+    const back = r.root.findAll((n) => n.props.title === 'Back' && typeof n.props.onPress === 'function')[0];
+    await act(async () => back.props.onPress());
+    expect(selected(r, 'onboarding-pc-vlm')).toBe(true);
+    act(() => byTestID(r, 'onboarding-next').props.onPress());
+    expect(useAppStore.getState().settings.classifierMode).toBe('vlm');
+    act(() => r.unmount());
+  });
+
   it('waits for a choice when the hardware can’t be read', async () => {
     seed(RUNNING, 'down');
     const r = await renderWith(new Error('unsupported'));

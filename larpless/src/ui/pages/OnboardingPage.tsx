@@ -63,6 +63,12 @@ export function OnboardingPage() {
   }, [current]);
   const next = () => setStep((i) => i + 1);
   const back = () => setStep((i) => Math.max(0, i - 1));
+  // The PC step was answered (here, or before a relaunch past it): going back shows that pick, not the
+  // hardware recommendation, so Continue doesn't silently switch the mode.
+  const [pcAnswered, setPcAnswered] = useState(() => {
+    const saved = useAppStore.getState().settings.onboardingStep;
+    return saved !== '' && saved !== 'pc';
+  });
   const fade = useRef(new Animated.Value(1)).current;
   useEffect(() => {
     if (!ANIMATE) return undefined;
@@ -88,7 +94,15 @@ export function OnboardingPage() {
       <PageBody>
         <Progress steps={steps} current={current} />
         <MotionView style={ANIMATE ? { opacity: fade, transform: [{ translateY }] } : undefined}>
-          {current === 'pc' ? <PcStep onNext={next} /> : null}
+          {current === 'pc' ? (
+            <PcStep
+              answered={pcAnswered}
+              onNext={() => {
+                setPcAnswered(true);
+                next();
+              }}
+            />
+          ) : null}
           {current === 'modules' ? <ModulesStep onBack={back} onNext={next} /> : null}
           {current === 'permissions' ? <PermissionsStep onBack={back} onNext={next} /> : null}
           {current === 'ollama' ? <OllamaStep onBack={back} onNext={next} /> : null}
@@ -128,14 +142,15 @@ function Progress({ steps, current }: { steps: OnboardingStep[]; current: Onboar
 
 const MODE_LABEL = Object.fromEntries(CLASSIFIER_OPTIONS.map((o) => [o.value, o.label])) as Record<ClassifierMode, string>;
 
-function PcStep({ onNext }: { onNext: () => void }) {
+/** `answered`: the user already confirmed this step, so their saved mode is selected instead of the recommendation. */
+function PcStep({ answered, onNext }: { answered: boolean; onNext: () => void }) {
   const saved = useAppStore((s) => s.settings.classifierMode);
   const model = useAppStore((s) => s.settings.model);
   const updateSettings = useAppStore((s) => s.updateSettings);
   const refresh = useScreenModelStore((s) => s.refresh);
   // A build without FLScreenModel reports unsupported: only the vision LLM can work there.
   const unsupported = useScreenModelStore((s) => s.status?.supported === false);
-  const [choice, setChoice] = useState<ClassifierMode | null>(null);
+  const [choice, setChoice] = useState<ClassifierMode | null>(() => (answered ? saved : null));
   // Read this computer's memory and chip (GPU on Windows) to preselect a card; the user can still pick the other.
   const [hint, setHint] = useState<Recommendation | null>(null);
   useEffect(() => {

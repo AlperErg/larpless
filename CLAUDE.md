@@ -71,7 +71,7 @@ These are product guarantees; preserve them in any change:
 
 - Screenshots, webcam frames, base64 strings, pixel buffers and `CGImage`s stay in memory only: never written to disk/AsyncStorage/temp files, never logged (log sizes and timings only), never sent anywhere but local Ollama (`ollamaUrl` must stay local). This also applies to `__FL` results and `js-eval` output.
 - Only labels are persisted; window titles are never stored. `privacy.framesStored` is the constant `0`.
-- A screenshot is taken only on the VLM path. Nothing is captured during Pomodoro breaks or while the user is away.
+- A screenshot is taken only to read the screen: on the VLM path (a JPEG for local Ollama) or in the `'classifier'` mode (pixels for FLScreenModel, never encoded or returned to JS). Nothing is captured during Pomodoro breaks or while the user is away.
 - OCR text and image/text embeddings count as frame data: FLScreenModel keeps them in native memory and returns only scores and the OCR character count to JS.
 - Now-playing title, artist and artwork stay inside the Swift panel: never sent to JS, logged or stored (JS only calls `setEnabled`).
 - Supabase tokens live in the Keychain, not AsyncStorage. Posts carry stats only, never chunks, app names, titles or images.

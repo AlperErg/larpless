@@ -241,6 +241,12 @@ export interface ScreenModelApi {
   onProgress(cb: (p: ScreenModelProgress) => void): Unsubscribe; // event 'FLScreenModelProgress'
   /** Captures and scores the screen. Rejects E_NOT_INSTALLED / E_MODEL / E_CAPTURE. */
   classify(input: ScreenModelInput): Promise<ScreenModelScores>;
+  /**
+   * Warms up OCR in the background once per launch, so the first check of a session isn't slow (macOS: Vision's
+   * recognizer has a 30-60 s cold start in a new build; a no-op on Windows). Called only in the 'classifier' mode
+   * with the model installed.
+   */
+  warmUp(): Promise<void>;
   /** Frees the model sessions. */
   unload(): Promise<void>;
 }

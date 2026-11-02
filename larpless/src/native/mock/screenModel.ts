@@ -39,5 +39,6 @@ export const mockScreenModel: ScreenModelApi & {
     if (!installed || !scores) throw Object.assign(new Error('not installed'), { code: 'E_NOT_INSTALLED' });
     return { ...scores, capturedAt: Date.now() };
   },
+  warmUp: async () => {},
   unload: async () => {},
 };

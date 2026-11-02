@@ -76,6 +76,13 @@ final class FLScreenModel: RCTEventEmitter {
     core.classify(input, resolve: resolve, reject: reject)
   }
 
+  /// Starts the once-per-launch OCR warm-up in the background (see FLScreenModelCore.warmUpOcr) and resolves at once.
+  @objc func warmUp(_ resolve: @escaping RCTPromiseResolveBlock,
+                    reject: @escaping RCTPromiseRejectBlock) {
+    FLScreenModelCore.warmUpOcr()
+    resolve(nil)
+  }
+
   /// Frees the sessions (about 1 GB) between study sessions.
   @objc func unload(_ resolve: @escaping RCTPromiseResolveBlock,
                     reject: @escaping RCTPromiseRejectBlock) {
@@ -160,13 +167,14 @@ final class FLScreenModelCore: @unchecked Sendable {
         let size = (obj["size"] as? NSNumber)?.int64Value ?? -1
         if Self.fileSize(dir.appendingPathComponent(name)) != size { missing.append(name) }
       }
-      // A download cut off by quitting the app leaves its .part behind (up to 372 MB).
-      if !locked({ downloading }) {
+      // A download cut off by quitting the app leaves its .part behind (up to 372 MB). Under the lock, so a
+      // download() starting now can't have its fresh .part removed.
+      locked {
+        guard !downloading else { return }
         for name in FLScreenModelEngine.files {
           try? FileManager.default.removeItem(at: dir.appendingPathComponent(name + ".part"))
         }
       }
-      if missing.isEmpty { Self.warmUpOcr() }
       resolve(["supported": true, "installed": missing.isEmpty, "missing": missing, "loaded": locked { loaded }])
     }
   }
@@ -290,6 +298,10 @@ final class FLScreenModelCore: @unchecked Sendable {
     return e
   }
 
+  /// A capture normally takes well under a second; past this the run queue (and the unload queued behind it) is
+  /// released and the call fails with E_CAPTURE.
+  private static let screenshotTimeout: DispatchTimeInterval = .seconds(10)
+
   /// Blocks runQueue on the async ScreenCaptureKit capture; the capture runs on the concurrency pool.
   private func screenshot(maxWidth: Int, near bounds: CGRect?) throws -> CGImage {
     final class Box: @unchecked Sendable { var result: Result<CGImage, Error> = .failure(FLScreenCapture.NoDisplayError()) }
@@ -303,7 +315,11 @@ final class FLScreenModelCore: @unchecked Sendable {
       }
       done.signal()
     }
-    done.wait()
+    // On a timeout the task may still write `box` later; it is never read again.
+    guard done.wait(timeout: .now() + Self.screenshotTimeout) == .success else {
+      Self.log("screen capture timed out")
+      throw FLScreenModelDownloader.Failure(code: "E_CAPTURE", message: "screen capture timed out")
+    }
     switch box.result {
     case .success(let image):
       return image
@@ -390,7 +406,8 @@ final class FLScreenModelCore: @unchecked Sendable {
 
   /// Vision's accurate recognizer has a cold start of 30-60 s the first time a new build of the app uses it
   /// (relaunches of the same build start warm in ~0.1 s), which would time out the first check of a session. Run
-  /// it once per launch in the background, on a generated line of text, as soon as the model is installed.
+  /// it once per launch in the background, on a generated line of text, when JS asks (warmUp(): the 'classifier'
+  /// mode with the model installed).
   static func warmUpOcr() {
     warmUpLock.lock()
     defer { warmUpLock.unlock() }
