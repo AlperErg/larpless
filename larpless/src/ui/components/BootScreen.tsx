@@ -185,31 +185,27 @@ export function bootPose(elapsed: number, exitAt: number | null, reduced: boolea
 }
 
 /**
- * Vsync-aligned frames in the app. Jest's requestAnimationFrame is a 0 ms timer,
- * which never lets fake time move, so tests step a 16 ms clock instead.
+ * Milliseconds since mount, stepped by a 16 ms timer. Not requestAnimationFrame: on
+ * the RN 0.81 event loop its callbacks land inside React's commit, so a state update
+ * every frame counts as nested and trips "Maximum update depth exceeded" on Windows.
+ * Poses come from the clock, not a frame count, so timer jitter never changes speed.
  */
-const useFrames = typeof requestAnimationFrame === 'function' && process.env.JEST_WORKER_ID == null;
-
 function useElapsed(running: boolean): number {
   const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
     if (!running) return undefined;
     let alive = true;
     const started = Date.now();
-    let handle = 0;
-    const schedule = (fn: () => void) => {
-      handle = useFrames ? requestAnimationFrame(fn) : (setTimeout(fn, 16) as unknown as number);
-    };
+    let timer = 0;
     const tick = () => {
       if (!alive) return;
       setElapsed(Date.now() - started);
-      schedule(tick);
+      timer = setTimeout(tick, 16) as unknown as number;
     };
-    schedule(tick);
+    timer = setTimeout(tick, 16) as unknown as number;
     return () => {
       alive = false;
-      if (useFrames) cancelAnimationFrame(handle);
-      else clearTimeout(handle);
+      clearTimeout(timer);
     };
   }, [running]);
   return elapsed;
@@ -308,9 +304,10 @@ export function BootScreen({ ready, onDone }: { ready: boolean; onDone: () => vo
       onDoneRef.current();
       return;
     }
-    if (elapsed < BOOT_INTRO_MS) return;
-    setExitAt((at) => (at == null ? elapsed : at));
-  }, [ready, reduced, elapsed]);
+    // Set once; calling setState here on every frame of the exit would be a needless update per tick.
+    if (elapsed < BOOT_INTRO_MS || exitAt != null) return;
+    setExitAt(elapsed);
+  }, [ready, reduced, elapsed, exitAt]);
 
   useEffect(() => {
     if (!pose.done || finished.current) return;
