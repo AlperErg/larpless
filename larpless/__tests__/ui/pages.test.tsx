@@ -179,7 +179,10 @@ describe('full flow with fake store actions (stand-in for WS-C)', () => {
 
     const r = await mountApp();
     expect(useNavStore.getState().route).toBe('onboarding');
-    // Step 1: a built-in subject name is refused; a more specific course name is kept.
+    // Step 1: this Mac reads the screen with the vision LLM.
+    act(() => byTestID(r, 'onboarding-pc-vlm').props.onPress());
+    act(() => byTestID(r, 'onboarding-next').props.onPress());
+    // Step 2: a built-in subject name is refused; a more specific course name is kept.
     const table = () => r.root.findByType(EditableTable);
     const row = (name: string) => ({ id: 'mod_custom', name, color: 'green' as const, keywordsText: 'BIO101' });
     act(() => table().props.onChange([row('biology')]));

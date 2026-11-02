@@ -5,6 +5,7 @@ const M = NativeModules.FLAppShell;
 const emitter = M ? new NativeEventEmitter(M) : null;
 
 export const appShell: AppShellApi = {
+  hardware: () => M.hardware(),
   beginSessionActivity: () => M.beginSessionActivity(),
   endSessionActivity: () => M.endSessionActivity(),
   bringToFront: () => M.bringToFront(),

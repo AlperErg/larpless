@@ -110,6 +110,7 @@ describe('createScreenModelStep', () => {
       cancelDownload: jest.fn(async () => {}),
       onProgress: () => () => {},
       classify: jest.fn(async () => scores()),
+      warmUp: jest.fn(async () => {}),
       unload: jest.fn(async () => {}),
       ...over,
     };

@@ -843,6 +843,12 @@ struct FLScreenModel {
     m_core->Classify(std::move(opts), std::move(result));
   }
 
+  // Windows.Media.Ocr has no cold start worth hiding; the macOS module warms up Vision here.
+  REACT_METHOD(WarmUp, L"warmUp")
+  void WarmUp(ReactPromise<void> &&result) noexcept {
+    result.Resolve();
+  }
+
   REACT_METHOD(Unload, L"unload")
   void Unload(ReactPromise<void> &&result) noexcept {
     m_core->Unload(std::move(result));
