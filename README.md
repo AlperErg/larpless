@@ -52,7 +52,7 @@ flowchart LR
   end
   F[src/native facades] --> CTRL[core/sessionController]
   CTRL --> CLS[core/classifier: rules → cache → VLM or screen model]
-  CLS -->|Windows classifier mode: scores only| SM[FLScreenModel: SigLIP 2 + OCR + MiniLM]
+  CLS -->|classifier mode: scores only| SM[FLScreenModel: SigLIP 2 + OCR + MiniLM]
   CLS -->|POST /api/chat, vision LLM mode| OL[Ollama 127.0.0.1:11434]
   CTRL --> FU[core/chunkFuser] --> ST[zustand stores]
   CTRL --> AL[core/alerts] --> NT
@@ -73,23 +73,23 @@ The classifier stops at the cheapest step that gives an answer:
 1. **LarpLess in front:** reuse the previous verdict.
 2. **Rules:** a distraction keyword in the app or window title → `distracted`; a known study tool (Vivado, Quartus, RARS, …) → its subject. No screenshot.
 3. **Cache:** same app and title as a recent verdict → reuse it. Verdicts last as long as the profile's cache time (2–3 min), "not study" verdicts at most 1 min so a wrong label doesn't stick. No screenshot.
-4. **Read the screen** with one of two models, chosen by the [screen check mode](#screen-check-modes) (Windows; the Mac always uses the VLM):
-   - **On-device classifier (Windows):** SigLIP 2 image embeddings, Windows OCR and MiniLM text embeddings score the screen in about 0.5 s, with no Ollama involved.
+4. **Read the screen** with one of two models, chosen by the [screen check mode](#screen-check-modes):
+   - **On-device classifier:** SigLIP 2 image embeddings, OCR (Apple Vision on the Mac, Windows OCR on Windows) and MiniLM text embeddings score the screen in under a second, with no Ollama involved.
    - **VLM:** take a screenshot and classify it with the vision model in Ollama (about 3 s on a fast Mac). Only one vision call runs at a time, and it is allowed to finish. A check for the same window shares its result. If you switched windows meanwhile, one follow-up reads whatever is in front when the call returns, so windows you only passed through are never captured.
 
 ### Screen check modes
 
-On Windows, **Settings → Local AI → Screen check** chooses which one model reads the screen (onboarding asks how powerful the PC is and picks it). The change applies from the next check, with no restart.
+**Settings → Local AI → Screen check** chooses which one model reads the screen (onboarding asks how powerful the Mac or PC is and picks it). The change applies from the next check, with no restart.
 
 | | **Vision LLM (Ollama)** (default) | **On-device classifier** |
 | --- | --- | --- |
-| Reads the screen | Ollama's vision model, as on the Mac; the on-device model is never run | the on-device model alone |
+| Reads the screen | Ollama's vision model; the on-device model is never run | the on-device model alone |
 | Study verdict | Ollama's answer | always used |
 | "Not study" verdict | Ollama's answer | used at ≥ 0.6; below that the chunk is `unknown` (no alert) |
 | Ollama | opened at session start, model warmed up | never opened, warmed up or asked |
 | Model not downloaded | not needed | every chunk is `unknown` (Settings only offers this mode once it's downloaded) |
 
-The on-device classifier is for PCs where Ollama is too slow or uses too much memory. On the 54-screenshot bench it gets 94% of subjects right and tells study from distraction 54/54. The Mac has no on-device model yet, so it always uses Ollama and the setting is hidden there.
+The on-device classifier is for computers where Ollama is too slow or uses too much memory (8 GB RAM devices, PCs/Macs without a fast GPU). On the 54-screenshot bench (Windows OCR) it gets 94% of subjects right and tells study from distraction 54/54. Both apps run the same pinned ONNX files through ONNX Runtime, so the image scores match; the Mac's text side uses Apple Vision OCR and hasn't been re-benched yet.
 
 ### Live: what the panel shows
 
@@ -132,7 +132,7 @@ Starting a session opens Ollama in the background if it isn't running, then warm
 - **State / storage:** zustand 5, AsyncStorage 2.2.0 (pinned), date-fns 4.
 - **Native, Mac (Swift 5, macOS 14+):** ScreenCaptureKit, AVFoundation, Vision, CoreML, UserNotifications, AppKit, SwiftUI, and the Keychain for the Supabase sign-in.
 - **Now playing:** on Mac, a vendored [mediaremote-adapter](https://github.com/ungive/mediaremote-adapter) (BSD-3-Clause) run through `/usr/bin/perl`, because since macOS 15.4 a Developer ID app can't read MediaRemote itself. On Windows, the system media transport controls.
-- **Models:** Ollama `qwen3-vl:2b` and YOLO11n (`nms=True`, bundled; presence and phone). CoreML on Mac, ONNX Runtime on Windows. On Windows also SigLIP 2 base/16 (vision tower) and all-MiniLM-L6-v2 in ONNX Runtime for the on-device screen model.
+- **Models:** Ollama `qwen3-vl:2b` and YOLO11n (`nms=True`, bundled; presence and phone). CoreML on Mac, ONNX Runtime on Windows. On both, SigLIP 2 base/16 (vision tower) and all-MiniLM-L6-v2 in ONNX Runtime for the on-device screen model.
 - **Social:** `@supabase/supabase-js` + `react-native-url-polyfill`.
 - **Website:** Vite + TypeScript in `site/`.
 - **Native, Windows (C++ app, WinAppSDK 1.8):** C++/WinRT modules with Direct2D + DirectWrite, XAudio2, MediaCapture, ONNX Runtime, WIC, toast notifications, and DPAPI for the Supabase sign-in.
@@ -143,7 +143,7 @@ Starting a session opens Ollama in the background if it isn't running, then warm
 
 #### Minimum Requirements
 
-- Mac with an apple silicon chip and 16 GB of RAM or more
+- Mac with an apple silicon chip and 16 GB of RAM or more for the vision LLM. Any Mac (M1/M2/M3, or 8 GB) can use the [on-device classifier](#screen-check-modes) instead.
 - **macOS 14.5** Sonoma or above.
 
 #### Recommended Requirements
@@ -160,7 +160,7 @@ It is also worth considering that performance may degrade over time for MacBook 
 - **Node 22** or above.
 - **Cocoapods** (`brew install cocoapods`).
 - **CMake** (`brew install cmake`).
-- **[Ollama](https://ollama.com)** to run the vision model. Onboarding installs it and downloads the model for you (see [First launch](#first-launch)); from a terminal it's `ollama pull qwen3-vl:2b`.
+- **[Ollama](https://ollama.com)** to run the vision model. Onboarding installs it and downloads the model for you (see [First launch](#first-launch)); from a terminal it's `ollama pull qwen3-vl:2b`. Not needed in the **On-device classifier** [screen check mode](#screen-check-modes), which only needs a one-time download of about 460 MB (into `~/Library/Application Support/com.larpless.app/Models`).
 
 ### Installation
 
@@ -201,14 +201,15 @@ xcodebuild -workspace larpless/macos/Focusline.xcworkspace -scheme Focusline-mac
 
 ### First launch
 
-Onboarding takes four steps:
+Onboarding takes four or five steps:
 
-1. **Your modules.** Optional. LarpLess recognises the built-in subjects on its own; add your own courses (course codes, topics, lecturer names) for sharper labels. For each course, add 6–10 distinctive keywords that actually show up on your screen while you study it (malloc, ER diagram, CS2010). Skip short or common words and anything shared with your other courses.
-2. **Permissions.** **Screen Recording** (macOS only applies it after a relaunch; the **Relaunch** button does that), **Camera** (optional: presence and phone detection) and **Notifications**.
-3. **Ollama.** LarpLess checks whether Ollama is installed and running, and the page updates by itself.
+1. **Your Mac.** Pick which model reads the screen ([screen check modes](#screen-check-modes)): the vision LLM in Ollama for Apple silicon with 16 GB or more (except a base M1, M2 or M3, which are too slow for it; their Pro, Max and Ultra versions are fine), or the on-device classifier for any Mac. LarpLess reads the chip and memory (on Windows also the GPU) and preselects the one that fits, with the reason; you can pick the other. The hardware details aren't saved or sent anywhere. The classifier replaces steps 4 and 5 with its own download.
+2. **Your modules.** Optional. LarpLess recognises the built-in subjects on its own; add your own courses (course codes, topics, lecturer names) for sharper labels. For each course, add 6–10 distinctive keywords that actually show up on your screen while you study it (malloc, ER diagram, CS2010). Skip short or common words and anything shared with your other courses.
+3. **Permissions.** **Screen Recording** (macOS only applies it after a relaunch; the **Relaunch** button does that), **Camera** (optional: presence and phone detection) and **Notifications**.
+4. **Ollama.** LarpLess checks whether Ollama is installed and running, and the page updates by itself.
    - Not installed: **Download Ollama** downloads `Ollama.dmg`. Open it and drag Ollama into Applications.
    - Installed but not running: **Open Ollama** starts it in the background, with the [memory saver](#the-model) on.
-4. **AI model.** **Download model** pulls `qwen3-vl:2b` (about 1.9 GB) through Ollama with a progress bar. Cancel stops it, and the next download picks up where it left off. The download keeps going if you finish onboarding, and the sidebar shows its progress.
+5. **AI model.** **Download model** pulls `qwen3-vl:2b` (about 1.9 GB) through Ollama with a progress bar. Cancel stops it, and the next download picks up where it left off. The download keeps going if you finish onboarding, and the sidebar shows its progress.
 
 You can finish without Ollama or the model and set them up later: **Settings → Local AI** has the same **Open Ollama** and **Download model** buttons, and demo mode works offline. Settings → Onboarding → **Run again** shows it again.
 
@@ -237,7 +238,6 @@ The script uninstalls the old app package first, and that deletes the app's loca
 **Differences from the Mac app**
 
 - Shortcuts use **Ctrl** instead of ⌘ (Ctrl+K palette, Ctrl+Enter start, Ctrl+. end).
-- The on-device screen model and the [screen check modes](#screen-check-modes) exist only on Windows for now.
 - The webcam uses the same YOLO11n rules as Mac (`person` above 0.5, `cell phone` above 0.4), through ONNX Runtime instead of CoreML. Samples start once the model has loaded.
 - The main window uses Segoe UI, Georgia and Consolas, because react-native-windows can't load bundled fonts yet. The floating panel draws its own text and keeps Inter + Instrument Serif.
 - Page transitions and other `Animated` effects are off on Windows (`ANIMATE` in `src/ui/platform.ts`): react-native-windows drops the content of a re-rendered `Animated.View`. The floating panel's tint, pulse and flash animations are native and unaffected.
@@ -351,4 +351,4 @@ cd site && npm install && npm run dev
 
 Copyright (C) 2026 the LarpLess contributors.
 
-LarpLess is free software under the [GNU Affero General Public License v3.0](LICENSE). The webcam model, Ultralytics YOLO11n, is AGPL-3.0, so the app as a whole is too. The screen models (Qwen3-VL through Ollama; SigLIP 2 and all-MiniLM-L6-v2 in the on-device classifier on Windows) are Apache-2.0, and the fonts are OFL-1.1. Third-party notices are listed in the app under Settings → About → Acknowledgements, generated by `larpless/scripts/acknowledgements.mjs` from the texts in [`larpless/licenses/`](larpless/licenses/).
+LarpLess is free software under the [GNU Affero General Public License v3.0](LICENSE). The webcam model, Ultralytics YOLO11n, is AGPL-3.0, so the app as a whole is too. The screen models (Qwen3-VL through Ollama; SigLIP 2 and all-MiniLM-L6-v2 in the on-device classifier) are Apache-2.0, and the fonts are OFL-1.1. Third-party notices are listed in the app under Settings → About → Acknowledgements, generated by `larpless/scripts/acknowledgements.mjs` from the texts in [`larpless/licenses/`](larpless/licenses/).

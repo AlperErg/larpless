@@ -12,6 +12,9 @@ target 'Focusline-macOS' do
   platform :macos, '14.0'
   use_native_modules!
 
+  # FLScreenModel: SigLIP 2 + MiniLM through ONNX Runtime (the same pinned ONNX files as Windows).
+  pod 'onnxruntime-objc', '1.30.0'
+
   # Flags change depending on the env values.
   flags = get_default_flags()
 

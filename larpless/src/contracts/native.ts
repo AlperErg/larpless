@@ -105,7 +105,24 @@ export interface NowPlayingApi {
 /* ---------- FLAppShell (WS-B) ---------- */
 /** 'acknowledgements' is macOS only: LarpLess → Acknowledgements, under About LarpLess. */
 export type MenuCommand = 'commandPalette' | 'startSession' | 'endSession' | 'acknowledgements';
+/**
+ * What onboarding needs to recommend a screen reader (core/hardware.ts). Read locally when asked; never stored,
+ * logged or sent anywhere.
+ */
+export interface HardwareInfo {
+  /** Physical memory in bytes. */
+  memoryBytes: number;
+  /** Mac: an Apple silicon chip (also true for an Intel build running under Rosetta). Null on Windows. */
+  appleSilicon: boolean | null;
+  /** "Apple M2 Pro", "AMD Ryzen 7 350 …"; null when unknown. */
+  chip: string | null;
+  /** Windows: the adapter with the most dedicated video memory (software adapters skipped). Null on the Mac or with none. */
+  gpu: { name: string; dedicatedBytes: number } | null;
+}
+
 export interface AppShellApi {
+  /** This computer's memory, chip and (Windows) GPU, for onboarding's recommendation. */
+  hardware(): Promise<HardwareInfo>;
   beginSessionActivity(): void;   // prevents App Nap from throttling JS timers
   endSessionActivity(): void;
   bringToFront(): void;
@@ -162,11 +179,10 @@ export interface KeychainApi {
   removeItem(key: string): Promise<void>;
 }
 
-/* ---------- FLScreenModel (Windows only for now) ---------- */
+/* ---------- FLScreenModel ---------- */
 /**
- * On-device screen classifier: SigLIP 2 image embeddings + Windows OCR text embedded with MiniLM, via ONNX
- * Runtime. Returns scores only; src/core/screenModel.ts turns them into a verdict. The macOS app has no
- * counterpart yet: there `native.screenModel.status()` reports `supported: false` and the classifier skips it.
+ * On-device screen classifier: SigLIP 2 image embeddings + OCR text (Windows.Media.Ocr / Apple Vision) embedded
+ * with MiniLM, via ONNX Runtime. Returns scores only; src/core/screenModel.ts turns them into a verdict.
  */
 export interface ScreenModelFile {
   /** One of 'siglip2-vision.onnx', 'minilm.onnx', 'minilm-vocab.txt'. */
@@ -177,7 +193,7 @@ export interface ScreenModelFile {
   size: number;
 }
 export interface ScreenModelStatus {
-  /** False where the native module doesn't exist (macOS, tests without a mock). */
+  /** False where the native module doesn't exist (an older build, tests without a mock). */
   supported: boolean;
   /** Every file is in the model folder with the expected size. */
   installed: boolean;
@@ -195,7 +211,7 @@ export interface ScreenModelProgress {
 export interface ScreenModelInput {
   /** Capture width (the power profile's), at least 224. */
   maxWidth: number;
-  /** BCP-47 tag for Windows OCR; default 'en-US'. */
+  /** BCP-47 tag for OCR; default 'en-US'. */
   ocrLanguage?: string;
   /**
    * Labels to score the screen text against (module descriptions, distraction descriptions). `keywords` are

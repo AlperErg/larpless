@@ -30,7 +30,7 @@ export type ActivityCategory = (typeof ACTIVITY_CATEGORIES)[number];
 
 export type ChunkKind = 'subject' | 'distracted' | 'away' | 'unknown';
 export type DistractionReason = 'phone' | 'screen' | 'rule';
-/** 'embed': the on-device screen model (FLScreenModel, Windows), before Ollama. */
+/** 'embed': the on-device screen model (FLScreenModel), before Ollama. */
 export type ChunkSource = 'vlm' | 'rule' | 'cache' | 'webcam' | 'none' | 'user' | 'title' | 'embed';
 
 export interface Chunk {
@@ -79,7 +79,7 @@ export type Strictness = 2 | 5 | 10;               // minutes until the first no
 export type PowerProfile = 'eco' | 'medium' | 'high';
 /**
  * Who reads the screen. 'vlm': the vision language model in Ollama, alone (the screen model is never used).
- * 'classifier': the on-device screen model alone (Windows only); Ollama is never started or asked.
+ * 'classifier': the on-device screen model alone; Ollama is never started or asked.
  */
 export type ClassifierMode = 'vlm' | 'classifier';
 export type PomodoroPreset = '25/5' | '50/10' | 'demo';

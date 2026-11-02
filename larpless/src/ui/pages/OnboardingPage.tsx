@@ -2,8 +2,8 @@
  * Onboarding (D5): 1. Your modules → 2. Permissions → 3. Ollama → 4. AI model → Home.
  * Full-window (no sidebar). Steps 3 and 4 install, open and fill Ollama without the terminal.
  *
- * Windows starts with "Your PC", which picks the screen reader (`classifierMode`): the vision LLM keeps the
- * Ollama steps; the on-device classifier replaces them with its own download. The Mac flow is unchanged.
+ * It starts with "Your PC" / "Your Mac", which picks the screen reader (`classifierMode`): the vision LLM keeps
+ * the Ollama steps; the on-device classifier replaces them with its own download.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
@@ -11,6 +11,8 @@ import { Animated, Easing, Linking, StyleSheet, View } from 'react-native';
 import { config } from '../../config';
 import type { ClassifierMode, TagColor } from '../../contracts/domain';
 import type { PermissionKind, PermissionStatus } from '../../contracts/native';
+import { recommendClassifierMode } from '../../core/hardware';
+import type { Recommendation } from '../../core/hardware';
 import { isLocalUrl } from '../../core/ollamaHost';
 import { SCREEN_MODEL_BYTES } from '../../core/screenModel';
 import { native } from '../../native';
@@ -33,7 +35,7 @@ import { LIBRARY_MODULES } from '../../core/subjectLibrary';
 export type OnboardingStep = 'pc' | 'modules' | 'permissions' | 'ollama' | 'model' | 'classifier';
 
 const STEP_LABEL: Record<OnboardingStep, string> = {
-  pc: 'Your PC',
+  pc: `Your ${DEVICE}`,
   modules: 'Your modules',
   permissions: 'Permissions',
   ollama: 'Ollama',
@@ -41,15 +43,14 @@ const STEP_LABEL: Record<OnboardingStep, string> = {
   classifier: 'Classifier',
 };
 
-/** The steps for this platform and screen reader. Only Windows asks about the PC (the Mac has the vision LLM only). */
-export function onboardingSteps(windows: boolean, mode: ClassifierMode): OnboardingStep[] {
-  if (!windows) return ['modules', 'permissions', 'ollama', 'model'];
+/** The steps for the chosen screen reader. */
+export function onboardingSteps(mode: ClassifierMode): OnboardingStep[] {
   return ['pc', 'modules', 'permissions', ...(mode === 'classifier' ? (['classifier'] as const) : (['ollama', 'model'] as const))];
 }
 
 export function OnboardingPage() {
   const mode = useAppStore((s) => s.settings.classifierMode);
-  const steps = onboardingSteps(IS_WINDOWS, mode);
+  const steps = onboardingSteps(mode);
   // Reopen at the saved step: granting Screen Recording relaunches the app mid-onboarding.
   const [step, setStep] = useState(() => Math.max(0, steps.indexOf(useAppStore.getState().settings.onboardingStep as OnboardingStep)));
   const current = steps[Math.min(step, steps.length - 1)];
@@ -88,7 +89,7 @@ export function OnboardingPage() {
         <Progress steps={steps} current={current} />
         <MotionView style={ANIMATE ? { opacity: fade, transform: [{ translateY }] } : undefined}>
           {current === 'pc' ? <PcStep onNext={next} /> : null}
-          {current === 'modules' ? <ModulesStep onBack={IS_WINDOWS ? back : undefined} onNext={next} /> : null}
+          {current === 'modules' ? <ModulesStep onBack={back} onNext={next} /> : null}
           {current === 'permissions' ? <PermissionsStep onBack={back} onNext={next} /> : null}
           {current === 'ollama' ? <OllamaStep onBack={back} onNext={next} /> : null}
           {current === 'model' ? <ModelStep onBack={back} onFinish={finish} /> : null}
@@ -122,7 +123,7 @@ function Progress({ steps, current }: { steps: OnboardingStep[]; current: Onboar
 }
 
 /* ------------------------------------------------------------------ */
-/* Windows: Your PC (which model reads the screen)                     */
+/* Your PC / Your Mac (which model reads the screen)                   */
 /* ------------------------------------------------------------------ */
 
 const MODE_LABEL = Object.fromEntries(CLASSIFIER_OPTIONS.map((o) => [o.value, o.label])) as Record<ClassifierMode, string>;
@@ -132,46 +133,77 @@ function PcStep({ onNext }: { onNext: () => void }) {
   const model = useAppStore((s) => s.settings.model);
   const updateSettings = useAppStore((s) => s.updateSettings);
   const refresh = useScreenModelStore((s) => s.refresh);
-  // A Windows build without FLScreenModel reports unsupported: only the vision LLM can work there.
+  // A build without FLScreenModel reports unsupported: only the vision LLM can work there.
   const unsupported = useScreenModelStore((s) => s.status?.supported === false);
-  const [picked, setPicked] = useState<ClassifierMode | null>(null);
+  const [choice, setChoice] = useState<ClassifierMode | null>(null);
+  // Read this computer's memory and chip (GPU on Windows) to preselect a card; the user can still pick the other.
+  const [hint, setHint] = useState<Recommendation | null>(null);
   useEffect(() => {
     refresh().catch(() => {});
   }, [refresh]);
+  useEffect(() => {
+    let alive = true;
+    native.appShell
+      .hardware()
+      .then(
+        (hw) => recommendClassifierMode(hw, IS_WINDOWS),
+        () => recommendClassifierMode(null, IS_WINDOWS),
+      )
+      .then((r) => {
+        if (alive) setHint(r);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  // Without hardware info there's no preselection: "if you're not sure" stays on the classifier.
+  const recommended = hint?.summary ? (hint.mode === 'classifier' && unsupported ? 'vlm' : hint.mode) : null;
+  const picked = choice ?? recommended;
+  const badgeFor = (mode: ClassifierMode) =>
+    recommended ? (recommended === mode ? `Recommended for this ${DEVICE}` : undefined) : mode === 'classifier' ? 'Recommended if you’re not sure' : undefined;
   const size = config.MODEL_SIZES[model];
 
   return (
     <View testID="onboarding-pc">
       <Text variant="h2" style={styles.h}>
-        How powerful is this PC?
+        {`How powerful is this ${DEVICE}?`}
       </Text>
       <Text muted style={styles.lead}>
-        LarpLess reads your screen with one of two AI models. Both run entirely on this PC, and nothing is sent
-        anywhere. Pick the one that fits your hardware; you can switch any time in Settings → Local AI.
+        {`LarpLess reads your screen with one of two AI models. Both run entirely on this ${DEVICE}, and nothing is sent anywhere. Pick the one that fits your hardware; you can switch any time in Settings → Local AI.`}
       </Text>
+      {recommended && hint?.summary ? (
+        <Text testID="onboarding-pc-hardware" variant="small" muted style={styles.lead}>
+          {`This ${DEVICE}: ${hint.summary}.`}
+        </Text>
+      ) : null}
       <ChoiceCard
         testID="onboarding-pc-classifier"
         icon="zap"
-        title="An everyday laptop or PC"
+        title={IS_WINDOWS ? 'An everyday laptop or PC' : 'An Intel or base M1–M3 Mac, or one with 8 GB'}
         model={MODE_LABEL.classifier}
-        badge="Recommended if you’re not sure"
+        badge={badgeFor('classifier')}
         selected={picked === 'classifier'}
         disabled={unsupported}
-        onPress={() => setPicked('classifier')}>
+        onPress={() => setChoice('classifier')}>
         {unsupported
           ? 'Not available in this build of LarpLess.'
-          : `A small classifier built into LarpLess. It recognises the subject from what’s on screen in under a second, on any PC, with no other app to install. One download of about ${formatBytes(SCREEN_MODEL_BYTES)}. Screens it isn’t sure about count as unknown.`}
+          : `A small classifier built into LarpLess. It recognises the subject from what’s on screen in under a second, on any ${DEVICE}, with no other app to install. One download of about ${formatBytes(SCREEN_MODEL_BYTES)}. Screens it isn’t sure about count as unknown.`}
       </ChoiceCard>
       <ChoiceCard
         testID="onboarding-pc-vlm"
         icon="bot"
-        title="A powerful PC with a graphics card"
+        title={IS_WINDOWS ? 'A powerful PC with a graphics card' : 'An M4 or newer, or a Pro, Max or Ultra chip, with 16 GB or more'}
         model={MODE_LABEL.vlm}
+        badge={badgeFor('vlm')}
         selected={picked === 'vlm'}
-        onPress={() => setPicked('vlm')}>
+        onPress={() => setChoice('vlm')}>
         {`A vision language model looks at each screenshot and understands it the way a person would, so it copes best with unusual screens. It runs in Ollama, a free app, and the model is ${
           size ? `a ${size} download` : 'a one-time download'
-        }. A check takes a few seconds with a dedicated GPU or a recent fast integrated one; without one it can take 30 s or more and use several GB of memory.`}
+        }. ${
+          IS_WINDOWS
+            ? 'A check takes a few seconds with a dedicated GPU or a recent fast integrated one; without one it can take 30 s or more and use several GB of memory.'
+            : 'A check takes a few seconds on Apple silicon; on an M1 Mac it can take around 20 seconds. It also requires at least 16 GB of memory.'
+        }`}
       </ChoiceCard>
       <View style={styles.actions}>
         <Button
@@ -645,7 +677,7 @@ function ModelStep({ onBack, onFinish }: { onBack: () => void; onFinish: () => v
 }
 
 /* ------------------------------------------------------------------ */
-/* Windows: the on-device classifier (instead of Ollama + AI model)    */
+/* The on-device classifier (instead of Ollama + AI model)             */
 /* ------------------------------------------------------------------ */
 
 function ClassifierStep({ onBack, onFinish }: { onBack: () => void; onFinish: () => void }) {

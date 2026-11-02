@@ -23,7 +23,10 @@
 import type { ScreenVerdict, StudyModule } from '../contracts/domain';
 import type { ActiveWindow, ScreenModelApi, ScreenModelFile, ScreenModelInput, ScreenModelScores } from '../contracts/native';
 
-/** Pinned Hugging Face files (commit + SHA-256), downloaded once at onboarding into LocalFolder\Models. */
+/**
+ * Pinned Hugging Face files (commit + SHA-256), downloaded once at onboarding into LocalFolder\Models (Windows) or
+ * ~/Library/Application Support/<bundle id>/Models (macOS).
+ */
 export const SCREEN_MODEL_FILES: ScreenModelFile[] = [
   {
     // SigLIP 2 base/16 at 224 px, vision tower only (Apache-2.0, google/siglip2-base-patch16-224).
