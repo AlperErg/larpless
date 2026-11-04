@@ -168,6 +168,11 @@ export const colors: Palette = { ...lightPalette };
 export const tag: Record<TagColor, TagTone> = cloneTags(lightTags);
 export const heat: [string, string, string, string, string] = [...lightHeat];
 
+/** The scheme the live tokens currently hold. Memoised components that read tokens can depend on it. */
+export function currentScheme(): SchemeName {
+  return activeScheme;
+}
+
 /** Point the live tokens at a scheme. Safe to call during render; a no-op when it already matches. */
 export function applyScheme(name: SchemeName): void {
   if (name === activeScheme) return;

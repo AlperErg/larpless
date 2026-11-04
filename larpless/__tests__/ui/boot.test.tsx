@@ -1,6 +1,6 @@
 import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
-import { BOOT_EXIT_MS, BOOT_INTRO_MS, BOOT_SEGMENTS, BOOT_CENTER, BOOT_HANDS, bootPose, BootScreen, handDiscs, segmentReveal, spinAngle } from '../../src/ui/components/BootScreen';
+import { BOOT_EXIT_MS, BOOT_HANDS_AT, BOOT_INTRO_MS, BOOT_SEGMENTS, BOOT_CENTER, BOOT_HANDS, bootPose, BootScreen, handDiscs, mixHex, segmentReveal, spinAngle } from '../../src/ui/components/BootScreen';
 
 function textOf(r: ReactTestRenderer): string {
   const out: string[] = [];
@@ -56,10 +56,18 @@ describe('boot pose', () => {
 
     const p = bootPose(1500, null, false);
     expect(p.minuteDeg).toBeGreaterThan(0);
-    expect(p.hourDeg).toBeCloseTo(spinAngle(1500 - 380) / 12);
+    expect(p.hourDeg).toBeCloseTo(spinAngle(1500 - BOOT_HANDS_AT) / 12);
     const still = bootPose(1500, null, true);
     expect(still.minuteDeg).toBe(0);
     expect(still.hourDeg).toBe(0);
+  });
+
+  it('fades the hand colour between hex tokens and never yields an invalid colour', () => {
+    expect(mixHex('#000000', '#FFFFFF', 0)).toBe('rgb(0, 0, 0)');
+    expect(mixHex('#000000', '#FFFFFF', 1)).toBe('rgb(255, 255, 255)');
+    expect(mixHex('#000', '#fff', 0.5)).toBe('rgb(128, 128, 128)');
+    expect(mixHex('#00000080', '#FFFFFFFF', 1)).toBe('rgb(255, 255, 255)');
+    expect(mixHex('rgba(0,0,0,1)', '#152033', 0.3)).toBe('#152033');
   });
 
   it('leaves a visible gap between neighbouring arcs', () => {

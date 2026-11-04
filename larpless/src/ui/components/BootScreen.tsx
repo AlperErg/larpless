@@ -1,7 +1,8 @@
 /**
  * Launch cover for Mac and Windows. The logo assembles itself: the crown drops in,
  * one pen stroke draws the session ring clockwise (study, break, distracted, away)
- * in the live theme colours, the hands fade in at the logo's time and start turning
+ * in the brand logo's colours (its distracted arc is yellow, though `kindColor`
+ * uses red) taken from the live theme tags, the hands fade in at the logo's time and start turning
  * like a clock running fast, and the serif name settles. The hands keep turning
  * until the cover has gone, so nothing snaps or stops on screen.
  * Plain views only: Windows Fabric drops painted content out of Animated.View, so
@@ -10,7 +11,8 @@
 import { memo, useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, StyleSheet, View } from 'react-native';
 import type { TagColor } from '../../contracts/domain';
-import { colors, tag, themed } from '../theme';
+import { colors, currentScheme, tag, themed } from '../theme';
+import type { SchemeName } from '../theme';
 import { Text } from './Text';
 
 export const BOOT_INTRO_MS = 1080;
@@ -28,6 +30,8 @@ const HOUR_LEN = 29;
 const MINUTE_LEN = 36;
 /** Disc spacing along the ring's centre line, px. Small enough that the edge scallop is < 0.05 px. */
 const DISC_STEP = 1.2;
+/** Disc spacing along a hand, px. The edge scallop is ~0.06 px; wider spacing means fewer views re-rendered per frame. */
+const HAND_STEP = 1.5;
 /**
  * How far each arc is trimmed at both ends, in degrees: most of the round cap's
  * reach, so the caps land near the logo's cuts while the gaps stay open (a full
@@ -36,7 +40,7 @@ const DISC_STEP = 1.2;
 const CAP_DEG = 0.85 * (STROKE / 2 / RADIUS) * (180 / Math.PI);
 
 /** The hands appear here, then spin up to speed over `SPIN_RAMP_MS`. */
-const HANDS_AT = 380;
+export const BOOT_HANDS_AT = 380;
 const HANDS_FADE_MS = 260;
 const SPIN_RAMP_MS = 600;
 /** One minute-hand lap; the hour hand turns twelve times slower, as on a real clock. */
@@ -170,12 +174,12 @@ export function bootPose(elapsed: number, exitAt: number | null, reduced: boolea
       done: false,
     };
   }
-  const spin = spinAngle(elapsed - HANDS_AT);
+  const spin = spinAngle(elapsed - BOOT_HANDS_AT);
   const exitT = exitAt == null ? 0 : progress(elapsed, exitAt, BOOT_EXIT_MS);
   return {
     crown: easeOut(progress(elapsed, 60, 240)),
     pen: easeInOut(progress(elapsed, 100, 620)) * BOOT_PEN_END,
-    hands: easeOut(progress(elapsed, HANDS_AT, HANDS_FADE_MS)),
+    hands: easeOut(progress(elapsed, BOOT_HANDS_AT, HANDS_FADE_MS)),
     minuteDeg: spin % 360,
     hourDeg: (spin / 12) % 360,
     word: easeOut(progress(elapsed, 720, 360)),
@@ -211,17 +215,30 @@ function useElapsed(running: boolean): number {
   return elapsed;
 }
 
-/** Blends two `#RRGGBB` colours; fading a hand by colour keeps its overlapping discs from showing seams. */
-function mixHex(from: string, to: string, t: number): string {
-  const ch = (hex: string, i: number) => parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16);
+/** RGB channels of a `#RGB`, `#RRGGBB` or `#RRGGBBAA` colour (alpha ignored), else null. */
+function hexChannels(hex: string): [number, number, number] | null {
+  const m = /^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.exec(hex.trim());
+  if (!m) return null;
+  const h = m[1].length === 3 ? m[1].replace(/./g, (d) => d + d) : m[1];
+  return [0, 1, 2].map((i) => parseInt(h.slice(i * 2, i * 2 + 2), 16)) as [number, number, number];
+}
+
+/**
+ * Blends two hex colours; fading a hand by colour keeps its overlapping discs from
+ * showing seams. A token that isn't hex falls back to `to` rather than an invalid colour.
+ */
+export function mixHex(from: string, to: string, t: number): string {
+  const a = hexChannels(from);
+  const b = hexChannels(to);
+  if (!a || !b) return to;
   const k = clamp01(t);
-  const c = [0, 1, 2].map((i) => Math.round(ch(from, i) + (ch(to, i) - ch(from, i)) * k));
+  const c = a.map((v, i) => Math.round(v + (b[i] - v) * k));
   return `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
 }
 
 /**
  * A rounded hand from the clock centre at screen angle `deg` (0° east, clockwise).
- * Drawn as a row of discs 1 px apart, each placed by trigonometry, with no rotate
+ * Drawn as a row of discs `HAND_STEP` px apart, each placed by trigonometry, with no rotate
  * transform: on Windows a rotated 80 px square holding the hand swung it out past
  * the ring instead of pivoting it. Discs need no rotation, so the hand stays on its axis.
  */
@@ -242,7 +259,7 @@ function Hand({ deg, length, color }: { deg: number; length: number; color: stri
 export function handDiscs(deg: number, length: number): { x: number; y: number }[] {
   const rad = (deg * Math.PI) / 180;
   const reach = length - HAND;
-  const n = Math.ceil(reach) + 1;
+  const n = Math.max(2, Math.ceil(reach / HAND_STEP) + 1);
   return Array.from({ length: n }, (_, k) => {
     const d = (reach * k) / (n - 1);
     return { x: CX + Math.cos(rad) * d, y: CY + Math.sin(rad) * d };
@@ -252,8 +269,12 @@ export function handDiscs(deg: number, length: number): { x: number; y: number }
 export const BOOT_CENTER = { x: CX, y: CY };
 export const BOOT_HANDS = { hour: HOUR_LEN, minute: MINUTE_LEN, width: HAND, ringInner: RADIUS - STROKE / 2, ringStroke: STROKE };
 
-/** ~200 discs; memoised on the pen so it stops re-rendering once the ring is drawn. */
-const Ring = memo(function Ring({ pen }: { pen: number }) {
+/**
+ * ~200 discs; memoised on the pen so it stops re-rendering once the ring is drawn.
+ * `scheme` is in the props because `tag` is mutated in place by `applyScheme`: without
+ * it a light/dark switch after the ring is drawn would leave the old arc colours.
+ */
+const Ring = memo(function Ring({ pen }: { pen: number; scheme: SchemeName }) {
   return (
     <>
       {BOOT_SEGMENTS.map((s, i) =>
@@ -331,7 +352,7 @@ export function BootScreen({ ready, onDone }: { ready: boolean; onDone: () => vo
             { backgroundColor: tag.red.text, opacity: pose.crown, transform: [{ translateY: (1 - pose.crown) * -6 }] },
           ]}
         />
-        <Ring pen={pose.pen} />
+        <Ring pen={pose.pen} scheme={currentScheme()} />
         <Hand deg={pose.hourDeg} length={HOUR_LEN} color={handColor} />
         <Hand deg={pose.minuteDeg - 90} length={MINUTE_LEN} color={handColor} />
         <View style={[styles.dot, { backgroundColor: tag.red.text, opacity: pose.hands }]} />
