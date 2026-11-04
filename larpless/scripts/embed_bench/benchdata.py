@@ -137,7 +137,7 @@ THRESHOLDS = (0.0, 0.05, 0.1, 0.15, 0.2, 0.3, 0.5, 0.6, 0.7, 0.8, 0.9)
 
 
 def coverage_curve(preds: list[tuple[str | None, float]], items: list[dict], indent: str = "  ") -> None:
-    print(f"{indent}abstain threshold -> coverage / accuracy of answered (rest would go to Ollama):")
+    print(f"{indent}abstain threshold -> coverage / accuracy of answered (rest would be unknown):")
     for tau in THRESHOLDS:
         kept = [(p, it) for (p, c), it in zip(preds, items) if p is not None and c >= tau]
         acc = sum(hit(p, it) for p, it in kept) / len(kept) if kept else 0.0
