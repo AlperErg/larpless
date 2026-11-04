@@ -125,6 +125,6 @@ export interface Settings {
   friendsEnabled: boolean;
   /** "Use your own server": a Supabase project URL. Empty (with the key) uses the LarpLess server. */
   supabaseUrl: string;
-  /** "Use your own server": that project's anon key. Empty (with the URL) uses the LarpLess server. */
-  supabaseAnonKey: string;
+  /** "Use your own server": that project's publishable key (or a legacy anon key). Empty (with the URL) uses the LarpLess server. */
+  supabaseKey: string;
 }

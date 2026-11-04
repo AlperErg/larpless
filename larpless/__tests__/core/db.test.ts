@@ -129,20 +129,33 @@ describe('db', () => {
       await kv.setItem(KEYS.settings, JSON.stringify({ classifierMode: old }));
       expect((await db.loadSettings()).classifierMode).toBe('vlm');
     }
-    await kv.setItem(KEYS.settings, JSON.stringify({ appearance: 'neon', supabaseUrl: 12, supabaseAnonKey: { k: 1 } }));
+    await kv.setItem(KEYS.settings, JSON.stringify({ appearance: 'neon', supabaseUrl: 12, supabaseKey: { k: 1 } }));
     expect((await db.loadSettings()).appearance).toBe('system');
     expect((await db.loadSettings()).supabaseUrl).toBe('');
-    expect((await db.loadSettings()).supabaseAnonKey).toBe('');
+    expect((await db.loadSettings()).supabaseKey).toBe('');
     await kv.setItem(KEYS.modules, '"oops"');
     expect(await db.loadModules()).toEqual([]);
   });
 
   it('Friends is off by default; older saves with their own server keep it on', () => {
     expect(cleanSettings({}).friendsEnabled).toBe(false);
-    expect(cleanSettings({ supabaseUrl: 'https://own.supabase.co', supabaseAnonKey: 'k' }).friendsEnabled).toBe(true);
+    expect(cleanSettings({ supabaseUrl: 'https://own.supabase.co', supabaseKey: 'k' }).friendsEnabled).toBe(true);
     expect(cleanSettings({ supabaseUrl: 'https://own.supabase.co' }).friendsEnabled).toBe(false);
-    expect(cleanSettings({ supabaseUrl: 'https://own.supabase.co', supabaseAnonKey: 'k', friendsEnabled: false }).friendsEnabled).toBe(false);
+    expect(cleanSettings({ supabaseUrl: 'https://own.supabase.co', supabaseKey: 'k', friendsEnabled: false }).friendsEnabled).toBe(false);
     expect(cleanSettings({ friendsEnabled: 'yes' }).friendsEnabled).toBe(false);
+  });
+
+  it('carries a key saved as supabaseAnonKey over, and never keeps a secret key', () => {
+    expect(cleanSettings({ supabaseUrl: 'https://own.supabase.co', supabaseAnonKey: 'legacy-anon' })).toMatchObject({
+      supabaseKey: 'legacy-anon',
+      friendsEnabled: true,
+    });
+    expect(cleanSettings({ supabaseKey: 'sb_publishable_new', supabaseAnonKey: 'legacy-anon' }).supabaseKey).toBe('sb_publishable_new');
+    expect('supabaseAnonKey' in cleanSettings({ supabaseAnonKey: 'legacy-anon' })).toBe(false);
+    expect(cleanSettings({ supabaseUrl: 'https://own.supabase.co', supabaseKey: 'sb_secret_x' })).toMatchObject({
+      supabaseKey: '',
+      friendsEnabled: false,
+    });
   });
 
   it('persists only Chunk fields (no window titles or image data sneak in)', async () => {

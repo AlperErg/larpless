@@ -215,15 +215,28 @@ describe('Settings page', () => {
     act(() => r.unmount());
   });
 
-  it('saves the Supabase URL and anon key together', async () => {
+  it('saves the Supabase URL and publishable key together', async () => {
     const r = render();
 
     await type(r, 'settings-supabase-url', ' https://example.supabase.co ', 'onBlur');
-    expect(settings()).toMatchObject({ supabaseUrl: 'https://example.supabase.co', supabaseAnonKey: '' });
+    expect(settings()).toMatchObject({ supabaseUrl: 'https://example.supabase.co', supabaseKey: '' });
 
     await type(r, 'settings-supabase-key', ' anon-key ', 'onBlur');
-    expect(settings()).toMatchObject({ supabaseUrl: 'https://example.supabase.co', supabaseAnonKey: 'anon-key' });
-    expect(await stored()).toMatchObject({ supabaseUrl: 'https://example.supabase.co', supabaseAnonKey: 'anon-key' });
+    expect(settings()).toMatchObject({ supabaseUrl: 'https://example.supabase.co', supabaseKey: 'anon-key' });
+    expect(await stored()).toMatchObject({ supabaseUrl: 'https://example.supabase.co', supabaseKey: 'anon-key' });
+    act(() => r.unmount());
+  });
+
+  it('refuses a secret key in the publishable key field', async () => {
+    const r = render();
+    await type(r, 'settings-supabase-url', 'https://example.supabase.co', 'onBlur');
+    await type(r, 'settings-supabase-key', 'sb_secret_abc', 'onBlur');
+    expect(settings().supabaseKey).toBe('');
+    expect(textOf(r)).toContain("That's a secret key");
+
+    await type(r, 'settings-supabase-key', 'sb_publishable_abc', 'onBlur');
+    expect(settings().supabaseKey).toBe('sb_publishable_abc');
+    expect(r.root.findAll((n) => n.props.testID === 'settings-supabase-key-error')).toHaveLength(0);
     act(() => r.unmount());
   });
 
@@ -246,7 +259,7 @@ describe('Settings page', () => {
 
   it('uses the hosted server unless "Use your own server" is filled in', async () => {
     const saved = { ...config.HOSTED_SUPABASE };
-    Object.assign(config.HOSTED_SUPABASE, { url: 'https://hosted.supabase.co', anonKey: 'hosted-key' });
+    Object.assign(config.HOSTED_SUPABASE, { url: 'https://hosted.supabase.co', publishableKey: 'hosted-key' });
     try {
       const r = render();
       expect(isOn(r, 'settings-own-server')).toBe(false);
@@ -258,11 +271,11 @@ describe('Settings page', () => {
       await press(byTestID(r, 'settings-own-server'));
       await type(r, 'settings-supabase-url', 'https://own.supabase.co', 'onBlur');
       await type(r, 'settings-supabase-key', 'own-key', 'onBlur');
-      expect(settings()).toMatchObject({ supabaseUrl: 'https://own.supabase.co', supabaseAnonKey: 'own-key' });
+      expect(settings()).toMatchObject({ supabaseUrl: 'https://own.supabase.co', supabaseKey: 'own-key' });
 
       // Switching back clears the own project, so the hosted one applies again.
       await press(byTestID(r, 'settings-own-server'));
-      expect(settings()).toMatchObject({ supabaseUrl: '', supabaseAnonKey: '' });
+      expect(settings()).toMatchObject({ supabaseUrl: '', supabaseKey: '' });
       expect(r.root.findAll((n) => n.props.testID === 'settings-supabase-url')).toHaveLength(0);
       expect(isSupabaseConfigured()).toBe(true);
       act(() => r.unmount());

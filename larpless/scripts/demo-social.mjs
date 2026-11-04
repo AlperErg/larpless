@@ -7,15 +7,20 @@
  *   node scripts/demo-social.mjs request <user>    every demo account sends a friend request to <user>
  *   node scripts/demo-social.mjs status            friends, pending requests and post counts per demo account
  *
- * Needs SUPABASE_URL and SUPABASE_ANON_KEY in the environment (the values entered in Settings → Friends).
+ * Needs SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY in the environment (the project's publishable key,
+ * sb_publishable_…; a legacy SUPABASE_ANON_KEY still works until Supabase retires it). Never a secret key.
  * Refuses to run while "Confirm email" is on, so it never makes Supabase send mail.
  */
 import { createClient } from '@supabase/supabase-js';
 
 const URL_ = process.env.SUPABASE_URL;
-const KEY = process.env.SUPABASE_ANON_KEY;
+const KEY = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY;
 if (!URL_ || !KEY) {
-  console.error('Set SUPABASE_URL and SUPABASE_ANON_KEY first.');
+  console.error('Set SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY first.');
+  process.exit(1);
+}
+if (/^sb_secret_/i.test(KEY)) {
+  console.error('SUPABASE_PUBLISHABLE_KEY is a secret key. Use the publishable key (sb_publishable_…).');
   process.exit(1);
 }
 
