@@ -1,0 +1,48 @@
+name: Feedback from the app
+description: Report a problem, a wrong label or an idea. Opened by "Send feedback" in LarpLess.
+title: "[Feedback]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing LarpLess!
+
+        **This issue is public.** Don't include screenshots of your screen, window titles, your Friends username, or anything else personal. Describe what you were doing instead (for example "reading lecture slides in Preview").
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of feedback is this?
+      options:
+        - Something didn't work
+        - A wrong label (studying counted as distracted, or the other way round)
+        - An idea or request
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what LarpLess did instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How can it be reproduced?
+      description: Optional. The steps, if you know them.
+  - type: input
+    id: version
+    attributes:
+      label: LarpLess version
+      description: Filled in by the app.
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      description: Filled in by the app.
+  - type: input
+    id: mode
+    attributes:
+      label: Screen check mode
+      description: Filled in by the app (Settings → Local AI → Screen check).

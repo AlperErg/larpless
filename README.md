@@ -264,6 +264,7 @@ Friends is **off by default**: until you turn it on in **Settings → Friends** 
 2. **Create the tables.** Open **SQL Editor** in the project's sidebar, paste the whole of [`larpless/supabase/schema.sql`](larpless/supabase/schema.sql) into a new query and click **Run**. It creates the profiles, friendships and posts tables with their row-level security policies. It is safe to re-run; run it again whenever it changes (for example, **Settings → Account → Delete account** needs its `delete_account` function).
 3. **Turn off email confirmation.** Go to **Authentication → Sign In / Providers → Email** and switch off **Confirm email**, then save. Accounts use a username + password with a placeholder address that can't receive mail, so a confirmation email would never arrive. You can also sign in with the email of an account made outside the app.
    On the same page, set **Minimum password length** to **8** and **Password requirements** to **Lowercase, uppercase letters, digits and symbols**, the rules the app checks before signing up. A stricter server policy still applies; the app shows the server's message.
+   Then open **Authentication → Rate Limits** and lower the limit for sign-ups and sign-ins per IP address (for example to 10 per 5 minutes). There's no CAPTCHA yet, so this and the schema's limits (below) are what keep bots out.
 4. **Copy the URL and key.** Open **Project Settings → API Keys**, select the **Publishable and secret API keys** tab (choose **Create new API keys** if it offers that) and copy the **publishable** key, which starts with `sb_publishable_`. Supabase is retiring the legacy **anon** key by the end of 2026; the app still accepts one until then. The project URL is `https://<project-ref>.supabase.co`, where `<project-ref>` is the ID in the dashboard's address bar (`supabase.com/dashboard/project/<project-ref>`). Use the bare URL, not the `/rest/v1/` path. Never use a **secret** key (`sb_secret_…`) or the legacy **service_role** key: they bypass row-level security, so the app refuses them.
 5. **Connect the app.** In LarpLess, open **Settings → Friends**, turn on **Friends** and **Use your own server**, and paste the URL into **Project URL** and the key into **Publishable key**. They are saved with the rest of the settings, so they survive rebuilds and relaunches. Turning **Use your own server** off clears them and goes back to the LarpLess server; turning **Friends** off goes back to fully local.
 6. **Create an account.** Click **Friends** in the sidebar, choose **Create an account** and pick a username (3–20 letters, digits or underscores; it is saved in lowercase) and a password (8 or more characters, with a lowercase and an uppercase letter, a digit and a symbol).
@@ -351,6 +352,8 @@ cd site && npm install && npm run dev
 - `node scripts/demo-social.mjs seed`: creates demo accounts with friendships and sample posts. Also `accept`, `request <user>` and `status`.
 
 ## Privacy
+
+The [Privacy Policy](PRIVACY.md) and the [Terms of Use](TERMS.md) cover the app and the Friends service in full. In brief:
 
 - Screen and webcam frames stay in memory only. They never go to disk, AsyncStorage, temp files, logs, or the network (except local Ollama).
 - Snapshots, base64 strings, pixel buffers and `CGImage`s are never logged. Logs carry sizes and timings only.

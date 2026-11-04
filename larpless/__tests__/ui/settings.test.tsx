@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Linking } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import { config, DEFAULT_SETTINGS } from '../../src/config';
@@ -10,6 +11,7 @@ import { useSocialStore } from '../../src/store/socialStore';
 import { mockNowPlaying } from '../../src/native/mock/nowPlaying';
 import { isSupabaseConfigured, setSupabaseCredentials } from '../../src/social/supabase';
 import { SettingsPage } from '../../src/ui/pages/SettingsPage';
+import { APP_VERSION, PRIVACY_URL, TERMS_URL } from '../../src/ui/lib/links';
 
 function render(): ReactTestRenderer {
   let r: ReactTestRenderer;
@@ -282,6 +284,25 @@ describe('Settings page', () => {
     expect(r.root.findAll((n) => n.props.testID === 'settings-supabase-url')).toHaveLength(0);
     expect(isSupabaseConfigured()).toBe(true);
     act(() => r.unmount());
+  });
+
+  it('About shows the version and opens feedback, the privacy policy and the terms', async () => {
+    const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+    try {
+      const r = render();
+      expect(textOf(byID(r, 'settings-version'))).toBe(APP_VERSION);
+      await press(byTestID(r, 'settings-feedback'));
+      await press(byTestID(r, 'settings-privacy'));
+      await press(byTestID(r, 'settings-terms'));
+      expect(openURL.mock.calls.map((c) => c[0] as string)).toEqual([
+        expect.stringContaining(`/issues/new?template=feedback.yml&version=${APP_VERSION}`),
+        PRIVACY_URL,
+        TERMS_URL,
+      ]);
+      act(() => r.unmount());
+    } finally {
+      openURL.mockRestore();
+    }
   });
 
   it('follows settings changed elsewhere, e.g. loaded after the page opened', () => {

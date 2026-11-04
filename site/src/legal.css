@@ -1,0 +1,135 @@
+/* The Privacy Policy and Terms of Use pages, rendered at build time from PRIVACY.md and TERMS.md. */
+
+.legal {
+  padding-top: 40px;
+  padding-bottom: 72px;
+}
+
+.nav-link[aria-current="page"] {
+  color: var(--ink);
+}
+
+.doc {
+  max-width: 44rem;
+  margin: 0 auto;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+.doc h1 {
+  margin: 0 0 8px;
+  color: var(--ink);
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: clamp(40px, 7vw, 60px);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+
+.doc h2 {
+  margin: 48px 0 12px;
+  color: var(--ink);
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 30px;
+  line-height: 1.15;
+}
+
+.doc h3 {
+  margin: 32px 0 8px;
+  color: var(--ink);
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.doc h2,
+.doc h3 {
+  scroll-margin-top: calc(var(--header) + 20px);
+}
+
+.doc p,
+.doc ul,
+.doc ol {
+  margin: 0 0 14px;
+}
+
+.doc ul,
+.doc ol {
+  padding-left: 22px;
+}
+
+.doc li {
+  margin: 4px 0;
+}
+
+.doc strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.doc a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--faint);
+  text-underline-offset: 3px;
+}
+
+.doc a:hover {
+  text-decoration-color: var(--ink);
+}
+
+.doc code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--code);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1px 5px;
+}
+
+/* Wide tables scroll inside their own box, so the page never scrolls sideways on a phone. */
+.doc .table-wrap {
+  margin: 0 0 18px;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.doc table {
+  width: 100%;
+  min-width: 34rem;
+  border-collapse: collapse;
+  font-size: 14.5px;
+  line-height: 1.5;
+}
+
+.doc th,
+.doc td {
+  padding: 10px 14px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--line);
+}
+
+.doc tr:last-child td {
+  border-bottom: 0;
+}
+
+.doc th {
+  color: var(--ink);
+  font-weight: 600;
+  background: var(--hover);
+}
+
+@media (max-width: 560px) {
+  .legal {
+    padding-top: 24px;
+  }
+
+  .doc h2 {
+    font-size: 26px;
+    margin-top: 40px;
+  }
+}

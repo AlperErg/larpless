@@ -10,6 +10,7 @@ import { Button, Callout, Text } from '../components';
 import { TextField } from '../components/TextField';
 import { Page } from '../layout/Page';
 import { errorText } from '../lib/social';
+import { openLink, PRIVACY_URL, TERMS_URL } from '../lib/links';
 import { colors, motion, space, tag, themed } from '../theme';
 import { DEVICE } from '../platform';
 
@@ -74,6 +75,7 @@ function FriendsUnavailable() {
           }}
           style={styles.submit}
         />
+        <Button testID="friends-privacy" title="Read the Privacy Policy" variant="ghost" onPress={() => openLink(PRIVACY_URL)} style={styles.link} />
       </Page>
     );
   }
@@ -180,6 +182,14 @@ export function SignupPage({ onSignIn }: { onSignIn: () => void }) {
           Friends add you by your username. It's 3–20 letters, numbers or underscores. Passwords need 8 or more characters,
           with a lowercase and an uppercase letter, a digit and a symbol.
         </Text>
+        <Text variant="small" style={styles.hint}>
+          By creating an account, you agree to the Terms of Use and confirm you're 16 or older. The Privacy Policy explains what
+          the Friends server stores.
+        </Text>
+        <View style={styles.switchRow}>
+          <Button testID="signup-terms" title="Terms of Use" variant="ghost" onPress={() => openLink(TERMS_URL)} />
+          <Button testID="signup-privacy" title="Privacy Policy" variant="ghost" onPress={() => openLink(PRIVACY_URL)} />
+        </View>
         <View style={styles.switchRow}>
           <Text variant="small">Already have an account?</Text>
           <Button testID="signup-signin" title="Sign in" variant="ghost" onPress={onSignIn} />
@@ -244,6 +254,7 @@ function ErrorLine({ testID, text }: { testID: string; text: string }) {
 const styles = themed(() => StyleSheet.create({
   fill: { flex: 1 },
   notice: { marginTop: space.lg, maxWidth: 520 },
+  link: { marginTop: space.sm, alignSelf: 'flex-start' },
   card: {
     marginTop: space.xl,
     maxWidth: 360,

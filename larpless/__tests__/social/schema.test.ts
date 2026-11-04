@@ -105,8 +105,15 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
-  await db.exec('delete from public.posts; delete from public.friendships;');
+  await db.exec('delete from public.posts; delete from public.friendships; delete from public.rate_events;');
 });
+
+const usernamesVisibleTo = async (who: Who) =>
+  (await as<{ username: string }>(who, 'select username from public.profiles order by username')).rows.map((r) => r.username);
+
+/** The add-friend lookup as the app calls it: find_profile() by exact username. */
+const findProfile = async (who: Who, username: string) =>
+  (await as<{ username: string }>(who, 'select username from public.find_profile($1)', [username])).rows.map((r) => r.username);
 
 describe('profiles', () => {
   it('sign-up creates a profile with the lowercased username', async () => {
@@ -118,10 +125,21 @@ describe('profiles', () => {
     await expect(signUp('no spaces!')).rejects.toMatchObject({ code: '23514' });
   });
 
-  it('signed-in users can look anyone up by username; anonymous callers see nothing', async () => {
-    const names = (await as<{ username: string }>('carol', 'select username from public.profiles order by username')).rows;
-    expect(names.map((r) => r.username)).toEqual(['alice', 'bob', 'carol']);
+  it('nobody can list every username (#6): you see yourself and people you have a request or friendship with', async () => {
+    expect(await usernamesVisibleTo('carol')).toEqual(['carol']);
+    await seedFriendship('alice', 'carol', 'pending');
+    expect(await usernamesVisibleTo('carol')).toEqual(['alice', 'carol']);
+    expect(await usernamesVisibleTo('alice')).toEqual(['alice', 'carol']);
+    expect(await usernamesVisibleTo('bob')).toEqual(['bob']);
     expect((await as('anon', 'select * from public.profiles')).rows).toEqual([]);
+  });
+
+  it('find_profile() finds one person by their exact username, case and spaces aside, and nothing else', async () => {
+    expect(await findProfile('carol', 'bob')).toEqual(['bob']);
+    expect(await findProfile('carol', '  BOB ')).toEqual(['bob']);
+    expect(await findProfile('carol', 'bo')).toEqual([]);
+    expect(await findProfile('carol', '%')).toEqual([]);
+    await expect(as('anon', "select * from public.find_profile('bob')")).rejects.toMatchObject({ code: '42501' });
   });
 
   it('nobody can create or edit profiles through the API', async () => {
@@ -358,5 +376,88 @@ describe('posts', () => {
       'total_s',
       'user_id',
     ]);
+  });
+});
+
+describe('rate limits (#7)', () => {
+  const rateError = (kind: string) => expect.objectContaining({ message: expect.stringContaining(`rate_limit:${kind}`) });
+
+  async function logEvents(who: User, kind: string, count: number, minutesAgo = 0) {
+    await db.query(
+      `insert into public.rate_events (user_id, kind, at) select $1, $2, now() - make_interval(mins => $3) from generate_series(1, $4)`,
+      [ids[who], kind, minutesAgo, count],
+    );
+  }
+
+  it('allows 20 friend requests an hour, and counts a cancelled request', async () => {
+    await logEvents('alice', 'friend_request', 18);
+    await insertAs('alice', 'friendships', { requester_id: ids.alice, addressee_id: ids.bob });
+    await as('alice', 'delete from public.friendships where requester_id = $1', [ids.alice]);
+    await insertAs('alice', 'friendships', { requester_id: ids.alice, addressee_id: ids.bob });
+    await as('alice', 'delete from public.friendships where requester_id = $1', [ids.alice]);
+    await expect(insertAs('alice', 'friendships', { requester_id: ids.alice, addressee_id: ids.bob })).rejects.toEqual(rateError('friend_request'));
+    // Only alice is limited.
+    await insertAs('bob', 'friendships', { requester_id: ids.bob, addressee_id: ids.carol });
+  });
+
+  it('allows 50 friend requests a day', async () => {
+    await logEvents('alice', 'friend_request', 50, 120);
+    await expect(insertAs('alice', 'friendships', { requester_id: ids.alice, addressee_id: ids.bob })).rejects.toEqual(rateError('friend_request'));
+  });
+
+  it('forgets events older than a day', async () => {
+    await logEvents('alice', 'friend_request', 50, 25 * 60);
+    await insertAs('alice', 'friendships', { requester_id: ids.alice, addressee_id: ids.bob });
+    const left = await db.query<{ n: number }>('select count(*)::int as n from public.rate_events where user_id = $1', [ids.alice]);
+    expect(left.rows).toEqual([{ n: 1 }]);
+  });
+
+  it('allows 10 posts an hour and 30 a day', async () => {
+    await logEvents('alice', 'post', 9);
+    await insertAs('alice', 'posts', postRow('alice', 'sess_a'));
+    await expect(insertAs('alice', 'posts', postRow('alice', 'sess_b'))).rejects.toEqual(rateError('post'));
+    await logEvents('bob', 'post', 30, 120);
+    await expect(insertAs('bob', 'posts', postRow('bob', 'sess_c'))).rejects.toEqual(rateError('post'));
+  });
+
+  it('a rejected post does not count (the event rolls back with it)', async () => {
+    await insertAs('alice', 'posts', postRow('alice', 'sess_dup'));
+    await expect(insertAs('alice', 'posts', postRow('alice', 'sess_dup'))).rejects.toMatchObject({ code: '23505' });
+    const n = await db.query<{ n: number }>("select count(*)::int as n from public.rate_events where kind = 'post'");
+    expect(n.rows).toEqual([{ n: 1 }]);
+  });
+
+  it('allows 30 username lookups an hour, so usernames cannot be guessed in bulk', async () => {
+    await logEvents('carol', 'lookup', 29);
+    expect(await findProfile('carol', 'bob')).toEqual(['bob']);
+    await expect(findProfile('carol', 'alice')).rejects.toEqual(rateError('lookup'));
+  });
+
+  it('the log is private, and the dashboard or service role is never limited', async () => {
+    await logEvents('alice', 'friend_request', 50);
+    expect((await as('alice', 'select * from public.rate_events').catch((e: { code: string }) => e.code))).toBe('42501');
+    await expect(insertAs('alice', 'rate_events', { user_id: ids.alice, kind: 'post' })).rejects.toMatchObject({ code: '42501' });
+    await expect(as('alice', 'select public.check_rate($1, 1, 1)', ['post'])).rejects.toMatchObject({ code: '42501' });
+    await seedFriendship('alice', 'bob', 'pending');
+  });
+});
+
+describe('sign-up cap (#14, until there is a CAPTCHA)', () => {
+  it('refuses new accounts once 100 were created in the last hour', async () => {
+    const recent = await db.query<{ n: number }>("select count(*)::int as n from public.profiles where created_at > now() - interval '1 hour'");
+    const fill = 100 - recent.rows[0].n;
+    await db.query(
+      "insert into auth.users (raw_user_meta_data) select jsonb_build_object('username', 'bulk_' || g) from generate_series(1, $1) g",
+      [fill],
+    );
+    try {
+      await expect(signUp('one_too_many')).rejects.toMatchObject({ message: expect.stringContaining('signup_limit') });
+      // An hour later the window has moved on.
+      await db.query("update public.profiles set created_at = now() - interval '2 hours' where starts_with(username, 'bulk_')");
+      const id = await signUp('next_hour');
+      await db.query('delete from auth.users where id = $1', [id]);
+    } finally {
+      await db.query("delete from auth.users where starts_with(raw_user_meta_data ->> 'username', 'bulk_')");
+    }
   });
 });

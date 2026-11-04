@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 
-/// Target for the "Session" menu items and Acknowledgements; forwards to JS as `FLMenuCommand`.
+/// Target for the "Session" menu items, Acknowledgements and the Help items; forwards to JS as `FLMenuCommand`.
 final class FLShellMenuTarget: NSObject {
   static let shared = FLShellMenuTarget()
 
@@ -22,6 +22,12 @@ enum FLShellMenu {
   ]
 
   static let acknowledgementsTag = 0x464C_4143   // "FLAC"
+  static let helpTag = 0x464C_4850   // "FLHP"
+  static let helpItems: [(title: String, command: String)] = [
+    ("Send Feedback…", "feedback"),
+    ("Privacy Policy", "privacyPolicy"),
+    ("Terms of Use", "termsOfUse"),
+  ]
 
   /// Inserts a "Session" menu before Window (or Help), and Acknowledgements under About LarpLess.
   /// Idempotent across bridge reloads.
@@ -32,6 +38,7 @@ enum FLShellMenu {
       return
     }
     installAcknowledgements(in: main)
+    installHelp(in: main)
     if main.items.contains(where: { $0.tag == tag }) { return }
     let menu = NSMenu(title: "Session")
     for item in items {
@@ -49,6 +56,33 @@ enum FLShellMenu {
       ?? main.items.count
     main.insertItem(top, at: index)
     flShellLog("[FLAppShell] Session menu installed at index \(index)")
+  }
+
+  /// Help → Send Feedback…, Privacy Policy and Terms of Use. They replace the template's "LarpLess Help",
+  /// which opens an empty Help Book. The links live in JS (`ui/lib/links.ts`), so each item sends a command.
+  private static func installHelp(in main: NSMenu) {
+    let help: NSMenu
+    if let existing = NSApp.helpMenu ?? main.items.first(where: { $0.submenu?.title == "Help" })?.submenu {
+      help = existing
+    } else {
+      help = NSMenu(title: "Help")
+      let top = NSMenuItem(title: "Help", action: nil, keyEquivalent: "")
+      top.submenu = help
+      main.addItem(top)
+      NSApp.helpMenu = help
+    }
+    if help.items.contains(where: { $0.tag == helpTag }) { return }
+    for item in help.items where item.action == #selector(NSApplication.showHelp(_:)) {
+      help.removeItem(item)
+    }
+    for (index, entry) in helpItems.enumerated() {
+      let mi = NSMenuItem(title: entry.title, action: #selector(FLShellMenuTarget.fire(_:)), keyEquivalent: "")
+      mi.target = FLShellMenuTarget.shared
+      mi.representedObject = entry.command
+      mi.tag = helpTag
+      help.insertItem(mi, at: index)
+    }
+    flShellLog("[FLAppShell] Help menu items installed")
   }
 
   /// The open-source notices page lives in JS, so the item sends a menu command like the Session items.

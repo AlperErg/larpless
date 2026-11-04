@@ -68,6 +68,21 @@ const MISSING_FUNCTION = 'PGRST202';
 
 export class SocialError extends Error {}
 
+/** Limits enforced by supabase/schema.sql (check_rate, handle_new_user), worded for people. */
+const LIMIT_MESSAGES: Record<string, string> = {
+  'rate_limit:friend_request': "You've sent a lot of friend requests. Try again in an hour.",
+  'rate_limit:lookup': "You've looked up a lot of usernames. Try again in an hour.",
+  'rate_limit:post': "You've posted a lot of sessions. Try again later.",
+};
+
+/** A server error as a SocialError, with the database's limits explained. */
+function serverError(error: { message: string }): SocialError {
+  for (const [key, text] of Object.entries(LIMIT_MESSAGES)) {
+    if (error.message.includes(key)) return new SocialError(text);
+  }
+  return new SocialError(error.message);
+}
+
 export function normalizeUsername(raw: string): string {
   return raw.trim().replace(/^@/, '').toLowerCase();
 }
@@ -106,6 +121,10 @@ export async function signUp(client: SupabaseClient, rawUsername: string, passwo
     // The server's policy is the one that counts (a self-hosted project may set a stricter one).
     if ((error as { code?: string }).code === 'weak_password' || /weak|password should/i.test(error.message)) {
       throw new SocialError(`That password is too weak for this server. ${error.message}`);
+    }
+    // A failed profile insert (handle_new_user), which in practice is the hourly sign-up cap.
+    if (/database error saving new user|signup_limit/i.test(error.message)) {
+      throw new SocialError("Couldn't create the account right now. Try again in an hour.");
     }
     throw new SocialError(error.message);
   }
@@ -200,8 +219,13 @@ export async function sendFriendRequest(
 ): Promise<'sent' | 'accepted'> {
   const username = normalizeUsername(rawUsername);
   if (!username) throw new SocialError('Enter a username.');
-  const { data: target, error: findError } = await client.from('profiles').select('id, username').eq('username', username).maybeSingle();
-  if (findError) throw new SocialError(findError.message);
+  // Profiles of strangers aren't readable (#6); find_profile() matches one exact username.
+  const { data: found, error: findError } = await client.rpc('find_profile', { p_username: username });
+  if (findError) {
+    if (findError.code === MISSING_FUNCTION) throw new SocialError("This Supabase project can't look up usernames yet. Run the latest supabase/schema.sql.");
+    throw serverError(findError);
+  }
+  const target = (Array.isArray(found) ? found[0] : null) as Profile | null | undefined;
   if (!target) throw new SocialError(`No one is called @${username}.`);
   if (target.id === myId) throw new SocialError("That's you.");
 
@@ -221,7 +245,7 @@ export async function sendFriendRequest(
   const { error } = await client.from('friendships').insert({ requester_id: myId, addressee_id: target.id });
   if (error) {
     if (error.code === UNIQUE_VIOLATION) throw new SocialError(`Request to @${username} is already pending.`);
-    throw new SocialError(error.message);
+    throw serverError(error);
   }
   return 'sent';
 }
@@ -273,7 +297,7 @@ export function postPayload(myId: string, input: PublishInput) {
 /** Posting the same session twice counts as success. */
 export async function publishSession(client: SupabaseClient, myId: string, input: PublishInput): Promise<void> {
   const { error } = await client.from('posts').insert(postPayload(myId, input));
-  if (error && error.code !== UNIQUE_VIOLATION) throw new SocialError(error.message);
+  if (error && error.code !== UNIQUE_VIOLATION) throw serverError(error);
 }
 
 /** Keeps only well-formed entries, so one friend's bad post can't break the feed. */

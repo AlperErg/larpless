@@ -16,6 +16,7 @@ import { useSessionStore } from '../../store/sessionStore';
 import { useSocialStore } from '../../store/socialStore';
 import { Icon } from '../components/Icon';
 import type { IconName } from '../components/Icon';
+import { openFeedback, openLink, PRIVACY_URL, TERMS_URL } from '../lib/links';
 import { MacPressable, MacTextInput, MacView, handledKeys } from '../components/mac';
 import type { MacKeyEvent } from '../components/mac';
 import { native } from '../../native';
@@ -24,7 +25,7 @@ import { colors, fonts, radius, space, themed } from '../theme';
 
 export interface PaletteCommand {
   id: string;
-  group: 'Session' | 'Navigate' | 'Account' | 'Settings';
+  group: 'Session' | 'Navigate' | 'Account' | 'Settings' | 'Help';
   icon: IconName;
   title: string;
   hint?: string;
@@ -90,6 +91,7 @@ export function buildCommands(ctx: {
   if (ctx.hasSummary) out.push({ id: 'go-summary', group: 'Navigate', icon: 'flag', title: 'Go to last summary', run: () => nav.go('summary') });
   if (ctx.devTools) out.push({ id: 'go-dev', group: 'Navigate', icon: 'wrench', title: 'Go to Dev tools', run: () => nav.go('dev') });
 
+
   if (ctx.auth === 'signedOut') {
     out.push({ id: 'sign-in', group: 'Account', icon: 'key', title: 'Sign in', run: () => nav.go('feed', { auth: 'signIn' }) });
     out.push({
@@ -141,6 +143,9 @@ export function buildCommands(ctx: {
         .catch(() => {});
     },
   });
+  out.push({ id: 'feedback', group: 'Help', icon: 'megaphone', title: 'Send feedback', hint: 'GitHub', run: openFeedback });
+  out.push({ id: 'privacy', group: 'Help', icon: 'shield', title: 'Privacy Policy', run: () => openLink(PRIVACY_URL) });
+  out.push({ id: 'terms', group: 'Help', icon: 'scale', title: 'Terms of Use', run: () => openLink(TERMS_URL) });
   return out;
 }
 

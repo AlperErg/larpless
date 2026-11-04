@@ -35,6 +35,7 @@ import { SessionPage } from './ui/pages/SessionPage';
 import { SettingsPage } from './ui/pages/SettingsPage';
 import { SummaryPage } from './ui/pages/SummaryPage';
 import { applyScheme, colors, themed } from './ui/theme';
+import { openFeedback, openLink, PRIVACY_URL, TERMS_URL } from './ui/lib/links';
 
 function renderPage(route: Route) {
   switch (route) {
@@ -128,6 +129,9 @@ function useMenuCommands(): void {
           native.appShell.bringToFront();
           useNavStore.getState().go('acknowledgements');
         }
+        else if (c === 'feedback') openFeedback();
+        else if (c === 'privacyPolicy') openLink(PRIVACY_URL);
+        else if (c === 'termsOfUse') openLink(TERMS_URL);
       }),
     [],
   );

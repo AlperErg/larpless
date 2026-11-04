@@ -57,6 +57,8 @@ describe('accounts', () => {
       error: { message: 'Password should be at least 12 characters.', code: 'weak_password' } as never,
     });
     await expect(api.signUp(f.client, 'ada_l', 'Secret-12')).rejects.toThrow(/too weak for this server\. Password should be at least 12/);
+    f.auth.signUp.mockResolvedValueOnce({ data: { session: null } as never, error: { message: 'Database error saving new user' } });
+    await expect(api.signUp(f.client, 'ada_l', 'Secret-12')).rejects.toThrow(/Try again in an hour/);
   });
 
   it('signUp sends the username as metadata on the fake email', async () => {
@@ -137,15 +139,15 @@ describe('accounts', () => {
 
 describe('friend requests', () => {
   it('rejects unknown users and yourself', async () => {
-    const f = fakeSupabase({ profiles: [{ data: null }, { data: { id: ME, username: 'me' } }] });
+    const f = fakeSupabase({ 'rpc:find_profile': [{ data: [] }, { data: [{ id: ME, username: 'me' }] }] });
     await expect(api.sendFriendRequest(f.client, ME, 'ghost')).rejects.toThrow('No one is called @ghost.');
     await expect(api.sendFriendRequest(f.client, ME, 'me')).rejects.toThrow("That's you.");
   });
 
   it('rejects existing friends and duplicate requests', async () => {
-    const target = { data: { id: THEM, username: 'them' } };
+    const target = { data: [{ id: THEM, username: 'them' }] };
     const f = fakeSupabase({
-      profiles: [target, target],
+      'rpc:find_profile': [target, target],
       friendships: [
         { data: { id: 'f1', status: 'accepted', requester_id: THEM } },
         { data: { id: 'f1', status: 'pending', requester_id: ME } },
@@ -157,7 +159,7 @@ describe('friend requests', () => {
 
   it('accepts their request instead of sending a second one', async () => {
     const f = fakeSupabase({
-      profiles: [{ data: { id: THEM, username: 'them' } }],
+      'rpc:find_profile': [{ data: [{ id: THEM, username: 'them' }] }],
       friendships: [{ data: { id: 'f1', status: 'pending', requester_id: THEM } }, {}],
     });
     await expect(api.sendFriendRequest(f.client, ME, '@Them')).resolves.toBe('accepted');
@@ -168,10 +170,26 @@ describe('friend requests', () => {
   });
 
   it('inserts a pending request', async () => {
-    const f = fakeSupabase({ profiles: [{ data: { id: THEM, username: 'them' } }], friendships: [{ data: null }, {}] });
+    const f = fakeSupabase({ 'rpc:find_profile': [{ data: [{ id: THEM, username: 'them' }] }], friendships: [{ data: null }, {}] });
     await expect(api.sendFriendRequest(f.client, ME, 'them')).resolves.toBe('sent');
-    expect(f.opsFor('profiles')).toContainEqual(['eq', ['username', 'them']]);
+    // Looked up by exact username through find_profile(), never by reading the profiles table (#6).
+    expect(f.rpc).toHaveBeenCalledWith('find_profile', { p_username: 'them' });
+    expect(f.calls.some((c) => c.table === 'profiles')).toBe(false);
     expect(f.opsFor('friendships', 1)).toEqual([['insert', [{ requester_id: ME, addressee_id: THEM }]]]);
+  });
+
+  it('explains the database limits and an out-of-date schema', async () => {
+    const f = fakeSupabase({
+      'rpc:find_profile': [
+        { error: { message: 'Could not find the function', code: 'PGRST202' } },
+        { error: { message: 'rate_limit:lookup', code: 'P0001' } },
+        { data: [{ id: THEM, username: 'them' }] },
+      ],
+      friendships: [{ data: null }, { error: { message: 'rate_limit:friend_request', code: 'P0001' } }],
+    });
+    await expect(api.sendFriendRequest(f.client, ME, 'them')).rejects.toThrow(/Run the latest supabase\/schema\.sql/);
+    await expect(api.sendFriendRequest(f.client, ME, 'them')).rejects.toThrow(/looked up a lot of usernames/);
+    await expect(api.sendFriendRequest(f.client, ME, 'them')).rejects.toThrow(/sent a lot of friend requests/);
   });
 
   it('splits friendships into friends, incoming and outgoing', () => {
@@ -206,10 +224,13 @@ describe('posts', () => {
   });
 
   it('posting the same session twice is fine, other errors throw', async () => {
-    const f = fakeSupabase({ posts: [{ error: { message: 'dup', code: '23505' } }, { error: { message: 'boom' } }] });
+    const f = fakeSupabase({
+      posts: [{ error: { message: 'dup', code: '23505' } }, { error: { message: 'boom' } }, { error: { message: 'rate_limit:post', code: 'P0001' } }],
+    });
     const input = { summary, breakdown, focusPct: 80, streak: 1, caption: '' };
     await expect(api.publishSession(f.client, ME, input)).resolves.toBeUndefined();
     await expect(api.publishSession(f.client, ME, input)).rejects.toThrow('boom');
+    await expect(api.publishSession(f.client, ME, input)).rejects.toThrow(/posted a lot of sessions/);
   });
 
   it('maps feed rows', async () => {

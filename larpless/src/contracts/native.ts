@@ -104,7 +104,8 @@ export interface NowPlayingApi {
 
 /* ---------- FLAppShell (WS-B) ---------- */
 /** 'acknowledgements' is macOS only: LarpLess → Acknowledgements, under About LarpLess. */
-export type MenuCommand = 'commandPalette' | 'startSession' | 'endSession' | 'acknowledgements';
+/** 'feedback', 'privacyPolicy' and 'termsOfUse' come from the Help menu (macOS only). */
+export type MenuCommand = 'commandPalette' | 'startSession' | 'endSession' | 'acknowledgements' | 'feedback' | 'privacyPolicy' | 'termsOfUse';
 /**
  * What onboarding needs to recommend a screen reader (core/hardware.ts). Read locally when asked; never stored,
  * logged or sent anywhere.

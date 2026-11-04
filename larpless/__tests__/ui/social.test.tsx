@@ -1,3 +1,4 @@
+import { Linking } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import type { BreakdownEntry, SessionSummary } from '../../src/contracts/domain';
@@ -11,6 +12,7 @@ import type { SocialStore } from '../../src/store/socialStore';
 import { SharePanel } from '../../src/ui/components/SharePanel';
 import { buildCommands } from '../../src/ui/layout/CommandPalette';
 import { FriendsPage } from '../../src/ui/pages/FriendsPage';
+import { PRIVACY_URL, TERMS_URL } from '../../src/ui/lib/links';
 
 function textOf(r: ReactTestRenderer): string {
   const out: string[] = [];
@@ -122,6 +124,10 @@ describe('FriendsPage', () => {
       expect(textOf(r)).toContain('Friends is off');
       await act(async () => byTestID(r, 'friends-enable').props.onPress());
       expect(updateSettings).toHaveBeenCalledWith({ friendsEnabled: true });
+      const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+      await act(async () => byTestID(r, 'friends-privacy').props.onPress());
+      expect(openURL).toHaveBeenCalledWith(PRIVACY_URL);
+      openURL.mockRestore();
     } finally {
       act(() => useAppStore.setState(app, true));
     }
@@ -159,6 +165,21 @@ describe('FriendsPage', () => {
     await act(async () => byTestID(r, 'signup-confirm', 'onChangeText').props.onChangeText('secret1'));
     await act(async () => byTestID(r, 'signup-submit').props.onPress());
     expect(signUp).toHaveBeenCalledWith('ada_l', 'secret1');
+  });
+
+  it('sign-up states the terms and age, and links the terms and privacy policy', async () => {
+    act(() => useSocialStore.setState({ status: 'signedOut' }));
+    const r = await render(<FriendsPage />);
+    await act(async () => byTestID(r, 'login-create').props.onPress());
+    expect(textOf(r)).toContain("By creating an account, you agree to the Terms of Use and confirm you're 16 or older.");
+    const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+    try {
+      await act(async () => byTestID(r, 'signup-terms').props.onPress());
+      await act(async () => byTestID(r, 'signup-privacy').props.onPress());
+      expect(openURL.mock.calls.map((c) => c[0])).toEqual([TERMS_URL, PRIVACY_URL]);
+    } finally {
+      openURL.mockRestore();
+    }
   });
 
   it('stays on create-account when the passwords differ', async () => {
