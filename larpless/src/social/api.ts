@@ -51,7 +51,10 @@ export interface PublishInput {
 }
 
 export const USERNAME_RE = /^[a-z0-9_]{3,20}$/;
-export const MIN_PASSWORD = 6;
+/** Matches the Supabase project's Auth policy: 8+ characters with a lowercase, an uppercase, a digit and a symbol. */
+export const MIN_PASSWORD = 8;
+/** The symbols Supabase's "lowercase, uppercase, digits and symbols" rule accepts. */
+const PASSWORD_SYMBOL_RE = /[!@#$%^&*()_+\-=[\]{};'\\:"|<>?,./`~]/;
 export const MAX_CAPTION = 280;
 /** Most subjects a post's breakdown carries. supabase/schema.sql enforces the same cap. */
 export const MAX_BREAKDOWN = 20;
@@ -74,6 +77,19 @@ export function usernameProblem(username: string): string | null {
   return 'Usernames are 3–20 characters: letters, numbers and underscores.';
 }
 
+/** Null when Supabase will accept it; otherwise what is missing, so sign-up fails before the round trip. */
+export function passwordProblem(password: string): string | null {
+  const missing: string[] = [];
+  if (password.length < MIN_PASSWORD) missing.push(`at least ${MIN_PASSWORD} characters`);
+  if (!/[a-z]/.test(password)) missing.push('a lowercase letter');
+  if (!/[A-Z]/.test(password)) missing.push('an uppercase letter');
+  if (!/[0-9]/.test(password)) missing.push('a digit');
+  if (!PASSWORD_SYMBOL_RE.test(password)) missing.push('a symbol');
+  if (!missing.length) return null;
+  const list = missing.length > 1 ? `${missing.slice(0, -1).join(', ')} and ${missing[missing.length - 1]}` : missing[0];
+  return `Passwords need ${list}.`;
+}
+
 export const emailFor = (username: string) => `${username}@${EMAIL_DOMAIN}`;
 
 // Accounts -------------------------------------------------------------------
@@ -82,10 +98,15 @@ export async function signUp(client: SupabaseClient, rawUsername: string, passwo
   const username = normalizeUsername(rawUsername);
   const problem = usernameProblem(username);
   if (problem) throw new SocialError(problem);
-  if (password.length < MIN_PASSWORD) throw new SocialError(`Passwords need at least ${MIN_PASSWORD} characters.`);
+  const weak = passwordProblem(password);
+  if (weak) throw new SocialError(weak);
   const { data, error } = await client.auth.signUp({ email: emailFor(username), password, options: { data: { username } } });
   if (error) {
     if (/already registered|already exists/i.test(error.message)) throw new SocialError('That username is taken.');
+    // The server's policy is the one that counts (a self-hosted project may set a stricter one).
+    if ((error as { code?: string }).code === 'weak_password' || /weak|password should/i.test(error.message)) {
+      throw new SocialError(`That password is too weak for this server. ${error.message}`);
+    }
     throw new SocialError(error.message);
   }
   if (!data.session) throw new SocialError('Account created, but Supabase wants email confirmation. Turn off "Confirm email" in the dashboard.');

@@ -79,6 +79,8 @@ export function cleanSettings(raw: unknown): Settings {
   if (typeof out.onboardingStep !== 'string') out.onboardingStep = '';
   out.supabaseUrl = typeof out.supabaseUrl === 'string' ? out.supabaseUrl.trim() : '';
   out.supabaseAnonKey = typeof out.supabaseAnonKey === 'string' ? out.supabaseAnonKey.trim() : '';
+  // Saves from before the opt-in: someone who had entered their own server keeps Friends on.
+  out.friendsEnabled = typeof src.friendsEnabled === 'boolean' ? src.friendsEnabled : !!(out.supabaseUrl && out.supabaseAnonKey);
   return out;
 }
 

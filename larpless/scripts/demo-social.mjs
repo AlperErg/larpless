@@ -19,7 +19,10 @@ if (!URL_ || !KEY) {
   process.exit(1);
 }
 
-export const PASSWORD = 'larpless-demo';
+/** Meets the project's password policy (8+, lowercase, uppercase, digit, symbol). */
+export const PASSWORD = 'LarpLess-demo1';
+/** Demo accounts on older projects, made before that policy. */
+const OLD_PASSWORD = 'larpless-demo';
 /** Existing demo accounts were created under the old name. */
 const LEGACY_PASSWORD = 'focusline-demo';
 const legacyEmail = (u) => `${u}@focusline.local`;
@@ -72,6 +75,10 @@ async function preflight() {
 async function login(username, { create = false } = {}) {
   const c = newClient();
   let { data, error } = await c.auth.signInWithPassword({ email: emailFor(username), password: PASSWORD });
+  if (error) {
+    const retry = await c.auth.signInWithPassword({ email: emailFor(username), password: OLD_PASSWORD });
+    if (!retry.error) ({ data, error } = retry);
+  }
   if (error) {
     const retry = await c.auth.signInWithPassword({ email: legacyEmail(username), password: LEGACY_PASSWORD });
     if (!retry.error) ({ data, error } = retry);

@@ -12,6 +12,12 @@ export const config = {
   SHOW_DEV_TOOLS: __DEV__,
   /** Shown before a model download starts; Ollama reports the real size once it begins. */
   MODEL_SIZES: { 'qwen3-vl:2b': '1.9 GB', 'qwen3-vl:4b': '3.3 GB' } as Record<string, string>,
+  /**
+   * The LarpLess Friends server, used once Friends is turned on unless the user sets their own.
+   * The anon key is public by design (row-level security protects the data), so it can live here.
+   * Both empty: this build has no hosted server and Friends needs "Use your own server".
+   */
+  HOSTED_SUPABASE: { url: '', anonKey: '' },
 };
 
 /**
@@ -38,6 +44,7 @@ export const DEFAULT_SETTINGS: Settings = {
   onboarded: false,
   onboardingStep: '',
   appearance: 'system',
+  friendsEnabled: false,
   supabaseUrl: '',
   supabaseAnonKey: '',
 };

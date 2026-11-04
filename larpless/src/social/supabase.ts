@@ -43,7 +43,7 @@ export function keychainAuthStorage(keychain: AuthStorage, legacy: AuthStorage):
   };
 }
 
-/** Credentials from Settings → Friends, the only source. A half-filled pair is ignored until both are set. */
+/** Set by appStore from Settings → Friends (off, own server or the hosted one). A half-filled pair is ignored until both are set. */
 let runtimeUrl = '';
 let runtimeKey = '';
 

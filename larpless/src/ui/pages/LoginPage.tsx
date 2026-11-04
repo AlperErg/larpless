@@ -1,6 +1,9 @@
 /** Signed-out Friends: a sign-in screen, and a separate create-account screen. */
 import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Animated, Easing, View } from 'react-native';
+import { config } from '../../config';
+import { friendsServer } from '../../core/friendsServer';
+import { useAppStore } from '../../store/appStore';
 import { useNavStore } from '../../store/navStore';
 import { useSocialStore } from '../../store/socialStore';
 import { Button, Callout, Text } from '../components';
@@ -34,21 +37,54 @@ export function AuthGate() {
     nav.go(nav.route, { ...nav.params, auth: next });
   };
 
-  if (status === 'unconfigured') {
-    return (
-      <Page testID="page-login" header={{ icon: 'users', title: 'Friends' }}>
-        <Callout icon="alert" tone="orange">
-          <Text>Supabase isn't configured. Add the project URL and anon key in Settings.</Text>
-        </Callout>
-        <Button testID="login-open-settings" title="Open Settings" variant="secondary" onPress={() => useNavStore.getState().go('settings')} style={styles.submit} />
-      </Page>
-    );
-  }
+  if (status === 'unconfigured') return <FriendsUnavailable />;
 
   return (
     <Animated.View style={[styles.fill, { opacity: fade }]}>
       {screen === 'signUp' ? <SignupPage onSignIn={() => show('signIn')} /> : <LoginPage onCreateAccount={() => show('signUp')} />}
     </Animated.View>
+  );
+}
+
+/** Friends is off (the default), or on with no server to talk to. Nothing has been sent anywhere. */
+function FriendsUnavailable() {
+  const settings = useAppStore((s) => s.settings);
+  const updateSettings = useAppStore((s) => s.updateSettings);
+  const server = friendsServer(settings, config.HOSTED_SUPABASE);
+  const openSettings = () => useNavStore.getState().go('settings');
+
+  if (server.kind === 'off') {
+    return (
+      <Page testID="page-login" header={{ icon: 'users', title: 'Friends' }}>
+        <Text muted>{`Share finished sessions with friends and see how they're studying. Friends is off, so nothing leaves this ${DEVICE}.`}</Text>
+        <Callout icon="lock" tone="gray" style={styles.notice}>
+          <Text>
+            Turned on, the Friends server stores your username, your friends and the stats of sessions you choose to share. Never
+            screenshots, window titles or app names. You can turn it off again in Settings.
+          </Text>
+        </Callout>
+        <Button
+          testID="friends-enable"
+          title="Turn on Friends"
+          variant="primary"
+          onPress={() => {
+            updateSettings({ friendsEnabled: true }).catch((e: unknown) =>
+              console.warn('[ui] updateSettings failed:', e instanceof Error ? e.message : String(e)),
+            );
+          }}
+          style={styles.submit}
+        />
+      </Page>
+    );
+  }
+
+  return (
+    <Page testID="page-login" header={{ icon: 'users', title: 'Friends' }}>
+      <Callout icon="alert" tone="orange">
+        <Text>This build has no Friends server. Add your own Supabase project in Settings → Friends → Use your own server.</Text>
+      </Callout>
+      <Button testID="login-open-settings" title="Open Settings" variant="secondary" onPress={openSettings} style={styles.submit} />
+    </Page>
   );
 }
 
@@ -126,7 +162,7 @@ export function SignupPage({ onSignIn }: { onSignIn: () => void }) {
           testID="signup-password"
           value={password}
           onChangeText={setPassword}
-          placeholder="At least 6 characters"
+          placeholder="8+ characters"
           secure
           onSubmit={submit}
         />
@@ -141,7 +177,8 @@ export function SignupPage({ onSignIn }: { onSignIn: () => void }) {
           style={styles.submit}
         />
         <Text variant="small" style={styles.hint}>
-          Friends add you by your username. It's 3–20 letters, numbers or underscores.
+          Friends add you by your username. It's 3–20 letters, numbers or underscores. Passwords need 8 or more characters,
+          with a lowercase and an uppercase letter, a digit and a symbol.
         </Text>
         <View style={styles.switchRow}>
           <Text variant="small">Already have an account?</Text>
@@ -206,6 +243,7 @@ function ErrorLine({ testID, text }: { testID: string; text: string }) {
 
 const styles = themed(() => StyleSheet.create({
   fill: { flex: 1 },
+  notice: { marginTop: space.lg, maxWidth: 520 },
   card: {
     marginTop: space.xl,
     maxWidth: 360,

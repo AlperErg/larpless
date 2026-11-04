@@ -137,6 +137,14 @@ describe('db', () => {
     expect(await db.loadModules()).toEqual([]);
   });
 
+  it('Friends is off by default; older saves with their own server keep it on', () => {
+    expect(cleanSettings({}).friendsEnabled).toBe(false);
+    expect(cleanSettings({ supabaseUrl: 'https://own.supabase.co', supabaseAnonKey: 'k' }).friendsEnabled).toBe(true);
+    expect(cleanSettings({ supabaseUrl: 'https://own.supabase.co' }).friendsEnabled).toBe(false);
+    expect(cleanSettings({ supabaseUrl: 'https://own.supabase.co', supabaseAnonKey: 'k', friendsEnabled: false }).friendsEnabled).toBe(false);
+    expect(cleanSettings({ friendsEnabled: 'yes' }).friendsEnabled).toBe(false);
+  });
+
   it('persists only Chunk fields (no window titles or image data sneak in)', async () => {
     const kv = createMemoryKv();
     const db = createDb(kv);
