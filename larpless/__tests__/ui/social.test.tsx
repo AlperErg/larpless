@@ -3,7 +3,7 @@ import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import type { BreakdownEntry, SessionSummary } from '../../src/contracts/domain';
 import * as api from '../../src/social/api';
 import type { FeedPost, FriendLists } from '../../src/social/api';
-import { DEFAULT_SETTINGS } from '../../src/config';
+import { config, DEFAULT_SETTINGS } from '../../src/config';
 import { useAppStore } from '../../src/store/appStore';
 import { useNavStore } from '../../src/store/navStore';
 import { useSocialStore } from '../../src/store/socialStore';
@@ -129,6 +129,8 @@ describe('FriendsPage', () => {
 
   it('points to "Use your own server" when on without a server', async () => {
     const app = { ...useAppStore.getState() };
+    const hosted = { ...config.HOSTED_SUPABASE };
+    Object.assign(config.HOSTED_SUPABASE, { url: '', publishableKey: '' });
     act(() => {
       useAppStore.setState({ settings: { ...DEFAULT_SETTINGS, friendsEnabled: true } });
       useSocialStore.setState({ status: 'unconfigured' });
@@ -139,6 +141,7 @@ describe('FriendsPage', () => {
       await act(async () => byTestID(r, 'login-open-settings').props.onPress());
       expect(useNavStore.getState().route).toBe('settings');
     } finally {
+      Object.assign(config.HOSTED_SUPABASE, hosted);
       act(() => useAppStore.setState(app, true));
     }
   });

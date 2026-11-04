@@ -70,14 +70,19 @@ beforeAll(() => {
   jest.spyOn(console, 'log').mockImplementation(() => {});
 });
 
+/** The committed build's hosted Friends server; each test starts without one and sets it when needed. */
+const hostedBackup = { ...config.HOSTED_SUPABASE };
+
 beforeEach(async () => {
   jest.useFakeTimers(); // the Switch animation must not run past the test
+  Object.assign(config.HOSTED_SUPABASE, { url: '', publishableKey: '' });
   await AsyncStorage.clear();
   (AsyncStorage.setItem as jest.Mock).mockClear();
 });
 
 afterEach(() => {
   jest.useRealTimers();
+  Object.assign(config.HOSTED_SUPABASE, hostedBackup);
   setSupabaseCredentials('', '');
   act(() => {
     useSessionStore.setState({ ...actionsBackup.session, ...initialSessionState });
@@ -258,30 +263,25 @@ describe('Settings page', () => {
   });
 
   it('uses the hosted server unless "Use your own server" is filled in', async () => {
-    const saved = { ...config.HOSTED_SUPABASE };
     Object.assign(config.HOSTED_SUPABASE, { url: 'https://hosted.supabase.co', publishableKey: 'hosted-key' });
-    try {
-      const r = render();
-      expect(isOn(r, 'settings-own-server')).toBe(false);
-      expect(r.root.findAll((n) => n.props.testID === 'settings-supabase-url')).toHaveLength(0);
+    const r = render();
+    expect(isOn(r, 'settings-own-server')).toBe(false);
+    expect(r.root.findAll((n) => n.props.testID === 'settings-supabase-url')).toHaveLength(0);
 
-      await press(byTestID(r, 'settings-friends-enabled'));
-      expect(isSupabaseConfigured()).toBe(true);
+    await press(byTestID(r, 'settings-friends-enabled'));
+    expect(isSupabaseConfigured()).toBe(true);
 
-      await press(byTestID(r, 'settings-own-server'));
-      await type(r, 'settings-supabase-url', 'https://own.supabase.co', 'onBlur');
-      await type(r, 'settings-supabase-key', 'own-key', 'onBlur');
-      expect(settings()).toMatchObject({ supabaseUrl: 'https://own.supabase.co', supabaseKey: 'own-key' });
+    await press(byTestID(r, 'settings-own-server'));
+    await type(r, 'settings-supabase-url', 'https://own.supabase.co', 'onBlur');
+    await type(r, 'settings-supabase-key', 'own-key', 'onBlur');
+    expect(settings()).toMatchObject({ supabaseUrl: 'https://own.supabase.co', supabaseKey: 'own-key' });
 
-      // Switching back clears the own project, so the hosted one applies again.
-      await press(byTestID(r, 'settings-own-server'));
-      expect(settings()).toMatchObject({ supabaseUrl: '', supabaseKey: '' });
-      expect(r.root.findAll((n) => n.props.testID === 'settings-supabase-url')).toHaveLength(0);
-      expect(isSupabaseConfigured()).toBe(true);
-      act(() => r.unmount());
-    } finally {
-      Object.assign(config.HOSTED_SUPABASE, saved);
-    }
+    // Switching back clears the own project, so the hosted one applies again.
+    await press(byTestID(r, 'settings-own-server'));
+    expect(settings()).toMatchObject({ supabaseUrl: '', supabaseKey: '' });
+    expect(r.root.findAll((n) => n.props.testID === 'settings-supabase-url')).toHaveLength(0);
+    expect(isSupabaseConfigured()).toBe(true);
+    act(() => r.unmount());
   });
 
   it('follows settings changed elsewhere, e.g. loaded after the page opened', () => {
