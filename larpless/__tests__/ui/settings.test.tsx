@@ -1,14 +1,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
-import { DEFAULT_SETTINGS } from '../../src/config';
+import { config, DEFAULT_SETTINGS } from '../../src/config';
 import type { Settings } from '../../src/contracts/domain';
 import { initialAppState, useAppStore } from '../../src/store/appStore';
 import { useNavStore } from '../../src/store/navStore';
 import { initialSessionState, useSessionStore } from '../../src/store/sessionStore';
 import { useSocialStore } from '../../src/store/socialStore';
 import { mockNowPlaying } from '../../src/native/mock/nowPlaying';
-import { setSupabaseCredentials } from '../../src/social/supabase';
+import { isSupabaseConfigured, setSupabaseCredentials } from '../../src/social/supabase';
 import { SettingsPage } from '../../src/ui/pages/SettingsPage';
 
 function render(): ReactTestRenderer {
@@ -215,16 +215,73 @@ describe('Settings page', () => {
     act(() => r.unmount());
   });
 
-  it('saves the Supabase URL and anon key together', async () => {
+  it('saves the Supabase URL and publishable key together', async () => {
     const r = render();
 
     await type(r, 'settings-supabase-url', ' https://example.supabase.co ', 'onBlur');
-    expect(settings()).toMatchObject({ supabaseUrl: 'https://example.supabase.co', supabaseAnonKey: '' });
+    expect(settings()).toMatchObject({ supabaseUrl: 'https://example.supabase.co', supabaseKey: '' });
 
     await type(r, 'settings-supabase-key', ' anon-key ', 'onBlur');
-    expect(settings()).toMatchObject({ supabaseUrl: 'https://example.supabase.co', supabaseAnonKey: 'anon-key' });
-    expect(await stored()).toMatchObject({ supabaseUrl: 'https://example.supabase.co', supabaseAnonKey: 'anon-key' });
+    expect(settings()).toMatchObject({ supabaseUrl: 'https://example.supabase.co', supabaseKey: 'anon-key' });
+    expect(await stored()).toMatchObject({ supabaseUrl: 'https://example.supabase.co', supabaseKey: 'anon-key' });
     act(() => r.unmount());
+  });
+
+  it('refuses a secret key in the publishable key field', async () => {
+    const r = render();
+    await type(r, 'settings-supabase-url', 'https://example.supabase.co', 'onBlur');
+    await type(r, 'settings-supabase-key', 'sb_secret_abc', 'onBlur');
+    expect(settings().supabaseKey).toBe('');
+    expect(textOf(r)).toContain("That's a secret key");
+
+    await type(r, 'settings-supabase-key', 'sb_publishable_abc', 'onBlur');
+    expect(settings().supabaseKey).toBe('sb_publishable_abc');
+    expect(r.root.findAll((n) => n.props.testID === 'settings-supabase-key-error')).toHaveLength(0);
+    act(() => r.unmount());
+  });
+
+  it('Friends is off by default and only connects once turned on', async () => {
+    const r = render();
+    expect(isOn(r, 'settings-friends-enabled')).toBe(false);
+    await type(r, 'settings-supabase-url', 'https://example.supabase.co', 'onBlur');
+    await type(r, 'settings-supabase-key', 'anon-key', 'onBlur');
+    expect(isSupabaseConfigured()).toBe(false);
+
+    await press(byTestID(r, 'settings-friends-enabled'));
+    expect(settings().friendsEnabled).toBe(true);
+    expect(await stored()).toMatchObject({ friendsEnabled: true });
+    expect(isSupabaseConfigured()).toBe(true);
+
+    await press(byTestID(r, 'settings-friends-enabled'));
+    expect(isSupabaseConfigured()).toBe(false);
+    act(() => r.unmount());
+  });
+
+  it('uses the hosted server unless "Use your own server" is filled in', async () => {
+    const saved = { ...config.HOSTED_SUPABASE };
+    Object.assign(config.HOSTED_SUPABASE, { url: 'https://hosted.supabase.co', publishableKey: 'hosted-key' });
+    try {
+      const r = render();
+      expect(isOn(r, 'settings-own-server')).toBe(false);
+      expect(r.root.findAll((n) => n.props.testID === 'settings-supabase-url')).toHaveLength(0);
+
+      await press(byTestID(r, 'settings-friends-enabled'));
+      expect(isSupabaseConfigured()).toBe(true);
+
+      await press(byTestID(r, 'settings-own-server'));
+      await type(r, 'settings-supabase-url', 'https://own.supabase.co', 'onBlur');
+      await type(r, 'settings-supabase-key', 'own-key', 'onBlur');
+      expect(settings()).toMatchObject({ supabaseUrl: 'https://own.supabase.co', supabaseKey: 'own-key' });
+
+      // Switching back clears the own project, so the hosted one applies again.
+      await press(byTestID(r, 'settings-own-server'));
+      expect(settings()).toMatchObject({ supabaseUrl: '', supabaseKey: '' });
+      expect(r.root.findAll((n) => n.props.testID === 'settings-supabase-url')).toHaveLength(0);
+      expect(isSupabaseConfigured()).toBe(true);
+      act(() => r.unmount());
+    } finally {
+      Object.assign(config.HOSTED_SUPABASE, saved);
+    }
   });
 
   it('follows settings changed elsewhere, e.g. loaded after the page opened', () => {

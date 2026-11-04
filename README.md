@@ -29,7 +29,7 @@ It was started in one hackathon day with **react-native-macos**. It also runs on
 | **Escalating alerts** | Panel turns red → notification + soft chime → second notification + pulse. A "Back on track" flash when you return. Strictness: 2 / 5 / 10 min. |
 | **Ambient sound** | White, pink and brown noise generated on the fly (`AVAudioEngine` on Mac, XAudio2 on Windows), ducked during breaks. |
 | **Session Summary** | Duration, focus %, subject breakdown bar, streaks and a heatmap. |
-| **Friends feed** | Supabase accounts, friend requests and a feed of shared session stats. Posts include stats only. |
+| **Friends feed** | Off by default. Turned on, Supabase accounts, friend requests and a feed of shared session stats. Posts include stats only. |
 | **Demo mode** | Replays recorded chunks through the real store and panel, so the demo works offline with no Ollama and no camera. |
 
 The UI is styled after Notion: Inter + Instrument Serif, the Notion tag palette, callouts, toggle lists, and a ⌘K (Ctrl+K on Windows) command palette.
@@ -258,14 +258,15 @@ The script uninstalls the old app package first, and that deletes the app's loca
 
 ## Supabase Setup for the Friends Tab
 
-Supabase is optional: it powers accounts, friends and the feed. Leave it unconfigured and the app runs fully local.
+Friends is **off by default**: until you turn it on in **Settings → Friends** (or with **Turn on Friends** on the Friends page), no Supabase client is created and nothing leaves your computer. Turned on, it uses the LarpLess server when the build has one (`config.HOSTED_SUPABASE` in `larpless/src/config.ts`), or your own Supabase project under **Settings → Friends → Use your own server**. The steps below set up your own project, for self-hosting or for a build without a LarpLess server.
 
 1. **Create a project.** Sign up at [supabase.com](https://supabase.com) (the free plan is enough), click **New project**, pick a name, a database password and a region, and wait a minute or two for it to finish provisioning.
 2. **Create the tables.** Open **SQL Editor** in the project's sidebar, paste the whole of [`larpless/supabase/schema.sql`](larpless/supabase/schema.sql) into a new query and click **Run**. It creates the profiles, friendships and posts tables with their row-level security policies. It is safe to re-run; run it again whenever it changes (for example, **Settings → Account → Delete account** needs its `delete_account` function).
 3. **Turn off email confirmation.** Go to **Authentication → Sign In / Providers → Email** and switch off **Confirm email**, then save. Accounts use a username + password with a placeholder address that can't receive mail, so a confirmation email would never arrive. You can also sign in with the email of an account made outside the app.
-4. **Copy the URL and key.** Open **Project Settings → API Keys** (on some dashboards just **API**) and copy the **anon** public key; newer projects list it under **Legacy API keys**. The project URL is `https://<project-ref>.supabase.co`, where `<project-ref>` is the ID in the dashboard's address bar (`supabase.com/dashboard/project/<project-ref>`). Use the bare URL, not the `/rest/v1/` path. Never use the **service_role** key: it bypasses row-level security.
-5. **Connect the app.** In LarpLess, open **Settings → Friends** and paste the URL into **Project URL** and the key into **Anon key**. They are saved with the rest of the settings, so they survive rebuilds and relaunches. Clear both fields to go back to fully local.
-6. **Create an account.** Click **Friends** in the sidebar, choose **Create an account** and pick a username (3–20 letters, digits or underscores; it is saved in lowercase) and a password.
+   On the same page, set **Minimum password length** to **8** and **Password requirements** to **Lowercase, uppercase letters, digits and symbols**, the rules the app checks before signing up. A stricter server policy still applies; the app shows the server's message.
+4. **Copy the URL and key.** Open **Project Settings → API Keys**, select the **Publishable and secret API keys** tab (choose **Create new API keys** if it offers that) and copy the **publishable** key, which starts with `sb_publishable_`. Supabase is retiring the legacy **anon** key by the end of 2026; the app still accepts one until then. The project URL is `https://<project-ref>.supabase.co`, where `<project-ref>` is the ID in the dashboard's address bar (`supabase.com/dashboard/project/<project-ref>`). Use the bare URL, not the `/rest/v1/` path. Never use a **secret** key (`sb_secret_…`) or the legacy **service_role** key: they bypass row-level security, so the app refuses them.
+5. **Connect the app.** In LarpLess, open **Settings → Friends**, turn on **Friends** and **Use your own server**, and paste the URL into **Project URL** and the key into **Publishable key**. They are saved with the rest of the settings, so they survive rebuilds and relaunches. Turning **Use your own server** off clears them and goes back to the LarpLess server; turning **Friends** off goes back to fully local.
+6. **Create an account.** Click **Friends** in the sidebar, choose **Create an account** and pick a username (3–20 letters, digits or underscores; it is saved in lowercase) and a password (8 or more characters, with a lowercase and an uppercase letter, a digit and a symbol).
 
 ## Development
 

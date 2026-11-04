@@ -1,11 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
-import { DEFAULT_SETTINGS } from '../config';
+import { config, DEFAULT_SETTINGS } from '../config';
 import { native } from '../native';
-import type { SessionSummary } from '../contracts/domain';
+import type { SessionSummary, Settings } from '../contracts/domain';
 import type { AppDataState, AppStore } from '../contracts/store';
 import { cleanSettings, createDb } from '../core/db';
 import type { KeyValue } from '../core/db';
+import { friendsServer } from '../core/friendsServer';
 import { setSupabaseCredentials } from '../social/supabase';
 import { useSocialStore } from './socialStore';
 
@@ -19,8 +20,11 @@ export const initialAppState: AppDataState = {
 /** The app's db: core/db over AsyncStorage (injected here, never imported by core). Labels only. */
 export const appDb = createDb(AsyncStorage as unknown as KeyValue);
 
-function syncSupabase(settings: { supabaseUrl: string; supabaseAnonKey: string }): void {
-  if (setSupabaseCredentials(settings.supabaseUrl, settings.supabaseAnonKey)) {
+/** Friends off (or no server) clears the credentials, so no Supabase client exists and nothing is sent. */
+function syncSupabase(settings: Settings): void {
+  const server = friendsServer(settings, config.HOSTED_SUPABASE);
+  const pair = server.kind === 'own' || server.kind === 'hosted' ? server : { url: '', key: '' };
+  if (setSupabaseCredentials(pair.url, pair.key)) {
     useSocialStore.getState().reconfigure();
   }
 }

@@ -121,8 +121,10 @@ export interface Settings {
   /** The onboarding step to reopen at after a relaunch (Screen Recording needs one). Empty starts at the first. */
   onboardingStep: string;
   appearance: Appearance;
-  /** Supabase project URL from Settings → Friends. Empty (with the key) runs fully local. */
+  /** Friends is opt-in: while off, no Supabase client is created and nothing reaches any server. */
+  friendsEnabled: boolean;
+  /** "Use your own server": a Supabase project URL. Empty (with the key) uses the LarpLess server. */
   supabaseUrl: string;
-  /** Supabase anon key from Settings → Friends. Empty (with the URL) runs fully local. */
-  supabaseAnonKey: string;
+  /** "Use your own server": that project's publishable key (or a legacy anon key). Empty (with the URL) uses the LarpLess server. */
+  supabaseKey: string;
 }

@@ -34,17 +34,37 @@ describe('usernames', () => {
 describe('accounts', () => {
   it('signUp validates before calling Supabase', async () => {
     const f = fakeSupabase();
-    await expect(api.signUp(f.client, 'a', 'secret1')).rejects.toThrow(/3–20/);
-    await expect(api.signUp(f.client, 'ada_l', '123')).rejects.toThrow(/at least 6/);
+    await expect(api.signUp(f.client, 'a', 'Secret-12')).rejects.toThrow(/3–20/);
+    await expect(api.signUp(f.client, 'ada_l', '123')).rejects.toThrow(/at least 8/);
     expect(f.auth.signUp).not.toHaveBeenCalled();
+  });
+
+  it('passwordProblem matches the Supabase policy: 8+, lowercase, uppercase, digit and symbol', () => {
+    expect(api.passwordProblem('Secret-12')).toBeNull();
+    expect(api.passwordProblem('Ab1!')).toBe('Passwords need at least 8 characters.');
+    expect(api.passwordProblem('secret-12')).toBe('Passwords need an uppercase letter.');
+    expect(api.passwordProblem('SECRET-12')).toBe('Passwords need a lowercase letter.');
+    expect(api.passwordProblem('Secret-ab')).toBe('Passwords need a digit.');
+    expect(api.passwordProblem('Secret123')).toBe('Passwords need a symbol.');
+    expect(api.passwordProblem('secret')).toBe('Passwords need at least 8 characters, an uppercase letter, a digit and a symbol.');
+    for (const sym of '!@#$%^&*()_+-=[]{};\'\\:"|<>?,./`~') expect(api.passwordProblem(`Secret12${sym}`)).toBeNull();
+  });
+
+  it("signUp explains the server's weak-password rejection", async () => {
+    const f = fakeSupabase();
+    f.auth.signUp.mockResolvedValueOnce({
+      data: { session: null } as never,
+      error: { message: 'Password should be at least 12 characters.', code: 'weak_password' } as never,
+    });
+    await expect(api.signUp(f.client, 'ada_l', 'Secret-12')).rejects.toThrow(/too weak for this server\. Password should be at least 12/);
   });
 
   it('signUp sends the username as metadata on the fake email', async () => {
     const f = fakeSupabase();
-    await api.signUp(f.client, 'Ada_L', 'secret1');
+    await api.signUp(f.client, 'Ada_L', 'Secret-12');
     expect(f.auth.signUp).toHaveBeenCalledWith({
       email: 'ada_l@larpless.local',
-      password: 'secret1',
+      password: 'Secret-12',
       options: { data: { username: 'ada_l' } },
     });
   });
@@ -52,9 +72,9 @@ describe('accounts', () => {
   it('signUp explains a taken username and email confirmation', async () => {
     const f = fakeSupabase();
     f.auth.signUp.mockResolvedValueOnce({ data: { session: null } as never, error: { message: 'User already registered' } });
-    await expect(api.signUp(f.client, 'ada_l', 'secret1')).rejects.toThrow('That username is taken.');
+    await expect(api.signUp(f.client, 'ada_l', 'Secret-12')).rejects.toThrow('That username is taken.');
     f.auth.signUp.mockResolvedValueOnce({ data: { session: null } as never, error: null });
-    await expect(api.signUp(f.client, 'ada_l', 'secret1')).rejects.toThrow(/Confirm email/);
+    await expect(api.signUp(f.client, 'ada_l', 'Secret-12')).rejects.toThrow(/Confirm email/);
   });
 
   it('signIn maps bad credentials', async () => {

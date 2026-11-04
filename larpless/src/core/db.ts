@@ -2,6 +2,7 @@
  * Persistence over an injected key-value store (AsyncStorage in the app, a Map in tests).
  * Keys: CONTRACTS.md §8. Labels only: never images, never window titles.
  */
+import { supabaseKeyProblem } from './friendsServer';
 import { DEFAULT_SETTINGS, MODEL_DEFAULT_REV } from '../config';
 import { isLocalUrl } from './ollama';
 import { isPowerProfile } from './powerProfile';
@@ -78,7 +79,13 @@ export function cleanSettings(raw: unknown): Settings {
   out.ollamaUrl = out.ollamaUrl.trim();
   if (typeof out.onboardingStep !== 'string') out.onboardingStep = '';
   out.supabaseUrl = typeof out.supabaseUrl === 'string' ? out.supabaseUrl.trim() : '';
-  out.supabaseAnonKey = typeof out.supabaseAnonKey === 'string' ? out.supabaseAnonKey.trim() : '';
+  // Saved as supabaseAnonKey before Supabase's publishable keys; a legacy anon key still works until it's retired.
+  const savedKey = src.supabaseKey !== undefined ? src.supabaseKey : src.supabaseAnonKey;
+  out.supabaseKey = typeof savedKey === 'string' ? savedKey.trim() : '';
+  // A secret key bypasses row-level security; never keep one.
+  if (supabaseKeyProblem(out.supabaseKey)) out.supabaseKey = '';
+  // Saves from before the opt-in: someone who had entered their own server keeps Friends on.
+  out.friendsEnabled = typeof src.friendsEnabled === 'boolean' ? src.friendsEnabled : !!(out.supabaseUrl && out.supabaseKey);
   return out;
 }
 

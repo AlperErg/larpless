@@ -3,6 +3,8 @@ import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import type { BreakdownEntry, SessionSummary } from '../../src/contracts/domain';
 import * as api from '../../src/social/api';
 import type { FeedPost, FriendLists } from '../../src/social/api';
+import { DEFAULT_SETTINGS } from '../../src/config';
+import { useAppStore } from '../../src/store/appStore';
 import { useNavStore } from '../../src/store/navStore';
 import { useSocialStore } from '../../src/store/socialStore';
 import type { SocialStore } from '../../src/store/socialStore';
@@ -106,6 +108,39 @@ describe('FriendsPage', () => {
     const r = await render(<FriendsPage />);
     expect(r.root.findAll((n) => n.props.testID === 'page-login').length).toBeGreaterThan(0);
     expect(textOf(r)).toContain('Create an account');
+  });
+
+  it('offers to turn Friends on while it is off', async () => {
+    const updateSettings = jest.fn(async () => {});
+    const app = { ...useAppStore.getState() };
+    act(() => {
+      useAppStore.setState({ settings: DEFAULT_SETTINGS, updateSettings });
+      useSocialStore.setState({ status: 'unconfigured' });
+    });
+    try {
+      const r = await render(<FriendsPage />);
+      expect(textOf(r)).toContain('Friends is off');
+      await act(async () => byTestID(r, 'friends-enable').props.onPress());
+      expect(updateSettings).toHaveBeenCalledWith({ friendsEnabled: true });
+    } finally {
+      act(() => useAppStore.setState(app, true));
+    }
+  });
+
+  it('points to "Use your own server" when on without a server', async () => {
+    const app = { ...useAppStore.getState() };
+    act(() => {
+      useAppStore.setState({ settings: { ...DEFAULT_SETTINGS, friendsEnabled: true } });
+      useSocialStore.setState({ status: 'unconfigured' });
+    });
+    try {
+      const r = await render(<FriendsPage />);
+      expect(textOf(r)).toContain('Use your own server');
+      await act(async () => byTestID(r, 'login-open-settings').props.onPress());
+      expect(useNavStore.getState().route).toBe('settings');
+    } finally {
+      act(() => useAppStore.setState(app, true));
+    }
   });
 
   it('opens a create-account screen and submits the new account', async () => {

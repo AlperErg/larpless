@@ -4,6 +4,7 @@ import { StyleSheet, View } from 'react-native';
 import { config } from '../../config';
 import type { Settings, SoundId } from '../../contracts/domain';
 import type { OllamaHostInfo } from '../../contracts/native';
+import { hasHostedServer, supabaseKeyProblem } from '../../core/friendsServer';
 import { isLocalUrl } from '../../core/ollamaHost';
 import { useAppStore } from '../../store/appStore';
 import { useNavStore } from '../../store/navStore';
@@ -48,11 +49,25 @@ export function SettingsPage() {
   const [url, setUrl] = useState(s.ollamaUrl);
   const [urlRejected, setUrlRejected] = useState(false);
   const [supabaseUrl, setSupabaseUrl] = useState(s.supabaseUrl);
-  const [supabaseKey, setSupabaseKey] = useState(s.supabaseAnonKey);
+  const [supabaseKey, setSupabaseKey] = useState(s.supabaseKey);
+  const [keyRejected, setKeyRejected] = useState<string | null>(null);
   useEffect(() => setModel(s.model), [s.model]);
   useEffect(() => setUrl(s.ollamaUrl), [s.ollamaUrl]);
   useEffect(() => setSupabaseUrl(s.supabaseUrl), [s.supabaseUrl]);
-  useEffect(() => setSupabaseKey(s.supabaseAnonKey), [s.supabaseAnonKey]);
+  useEffect(() => setSupabaseKey(s.supabaseKey), [s.supabaseKey]);
+  const hostedServer = hasHostedServer(config.HOSTED_SUPABASE);
+  const [ownServerChosen, setOwnServerChosen] = useState(false);
+  // Shown when chosen, when fields are already filled in, or when there is no hosted server to fall back to.
+  const ownServer = ownServerChosen || !hostedServer || !!s.supabaseUrl || !!s.supabaseKey;
+  const toggleOwnServer = (on: boolean) => {
+    setOwnServerChosen(on);
+    if (on) return;
+    // Back to the LarpLess server: drop the own project so the fields don't keep overriding it.
+    setSupabaseUrl('');
+    setSupabaseKey('');
+    setKeyRejected(null);
+    if (s.supabaseUrl || s.supabaseKey) update({ supabaseUrl: '', supabaseKey: '' });
+  };
   const [checking, setChecking] = useState(false);
   const host = useOllamaStore((st) => st.host);
   const starting = useOllamaStore((st) => st.starting);
@@ -94,8 +109,15 @@ export function SettingsPage() {
     const nextUrl = normalizeSupabaseProjectUrl(supabaseUrl);
     const nextKey = supabaseKey.trim();
     if (nextUrl !== supabaseUrl) setSupabaseUrl(nextUrl);
-    if (nextUrl === s.supabaseUrl && nextKey === s.supabaseAnonKey) return;
-    update({ supabaseUrl: nextUrl, supabaseAnonKey: nextKey });
+    // A secret key would give this app full database access; it's never saved.
+    const problem = supabaseKeyProblem(nextKey);
+    setKeyRejected(problem);
+    if (problem) {
+      setSupabaseKey(s.supabaseKey);
+      return;
+    }
+    if (nextUrl === s.supabaseUrl && nextKey === s.supabaseKey) return;
+    update({ supabaseUrl: nextUrl, supabaseKey: nextKey });
   };
   const changeVolume = (v: number) => {
     const clamped = Math.max(0, Math.min(1, Math.round(v * 10) / 10));
@@ -116,32 +138,57 @@ export function SettingsPage() {
         />
       </Row>
       <SectionTitle>Friends</SectionTitle>
-      <Row label="Project URL" hint="Supabase → Project Settings → API → Project URL (not the /rest/v1/ path). Filled in, these replace the bundled keys.">
-        <MacTextInput
-          testID="settings-supabase-url"
-          value={supabaseUrl}
-          onChangeText={setSupabaseUrl}
-          onBlur={commitSupabase}
-          onSubmitEditing={commitSupabase}
-          autoCapitalize="none"
-          autoCorrect={false}
-          placeholder="https://your-project.supabase.co"
-          enableFocusRing={false}
-          style={styles.input}
-        />
+      <Row
+        label="Friends"
+        hint={`Off by default, and then nothing leaves this ${DEVICE}. Turned on, the Friends server stores your username, your friends and the stats of sessions you choose to share. Never screenshots, window titles or app names.`}>
+        <Switch testID="settings-friends-enabled" accessibilityLabel="Friends" value={s.friendsEnabled} onChange={(v) => update({ friendsEnabled: v })} />
       </Row>
-      <Row label="Anon key" hint="The anon public key. Both fields are saved together.">
-        <TextField
-          testID="settings-supabase-key"
-          value={supabaseKey}
-          onChangeText={setSupabaseKey}
-          onBlur={commitSupabase}
-          onSubmitEditing={commitSupabase}
-          secureTextEntry
-          placeholder="eyJ…"
-          style={styles.supabaseKey}
-        />
+      <Row
+        label="Use your own server"
+        hint={
+          hostedServer
+            ? 'A Supabase project of your own, set up with supabase/schema.sql. Leave both fields empty to use the LarpLess server.'
+            : 'This build has no LarpLess server, so Friends needs a Supabase project of your own, set up with supabase/schema.sql.'
+        }>
+        <Switch testID="settings-own-server" accessibilityLabel="Use your own server" value={ownServer} disabled={!hostedServer} onChange={toggleOwnServer} />
       </Row>
+      {ownServer ? (
+        <>
+          <Row label="Project URL" hint="Supabase → Project Settings → API → Project URL (not the /rest/v1/ path).">
+            <MacTextInput
+              testID="settings-supabase-url"
+              value={supabaseUrl}
+              onChangeText={setSupabaseUrl}
+              onBlur={commitSupabase}
+              onSubmitEditing={commitSupabase}
+              autoCapitalize="none"
+              autoCorrect={false}
+              placeholder="https://your-project.supabase.co"
+              enableFocusRing={false}
+              style={styles.input}
+            />
+          </Row>
+          <Row
+            label="Publishable key"
+            hint="Supabase → Project Settings → API Keys → Publishable key (sb_publishable_…). A legacy anon key works until Supabase retires it. Never a secret key. Both fields are saved together.">
+            <TextField
+              testID="settings-supabase-key"
+              value={supabaseKey}
+              onChangeText={setSupabaseKey}
+              onBlur={commitSupabase}
+              onSubmitEditing={commitSupabase}
+              secureTextEntry
+              placeholder="sb_publishable_…"
+              style={styles.supabaseKey}
+            />
+            {keyRejected ? (
+              <Text testID="settings-supabase-key-error" variant="small" color={tag.red.text}>
+                {keyRejected}
+              </Text>
+            ) : null}
+          </Row>
+        </>
+      ) : null}
       <AccountSection />
       <SectionTitle>Local AI</SectionTitle>
       <Row
