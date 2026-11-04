@@ -4,6 +4,7 @@ import { StyleSheet, Text as RNText, View } from 'react-native';
 import { config } from '../../config';
 import type { ScreenModelStatus } from '../../contracts/native';
 import type { ModelPull, OllamaStatus, SessionStatus } from '../../contracts/store';
+import { native } from '../../native';
 import { useAppStore } from '../../store/appStore';
 import { useNavStore } from '../../store/navStore';
 import type { Route } from '../../store/navStore';
@@ -92,6 +93,11 @@ export function Sidebar() {
   useEffect(() => {
     if (classifierMode) refreshScreenModel().catch(() => {});
   }, [classifierMode, refreshScreenModel]);
+  // Only the classifier mode reads the screen with OCR: warm it up there (once per launch natively), not in 'vlm'.
+  const screenModelInstalled = screenModel?.installed === true;
+  useEffect(() => {
+    if (classifierMode && screenModelInstalled) native.screenModel.warmUp().catch(() => {});
+  }, [classifierMode, screenModelInstalled]);
   const ol = classifierMode ? screenModelLine(screenModel, screenModelPulling) : ollamaLine(ollama.status, ollama.model, pull);
   const appearance = useAppStore((s) => s.settings.appearance);
   const updateSettings = useAppStore((s) => s.updateSettings);

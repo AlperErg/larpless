@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { SCREEN_MODEL_BYTES } from '../../core/screenModel';
 import { useScreenModelStore } from '../../store/screenModelStore';
 import { formatBytes } from '../lib/format';
+import { DEVICE } from '../platform';
 import { space, tag } from '../theme';
 import { Button } from './Button';
 import { Callout } from './Callout';
@@ -10,7 +11,7 @@ import { ProgressBar } from './ProgressBar';
 import { Text } from './Text';
 
 /**
- * Downloads the on-device screen model (FLScreenModel, Windows) and shows its progress. Renders nothing where
+ * Downloads the on-device screen model (FLScreenModel) and shows its progress. Renders nothing where
  * the module isn't supported. The download lives in the store, so it carries on when this unmounts.
  */
 export function ScreenModelDownload({ testID = 'screen-model-download' }: { testID?: string }) {
@@ -47,7 +48,7 @@ export function ScreenModelDownload({ testID = 'screen-model-download' }: { test
   }
   return (
     <View testID={testID}>
-      <Text variant="small">{`Fast on-device classifier: a one-time download of about ${formatBytes(SCREEN_MODEL_BYTES)}. It reads your screen in under a second without Ollama, and nothing leaves this PC.`}</Text>
+      <Text variant="small">{`Fast on-device classifier: a one-time download of about ${formatBytes(SCREEN_MODEL_BYTES)}. It reads your screen in under a second without Ollama, and nothing leaves this ${DEVICE}.`}</Text>
       <View style={styles.row}>
         <Button
           testID={`${testID}-start`}

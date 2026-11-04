@@ -1,7 +1,7 @@
 /**
  * Screen classifier: PLAN.md §6 steps 2–5 (isSelf → rules → cache → single-flight VLM). The screen is read by
  * one of two models, picked by the classifier mode on every call: Ollama's vision LLM ('vlm'), or in the
- * 'classifier' mode (`screenModelOnly`) the on-device screen model (core/screenModel.ts, Windows) alone, whose
+ * 'classifier' mode (`screenModelOnly`) the on-device screen model (core/screenModel.ts) alone, whose
  * verdict is final; Ollama is then never asked.
  *
  * Single flight: one screenshot at a time. A call for the same window shares that result.
@@ -53,7 +53,7 @@ export interface ClassifierDeps {
   config: ClassifierConfig;
   /** Capture size, cache TTL, timeout and keep_alive. Falls back to `config` when omitted. */
   getPower?: () => PowerSpec;
-  /** On-device screen model (Windows), used only in the 'classifier' mode. */
+  /** On-device screen model, used only in the 'classifier' mode. */
   screenModel?: ScreenModelStep;
   /**
    * True for the 'classifier' mode: the screen model reads the screen instead of Ollama and its verdict is final

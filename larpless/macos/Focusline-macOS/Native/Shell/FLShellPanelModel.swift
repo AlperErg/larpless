@@ -19,8 +19,6 @@ final class FLShellPanelModel: ObservableObject {
     if colorScheme != next { colorScheme = next }
   }
 
-  /// Hub control frames in the "flpanel" coordinate space (top-left origin). Used by the debug click synthesizer.
-  var buttonFrames: [String: CGRect] = [:]
   /// Set by the controller: screen-space drag point, or nil when the drag ends.
   var dragHandler: ((NSPoint?) -> Void)?
   /// Set by the controller: the study card's size changed, so the window must follow.
@@ -50,15 +48,9 @@ final class FLShellPanelModel: ObservableObject {
     onCardSizeChange?()
   }
 
-  // Debug bookkeeping (not published, never drives rendering).
+  /// Count of `update()` calls, for the log.
   private(set) var updateCount = 0
-  private(set) var flashCount = 0
-  private(set) var actionLog: [String] = []
-  private(set) var hovering = false
-  var lastRenderedTimer: String = ""
-  var lastRenderedPill: String = ""
-  var lastRenderAt: Date?
-  var renderCount = 0
+  private var hovering = false
 
   private var hideHubWork: DispatchWorkItem?
   private var flashWork: DispatchWorkItem?
@@ -101,7 +93,6 @@ final class FLShellPanelModel: ObservableObject {
 
   func triggerFlash() {
     flashWork?.cancel()
-    flashCount += 1
     withAnimation(.easeOut(duration: 0.18)) { flashVisible = true }
     let work = DispatchWorkItem { [weak self] in
       withAnimation(.easeIn(duration: 0.25)) { self?.flashVisible = false }
@@ -126,19 +117,10 @@ final class FLShellPanelModel: ObservableObject {
     }
   }
 
-  /// Every hub control funnels through here (and so does the debug path), then out to JS as `FLPanelAction`.
+  /// Every hub control funnels through here (and so does `debugPerform`), then out to JS as `FLPanelAction`.
   func perform(_ action: [String: Any]) {
     let type = action["type"] as? String ?? "?"
-    actionLog.append(type)
-    if actionLog.count > 50 { actionLog.removeFirst(actionLog.count - 50) }
     let delivered = FLFloatingPanel.emitAction(action)
     flShellLog("[FLPanel] action \(type) delivered=\(delivered)")
-  }
-
-  func noteRender(timer: String, pill: String) {
-    lastRenderedTimer = timer
-    lastRenderedPill = pill
-    lastRenderAt = Date()
-    renderCount += 1
   }
 }

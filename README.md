@@ -52,7 +52,7 @@ flowchart LR
   end
   F[src/native facades] --> CTRL[core/sessionController]
   CTRL --> CLS[core/classifier: rules → cache → VLM or screen model]
-  CLS -->|Windows classifier mode: scores only| SM[FLScreenModel: SigLIP 2 + OCR + MiniLM]
+  CLS -->|classifier mode: scores only| SM[FLScreenModel: SigLIP 2 + OCR + MiniLM]
   CLS -->|POST /api/chat, vision LLM mode| OL[Ollama 127.0.0.1:11434]
   CTRL --> FU[core/chunkFuser] --> ST[zustand stores]
   CTRL --> AL[core/alerts] --> NT
@@ -73,23 +73,23 @@ The classifier stops at the cheapest step that gives an answer:
 1. **LarpLess in front:** reuse the previous verdict.
 2. **Rules:** a distraction keyword in the app or window title → `distracted`; a known study tool (Vivado, Quartus, RARS, …) → its subject. No screenshot.
 3. **Cache:** same app and title as a recent verdict → reuse it. Verdicts last as long as the profile's cache time (2–3 min), "not study" verdicts at most 1 min so a wrong label doesn't stick. No screenshot.
-4. **Read the screen** with one of two models, chosen by the [screen check mode](#screen-check-modes) (Windows; the Mac always uses the VLM):
-   - **On-device classifier (Windows):** SigLIP 2 image embeddings, Windows OCR and MiniLM text embeddings score the screen in about 0.5 s, with no Ollama involved.
+4. **Read the screen** with one of two models, chosen by the [screen check mode](#screen-check-modes):
+   - **On-device classifier:** SigLIP 2 image embeddings, OCR (Apple Vision on the Mac, Windows OCR on Windows) and MiniLM text embeddings score the screen in under a second, with no Ollama involved.
    - **VLM:** take a screenshot and classify it with the vision model in Ollama (about 3 s on a fast Mac). Only one vision call runs at a time, and it is allowed to finish. A check for the same window shares its result. If you switched windows meanwhile, one follow-up reads whatever is in front when the call returns, so windows you only passed through are never captured.
 
 ### Screen check modes
 
-On Windows, **Settings → Local AI → Screen check** chooses which one model reads the screen (onboarding asks how powerful the PC is and picks it). The change applies from the next check, with no restart.
+**Settings → Local AI → Screen check** chooses which one model reads the screen (onboarding asks how powerful the Mac or PC is and picks it). The change applies from the next check, with no restart.
 
 | | **Vision LLM (Ollama)** (default) | **On-device classifier** |
 | --- | --- | --- |
-| Reads the screen | Ollama's vision model, as on the Mac; the on-device model is never run | the on-device model alone |
+| Reads the screen | Ollama's vision model; the on-device model is never run | the on-device model alone |
 | Study verdict | Ollama's answer | always used |
 | "Not study" verdict | Ollama's answer | used at ≥ 0.6; below that the chunk is `unknown` (no alert) |
 | Ollama | opened at session start, model warmed up | never opened, warmed up or asked |
 | Model not downloaded | not needed | every chunk is `unknown` (Settings only offers this mode once it's downloaded) |
 
-The on-device classifier is for PCs where Ollama is too slow or uses too much memory. On the 54-screenshot bench (30 study, 24 distractions) the shipped settings label 50 of 54 screens right (93%), and it tells study from distraction 54/54. The Mac has no on-device model yet, so it always uses Ollama and the setting is hidden there.
+The on-device classifier is for computers where Ollama is too slow or uses too much memory (8 GB RAM devices, PCs/Macs without a fast GPU). On the 54-screenshot bench (Windows OCR; 30 study, 24 distractions) the shipped settings label 50 of 54 screens right (93%), and it tells study from distraction 54/54. Both apps run the same pinned ONNX files through ONNX Runtime, so the image scores match; the Mac's text side uses Apple Vision OCR and hasn't been re-benched yet.
 
 ### Live: what the panel shows
 
@@ -132,7 +132,7 @@ Starting a session opens Ollama in the background if it isn't running, then warm
 - **State / storage:** zustand 5, AsyncStorage 2.2.0 (pinned), date-fns 4.
 - **Native, Mac (Swift 5, macOS 14.5+):** ScreenCaptureKit, AVFoundation, Vision, CoreML, UserNotifications, AppKit, SwiftUI, and the Keychain for the Supabase sign-in.
 - **Now playing:** on Mac, a vendored [mediaremote-adapter](https://github.com/ungive/mediaremote-adapter) (BSD-3-Clause) run through `/usr/bin/perl`, because since macOS 15.4 a Developer ID app can't read MediaRemote itself. On Windows, the system media transport controls.
-- **Models:** Ollama `qwen3-vl:2b` and YOLO11n (`nms=True`, bundled; presence and phone). CoreML on Mac, ONNX Runtime on Windows. On Windows also SigLIP 2 base/16 (vision tower) and all-MiniLM-L6-v2 in ONNX Runtime for the on-device screen model.
+- **Models:** Ollama `qwen3-vl:2b` and YOLO11n (`nms=True`, bundled; presence and phone). CoreML on Mac, ONNX Runtime on Windows. On both, SigLIP 2 base/16 (vision tower) and all-MiniLM-L6-v2 in ONNX Runtime for the on-device screen model.
 - **Social:** `@supabase/supabase-js` + `react-native-url-polyfill`.
 - **Website:** Vite + TypeScript in `site/`.
 - **Native, Windows (C++ app, WinAppSDK 1.8):** C++/WinRT modules with Direct2D + DirectWrite, XAudio2, MediaCapture, ONNX Runtime, WIC, toast notifications, and DPAPI for the Supabase sign-in.
@@ -143,16 +143,14 @@ Starting a session opens Ollama in the background if it isn't running, then warm
 
 #### Minimum Requirements
 
-- Mac with an apple silicon chip and 16 GB of RAM or more
-- **macOS 14.5** Sonoma or above.
+- A Mac running **macOS 14.5** Sonoma or newer.
 
 #### Recommended Requirements
 
-This app relies on a VLM which is a GPU-intensive process. For a responsive experience, processors with strong GPU performance is needed. M-series chips that have more GPU cores which are the Pro, Max and Ultra lineups will perform much better than a regular M-series chip.
-It is also worth considering that performance may degrade over time for MacBook Airs since they have no active cooling.
+This app works best in its VLM mode, which is better at recognition but requires a powerful computer. For a responsive experience, Macs with strong GPU performance is needed. M-series chips that have enhanced GPU performance which are the Pro, Max and Ultra lineups will perform much better than a regular M-series chip in this mode. It is also worth considering that responsiveness in this mode may degrade over time for MacBook Airs since they have no active cooling.
 
-- Mac with Apple M4 or M1 Pro or M1 Max chip
-- 24 GB of RAM or more
+- A Mac with Apple M4 or M1 Pro or M1 Max chip
+- 24 GB of RAM
 
 ### Software Requirements
 
@@ -160,35 +158,23 @@ It is also worth considering that performance may degrade over time for MacBook 
 - **Node 22** or above.
 - **Cocoapods** (`brew install cocoapods`).
 - **CMake** (`brew install cmake`).
-- **[Ollama](https://ollama.com)** to run the vision model. Onboarding installs it and downloads the model for you (see [First launch](#first-launch)); from a terminal it's `ollama pull qwen3-vl:2b`.
+- **[Ollama](https://ollama.com)** to run the vision model. Onboarding installs it and downloads the model for you (see [First launch](#first-launch)); from a terminal it's `ollama pull qwen3-vl:2b`. Not needed in the **On-device classifier** [screen check mode](#screen-check-modes), which only needs a one-time download of about 460 MB (into `~/Library/Application Support/com.larpless.app/Models`).
 
-### Install
+### Installation
 
-From `/larpless/`:
+Start by downloading/cloning this repository to your device. Then navigate to the root of the repository.
 
-```bash
-scripts/setup-worktree.sh
-```
-
-This runs `npm ci` and then `pod install` with the UTF-8 locale CocoaPods needs. If you run `pod install` yourself, `export LANG=en_US.UTF-8` first.
-
-### Supabase Setup
-
-Enter your project URL (`https://<project>.supabase.co`) and anon key in **Settings → Friends**. They are saved with the rest of the settings, so they survive rebuilds and relaunches. Leave both empty and the app skips Supabase and runs fully local.
-
-Then, in the Supabase dashboard, run [`larpless/supabase/schema.sql`](larpless/supabase/schema.sql) in the SQL editor and turn off **Authentication → Providers → Email → Confirm email** (accounts use a username + password; you can also sign in with the email of an account made outside the app). The script is safe to re-run; run it again whenever it changes (for example, **Settings → Account → Delete account** needs its `delete_account` function).
-
-### Run
+After that you only need to run this script to get started:
 
 ```bash
-scripts/run-mac.sh 8081
+./larpless/scripts/fresh-run-mac.sh 8081
 ```
 
-This starts Metro on the port, builds the Debug app with that port baked in, and launches it. Each run opens a **new** app instance, so quit the previous one first:
+It runs three scripts in order:
 
-```bash
-pkill -f "$PWD/macos/build/Build/Products/Debug/LarpLess.app"
-```
+1. `clean-build.sh` quits any running LarpLess, deletes `larpless/macos/build` and removes the `Focusline-*` folders from Xcode's DerivedData, so the build starts from scratch.
+2. `setup-worktree.sh` runs `npm ci`, then `pod install` in `larpless/macos` with the UTF-8 locale CocoaPods needs. If you run `pod install` yourself, `export LANG=en_US.UTF-8` first.
+3. `run-mac.sh 8081` starts Metro on port 8081 in the background unless something is already listening there (log in `larpless/.logs/metro-8081.log`), builds the Debug app with that port baked in, and opens it.
 
 The Debug app is signed ad-hoc, so no Apple ID is needed, but macOS forgets its Screen Recording and Camera permissions after every rebuild. To keep them, sign with your own Apple Development certificate (**any Apple ID works**, via Xcode → Settings → Accounts → Manage Certificates). Create `larpless/macos/signing.local` (gitignored) and `run-mac.sh` picks it up:
 
@@ -199,36 +185,55 @@ DEVELOPMENT_TEAM=YOURTEAMID
 
 `security find-identity -v -p codesigning` lists your certificate names; the team ID is the Organizational Unit in the certificate's details.
 
-The Release configuration is set up for distribution: Developer ID signing for the LarpLess team, hardened runtime, and the camera entitlement from `LarpLess.entitlements`. Building it needs that team's **Developer ID Application** certificate. To build Release locally without it, override the identity:
+The Release configuration is set up for distribution: Developer ID signing, hardened runtime, and the camera entitlement from `LarpLess.entitlements`. Building it needs that team's **Developer ID Application** certificate. To build Release locally without it, override the identity:
 
 ```bash
-xcodebuild -workspace macos/Focusline.xcworkspace -scheme Focusline-macOS -configuration Release -derivedDataPath macos/build CODE_SIGN_IDENTITY="Apple Development: Your Name (XXXXXXXXXX)" DEVELOPMENT_TEAM=YOURTEAMID build
+xcodebuild -workspace larpless/macos/Focusline.xcworkspace -scheme Focusline-macOS -configuration Release -derivedDataPath larpless/macos/build CODE_SIGN_IDENTITY="Apple Development: Your Name (XXXXXXXXXX)" DEVELOPMENT_TEAM=YOURTEAMID build
 ```
 
 ### First launch
 
-Onboarding takes four steps:
+Onboarding first asks which model should read your screen, and the steps that follow depend on the answer. Ollama is only needed for the vision LLM; with the on-device classifier you never install or open it.
 
-1. **Your modules.** Optional. LarpLess recognises the built-in subjects on its own; add your own courses (course codes, topics, lecturer names) for sharper labels. For each course, add 6–10 distinctive keywords that actually show up on your screen while you study it (malloc, ER diagram, CS2010). Skip short or common words and anything shared with your other courses.
-2. **Permissions.** **Screen Recording** (macOS only applies it after a relaunch; the **Relaunch** button does that), **Camera** (optional: presence and phone detection) and **Notifications**.
-3. **Ollama.** LarpLess checks whether Ollama is installed and running, and the page updates by itself.
+1. **Your Mac.** Pick the [screen check mode](#screen-check-modes):
+   - **On-device classifier**, for any Mac, including Intel Macs, base M1–M3 chips and Macs with 8 GB. It's built into LarpLess and needs no other app.
+   - **Vision LLM (Ollama)**, for an M4 or newer, or a Pro, Max or Ultra chip, with 16 GB or more. It copes better with unusual screens but needs Ollama and a strong GPU.
+
+   LarpLess reads the chip and memory and preselects the mode that fits, showing why. You can pick the other one, and switch later in **Settings → Local AI → Screen check**. The hardware details aren't saved or sent anywhere.
+2. **Your modules.** Optional. LarpLess recognises the built-in subjects on its own; add your own courses (course codes, topics, lecturer names) for sharper labels. For each course, add 6–10 distinctive keywords that actually show up on your screen while you study it (malloc, ER diagram, CS2010). Skip short or common words and anything shared with your other courses.
+3. **Permissions.** **Screen Recording** (macOS only applies it after a relaunch; the **Relaunch** button does that), **Camera** (optional: presence and phone detection) and **Notifications**.
+
+**With the on-device classifier**, onboarding ends with one more step:
+
+4. **Classifier.** **Download classifier** fetches the model (about 460 MB, into `~/Library/Application Support/com.larpless.app/Models`) with a progress bar. If you finish before it's downloaded, you can get it later in **Settings → Local AI**; until then every screen check counts as `unknown`.
+
+**With the vision LLM**, two Ollama steps follow:
+
+4. **Ollama.** LarpLess checks whether Ollama is installed and running, and the page updates by itself.
    - Not installed: **Download Ollama** downloads `Ollama.dmg`. Open it and drag Ollama into Applications.
    - Installed but not running: **Open Ollama** starts it in the background, with the [memory saver](#the-model) on.
-4. **AI model.** **Download model** pulls `qwen3-vl:2b` (about 1.9 GB) through Ollama with a progress bar. Cancel stops it, and the next download picks up where it left off. The download keeps going if you finish onboarding, and the sidebar shows its progress.
+5. **AI model.** **Download model** pulls `qwen3-vl:2b` (about 1.9 GB) through Ollama with a progress bar. Cancel stops it, and the next download picks up where it left off. The download keeps going if you finish onboarding, and the sidebar shows its progress.
 
-You can finish without Ollama or the model and set them up later: **Settings → Local AI** has the same **Open Ollama** and **Download model** buttons, and demo mode works offline. Settings → Onboarding → **Run again** shows it again.
+   You can finish without Ollama or the model and set them up later: **Settings → Local AI** has the same **Open Ollama** and **Download model** buttons.
+
+Demo mode works in both modes without any model. Settings → Onboarding → **Run again** shows onboarding again.
 
 ## Getting Started on Windows
 
 The Windows build uses the same TypeScript and the same JS ↔ native contract; only the native modules (`larpless/windows/LarpLess/Native/`) are C++ instead of Swift.
 
-**Requirements**
+### Windows Hardware Requirements
 
-- Windows 10/11 x64 with 16 GB of RAM or more.
+- A computer running Windows 10/11 x64 with 16 GB of RAM or more.
+
+### Windows Software Requirements
+
 - **Visual Studio 2026** (Community is fine) with the *Desktop development with C++* and *WinUI application development* workloads, the *MSIX Packaging Tools* component and the **Windows 11 SDK 10.0.22621**.
 - **.NET SDK 10**, **Node 22** or above.
 - **Developer Mode** on and **long paths** enabled (Settings → System → For developers).
-- **[Ollama for Windows](https://ollama.com)** with `qwen3-vl:2b` pulled, as on the Mac. Ollama skips integrated GPUs unless the user environment variable `OLLAMA_IGPU_ENABLE=1` is set (restart Ollama afterwards); with it, AMD iGPUs run through Vulkan. On the CPU alone a screenshot check can take 30 s or more. Not needed in the **On-device classifier** [screen check mode](#screen-check-modes), which only needs the on-device classifier (a one-time download of about 460 MB from onboarding or Settings → Local AI).
+- **[Ollama for Windows](https://ollama.com)**, only for the **Vision LLM** [screen check mode](#screen-check-modes). Onboarding installs it and downloads the model for you, as on the Mac (see [First launch](#first-launch)); from a terminal it's `ollama pull qwen3-vl:2b`. Ollama skips integrated GPUs unless the user environment variable `OLLAMA_IGPU_ENABLE=1` is set (restart Ollama afterwards); with it, AMD iGPUs run through Vulkan. On the CPU alone a screenshot check can take 30 s or more. Not needed in the **On-device classifier** mode, which only needs a one-time download of about 460 MB (into the app's `LocalState\Models`).
+
+### Windows Installation
 
 **Install and run.** From `larpless/`, run `npm ci`, then:
 
@@ -236,19 +241,31 @@ The Windows build uses the same TypeScript and the same JS ↔ native contract; 
 powershell -ExecutionPolicy Bypass -File scripts\run-windows.ps1
 ```
 
-This stops a running LarpLess and removes the installed package, bundles the JS into the app (so it runs without Metro, also from Start), restores the local PowerShell 7 tool the deploy step needs, then builds, deploys and launches the Debug app. Re-run it after JS changes. While developing, add `-Metro` to load the JS from Metro on port 8081 instead; it starts Metro if it isn't already running (log in `.logs/metro-8081.log`). The first build takes several minutes. No admin terminal is needed. Allow the camera when Windows asks; there is no Screen Recording permission on Windows. Onboarding starts with an extra step, **Your PC**, which asks how powerful the computer is and picks the [screen check mode](#screen-check-modes). Pick the **On-device classifier** and a single download step for it (about 460 MB) replaces the Ollama and AI-model steps; pick the **Vision LLM** and they stay, with **Download Ollama** downloading `OllamaSetup.exe` to run. The rest of the first launch is the same as on the Mac. [Supabase setup](#supabase-setup) is the same as on the Mac.
+This stops a running LarpLess and removes the installed package, bundles the JS into the app (so it runs without Metro, also from Start), restores the local PowerShell 7 tool the deploy step needs, then builds, deploys and launches the Debug app. Re-run it after JS changes. While developing, add `-Metro` to load the JS from Metro on port 8081 instead; it starts Metro if it isn't already running (log in `.logs/metro-8081.log`). The first build takes several minutes. No admin terminal is needed. Allow the camera when Windows asks; there is no Screen Recording permission on Windows.
+
+Onboarding starts with an extra step, **Your PC**, which asks how powerful the computer is and picks the [screen check mode](#screen-check-modes). Pick the **On-device classifier** and a single download step for it (about 460 MB) replaces the Ollama and AI-model steps; pick the **Vision LLM** and they stay, with **Download Ollama** downloading `OllamaSetup.exe` to run. The rest of the first launch is the same as on the Mac. [Supabase setup](#supabase-setup-for-the-friends-tab) is the same as on the Mac.
 
 The script uninstalls the old app package first, and that deletes the app's local data, including the downloaded on-device classifier. To keep it, rebuild without uninstalling (see `larpless/windows/CLAUDE.md`); on a `-Metro` install, JS-only changes need no rebuild at all, while the default install embeds the JS bundle and ignores Metro.
 
-**Differences from the Mac app**
+### Differences from the Mac app
 
 - Shortcuts use **Ctrl** instead of ⌘ (Ctrl+K palette, Ctrl+Enter start, Ctrl+. end).
-- The on-device screen model and the [screen check modes](#screen-check-modes) exist only on Windows for now.
 - The webcam uses the same YOLO11n rules as Mac (`person` above 0.5, `cell phone` above 0.4), through ONNX Runtime instead of CoreML. Samples start once the model has loaded.
 - The main window uses Segoe UI, Georgia and Consolas, because react-native-windows can't load bundled fonts yet. The floating panel draws its own text and keeps Inter + Instrument Serif.
 - Page transitions and other `Animated` effects are off on Windows (`ANIMATE` in `src/ui/platform.ts`): react-native-windows drops the content of a re-rendered `Animated.View`. The floating panel's tint, pulse and flash animations are native and unaffected.
 - Closing the main window quits the app (the Windows convention) instead of keeping it in the background.
 - During a session the app holds a Windows power request and opts out of EcoQoS, the counterpart of disabling App Nap.
+
+## Supabase Setup for the Friends Tab
+
+Supabase is optional: it powers accounts, friends and the feed. Leave it unconfigured and the app runs fully local.
+
+1. **Create a project.** Sign up at [supabase.com](https://supabase.com) (the free plan is enough), click **New project**, pick a name, a database password and a region, and wait a minute or two for it to finish provisioning.
+2. **Create the tables.** Open **SQL Editor** in the project's sidebar, paste the whole of [`larpless/supabase/schema.sql`](larpless/supabase/schema.sql) into a new query and click **Run**. It creates the profiles, friendships and posts tables with their row-level security policies. It is safe to re-run; run it again whenever it changes (for example, **Settings → Account → Delete account** needs its `delete_account` function).
+3. **Turn off email confirmation.** Go to **Authentication → Sign In / Providers → Email** and switch off **Confirm email**, then save. Accounts use a username + password with a placeholder address that can't receive mail, so a confirmation email would never arrive. You can also sign in with the email of an account made outside the app.
+4. **Copy the URL and key.** Open **Project Settings → API Keys** (on some dashboards just **API**) and copy the **anon** public key; newer projects list it under **Legacy API keys**. The project URL is `https://<project-ref>.supabase.co`, where `<project-ref>` is the ID in the dashboard's address bar (`supabase.com/dashboard/project/<project-ref>`). Use the bare URL, not the `/rest/v1/` path. Never use the **service_role** key: it bypasses row-level security.
+5. **Connect the app.** In LarpLess, open **Settings → Friends** and paste the URL into **Project URL** and the key into **Anon key**. They are saved with the rest of the settings, so they survive rebuilds and relaunches. Clear both fields to go back to fully local.
+6. **Create an account.** Click **Friends** in the sidebar, choose **Create an account** and pick a username (3–20 letters, digits or underscores; it is saved in lowercase) and a password.
 
 ## Development
 
@@ -286,7 +303,7 @@ Build the Mac app only:
 xcodebuild -workspace macos/Focusline.xcworkspace -scheme Focusline-macOS -configuration Debug build
 ```
 
-**Driving the running app from the shell.** `scripts/js-eval.mjs` connects to Metro's inspector, evaluates JS inside the app and prints JSON. `globalThis.__FL` exposes the native facades, the stores, `applyFixture`, `config` and the native test harnesses:
+**Driving the running app from the shell.** `scripts/js-eval.mjs` connects to Metro's inspector, evaluates JS inside the app and prints JSON. `globalThis.__FL` exposes the native facades, the stores, `applyFixture`, `config` and `__FL.ui` for reading the rendered UI:
 
 ```bash
 node scripts/js-eval.mjs 8081 "__FL.pingRoundTrip()"
@@ -346,4 +363,4 @@ cd site && npm install && npm run dev
 
 Copyright (C) 2026 the LarpLess contributors.
 
-LarpLess is free software under the [GNU Affero General Public License v3.0](LICENSE). The webcam model, Ultralytics YOLO11n, is AGPL-3.0, so the app as a whole is too. The screen models (Qwen3-VL through Ollama; SigLIP 2 and all-MiniLM-L6-v2 in the on-device classifier on Windows) are Apache-2.0, and the fonts are OFL-1.1. Third-party notices are listed in the app under Settings → About → Acknowledgements, generated by `larpless/scripts/acknowledgements.mjs` from the texts in [`larpless/licenses/`](larpless/licenses/).
+LarpLess is free software under the [GNU Affero General Public License v3.0](LICENSE). The webcam model, Ultralytics YOLO11n, is AGPL-3.0, so the app as a whole is too. The screen models (Qwen3-VL through Ollama; SigLIP 2 and all-MiniLM-L6-v2 in the on-device classifier) are Apache-2.0, and the fonts are OFL-1.1. Third-party notices are listed in the app under Settings → About → Acknowledgements, generated by `larpless/scripts/acknowledgements.mjs` from the texts in [`larpless/licenses/`](larpless/licenses/).

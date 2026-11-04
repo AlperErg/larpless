@@ -1,6 +1,12 @@
-import type { AppShellApi } from '../../contracts/native';
+import type { AppShellApi, HardwareInfo } from '../../contracts/native';
 
-export const mockAppShell: AppShellApi = {
+let hardware: HardwareInfo = { memoryBytes: 16 * 2 ** 30, appleSilicon: true, chip: 'Apple M2', gpu: null };
+
+export const mockAppShell: AppShellApi & { setHardware(h: HardwareInfo): void } = {
+  setHardware(h) {
+    hardware = h;
+  },
+  hardware: async () => hardware,
   beginSessionActivity: () => {
     console.log('[mock appShell] beginSessionActivity');
   },

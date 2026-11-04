@@ -10,12 +10,17 @@
 
 #include <atomic>
 #include <mutex>
+#include <string_view>
+#include <thread>
 #include <vector>
 
 #include "FLOllama.h"
 #include "FLWindow.h"
 
 #include <TlHelp32.h>
+#include <dxgi.h>
+
+#pragma comment(lib, "dxgi.lib")
 
 namespace LarpLess {
 
@@ -98,6 +103,45 @@ struct FLAppShell {
     if (command == "commandPalette" || command == "startSession" || command == "endSession") {
       MenuCommand(command);
     }
+  }
+
+  // { memoryBytes, appleSilicon: null, chip, gpu: { name, dedicatedBytes } | null } for onboarding's
+  // recommendation. Not logged or stored.
+  REACT_METHOD(Hardware, L"hardware")
+  void Hardware(winrt::Microsoft::ReactNative::ReactPromise<winrt::Microsoft::ReactNative::JSValue> &&result) noexcept {
+    using winrt::Microsoft::ReactNative::JSValue;
+    using winrt::Microsoft::ReactNative::JSValueObject;
+    std::thread([result = std::move(result)]() mutable noexcept {
+      JSValueObject info;
+      MEMORYSTATUSEX memory{sizeof(MEMORYSTATUSEX)};
+      info["memoryBytes"] = GlobalMemoryStatusEx(&memory) ? static_cast<double>(memory.ullTotalPhys) : 0.0;
+      info["appleSilicon"] = JSValue{nullptr};
+      wchar_t name[256]{};
+      DWORD size{sizeof(name)};
+      if (RegGetValueW(HKEY_LOCAL_MACHINE, L"HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0", L"ProcessorNameString",
+                       RRF_RT_REG_SZ, nullptr, name, &size) == ERROR_SUCCESS && name[0]) {
+        info["chip"] = winrt::to_string(std::wstring_view{name});
+      } else {
+        info["chip"] = JSValue{nullptr};
+      }
+      info["gpu"] = JSValue{nullptr};
+      winrt::com_ptr<IDXGIFactory1> factory;
+      if (SUCCEEDED(CreateDXGIFactory1(__uuidof(IDXGIFactory1), factory.put_void()))) {
+        winrt::com_ptr<IDXGIAdapter1> adapter;
+        SIZE_T best{0};
+        for (UINT i = 0; factory->EnumAdapters1(i, adapter.put()) != DXGI_ERROR_NOT_FOUND; ++i) {
+          DXGI_ADAPTER_DESC1 desc{};
+          if (SUCCEEDED(adapter->GetDesc1(&desc)) && !(desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) &&
+              desc.DedicatedVideoMemory > best) {
+            best = desc.DedicatedVideoMemory;
+            info["gpu"] = JSValueObject{{"name", winrt::to_string(std::wstring_view{desc.Description})},
+                                        {"dedicatedBytes", static_cast<double>(desc.DedicatedVideoMemory)}};
+          }
+          adapter = nullptr;
+        }
+      }
+      result.Resolve(JSValue{std::move(info)});
+    }).detach();
   }
 
   REACT_METHOD(BeginSessionActivity, L"beginSessionActivity")

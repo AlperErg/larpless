@@ -61,8 +61,9 @@ describe('acknowledgements data (scripts/acknowledgements.mjs)', () => {
     expect(names('macos')).not.toContain('react-native-windows');
     expect(names('macos')).not.toContain('ONNX Runtime');
     expect(names('macos')).not.toContain('Hermes');
-    expect(names('macos')).not.toContain('SigLIP 2');
-    expect(names('macos')).toContain('Qwen3-VL 2B');
+    expect(names('macos')).toEqual(
+      expect.arrayContaining(['Qwen3-VL 2B', 'SigLIP 2', 'all-MiniLM-L6-v2', 'onnxruntime-c', 'onnxruntime-objc']),
+    );
     expect(names('windows')).toEqual(
       expect.arrayContaining([
         'react-native-windows',

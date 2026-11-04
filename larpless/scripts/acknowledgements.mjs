@@ -77,7 +77,6 @@ const EXTRAS = [
       'Source: https://huggingface.co/google/siglip2-base-patch16-224\n' +
       'ONNX export: https://huggingface.co/onnx-community/siglip2-base-patch16-224-ONNX',
     file: 'licenses/Apache-2.0.txt',
-    platforms: ['windows'],
   },
   {
     group: 'Models',
@@ -88,7 +87,6 @@ const EXTRAS = [
       'Downloaded at onboarding (pinned commit, SHA-256 checked).\n' +
       'Source: https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2',
     file: 'licenses/Apache-2.0.txt',
-    platforms: ['windows'],
   },
   {
     group: 'Native libraries',

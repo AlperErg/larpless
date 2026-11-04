@@ -1,5 +1,5 @@
 /**
- * LarpLess root: route switch, sidebar layout, ⌘K palette, and the always-mounted Dev tools.
+ * LarpLess root: route switch, sidebar layout and ⌘K palette.
  *
  * Routing (WS-D brief):
  * - mount → appStore.load(); not onboarded → onboarding, else home
@@ -17,13 +17,14 @@ import { useOllamaStore } from './store/ollamaStore';
 import { isClassifierMode, useSessionStore } from './store/sessionStore';
 import { useSocialStore } from './store/socialStore';
 import { BootScreen } from './ui/components/BootScreen';
+import { installUiIntrospection } from './ui/dev/introspect';
 import { CommandPalette } from './ui/layout/CommandPalette';
 import { AppLayout } from './ui/layout/AppLayout';
 import { ErrorBoundary } from './ui/layout/ErrorBoundary';
 import { endSession, isLive, startSession } from './ui/lib/actions';
 import { useViewport } from './ui/lib/viewport';
 import { AcknowledgementsPage } from './ui/pages/AcknowledgementsPage';
-import { DevToolsPage, installUiIntrospection } from './ui/pages/DevToolsPage';
+import { DevToolsPage } from './ui/pages/DevToolsPage';
 import { FriendsPage } from './ui/pages/FriendsPage';
 import { HistoryPage } from './ui/pages/HistoryPage';
 import { HomePage } from './ui/pages/HomePage';
@@ -33,7 +34,7 @@ import { OnboardingPage } from './ui/pages/OnboardingPage';
 import { SessionPage } from './ui/pages/SessionPage';
 import { SettingsPage } from './ui/pages/SettingsPage';
 import { SummaryPage } from './ui/pages/SummaryPage';
-import { applyScheme, colors, layout, themed } from './ui/theme';
+import { applyScheme, colors, themed } from './ui/theme';
 
 function renderPage(route: Route) {
   switch (route) {
@@ -56,8 +57,10 @@ function renderPage(route: Route) {
       return <FriendsPage />;
     case 'login':
       return <AuthGate />;
+    case 'dev':
+      return config.SHOW_DEV_TOOLS ? <DevToolsPage /> : null;
     default:
-      // 'dev' is rendered by the persistent overlay below; 'onboarding' outside the layout.
+      // 'onboarding' renders outside the layout.
       return null;
   }
 }
@@ -166,14 +169,6 @@ function App() {
       ) : (
         <AppLayout route={route}>{renderPage(route)}</AppLayout>
       )}
-      {config.SHOW_DEV_TOOLS ? (
-        // Always mounted so the native harnesses register on launch; shown only on the 'dev' route.
-        <View style={route === 'dev' && booted ? styles.devOverlay : styles.hidden}>
-          <ErrorBoundary where="dev">
-            <DevToolsPage />
-          </ErrorBoundary>
-        </View>
-      ) : null}
       <CommandPalette />
       {bootCover ? <BootScreen ready={booted} onDone={() => setBootCover(false)} /> : null}
     </View>
@@ -182,15 +177,6 @@ function App() {
 
 const styles = themed(() => StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
-  devOverlay: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    right: 0,
-    left: layout.sidebarWidth,
-    backgroundColor: colors.bg,
-  },
-  hidden: { display: 'none' },
 }));
 
 export default App;

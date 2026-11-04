@@ -157,22 +157,4 @@ struct FLShellPanelState: Equatable {
     let h = t / 3600, m = (t % 3600) / 60, s = t % 60
     return h > 0 ? String(format: "%d:%02d:%02d", h, m, s) : String(format: "%d:%02d", m, s)
   }
-
-  // MARK: Debug
-
-  func asDictionary() -> [String: Any] {
-    var d: [String: Any] = [
-      "status": status, "title": title, "subtitle": subtitle.map { $0 as Any } ?? NSNull(), "tint": tint,
-      "timer": ["baseS": timerBaseS, "runningSinceMs": timerRunningSinceMs.map { $0 as Any } ?? NSNull()] as [String: Any],
-      "sound": ["id": soundId, "volume": soundVolume],
-      "pulse": pulse, "flash": flash.map { $0 as Any } ?? NSNull(),
-    ]
-    if let p = pomodoro {
-      d["pomodoro"] = ["phase": p.phase, "round": p.round, "rounds": p.rounds, "phaseEndsAtMs": p.phaseEndsAtMs,
-                       "pausedRemainingMs": p.pausedRemainingMs.map { $0 as Any } ?? NSNull()] as [String: Any]
-    } else {
-      d["pomodoro"] = NSNull()
-    }
-    return d
-  }
 }

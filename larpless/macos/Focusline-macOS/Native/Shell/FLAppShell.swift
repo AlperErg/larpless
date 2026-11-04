@@ -62,15 +62,6 @@ enum FLShellMenu {
     let about = appMenu.items.firstIndex { $0.action == #selector(NSApplication.orderFrontStandardAboutPanel(_:)) }
     appMenu.insertItem(item, at: about.map { $0 + 1 } ?? 0)
   }
-
-  static func describe() -> [[String: Any]] {
-    guard let top = NSApp.mainMenu?.items.first(where: { $0.tag == tag }), let menu = top.submenu else { return [] }
-    return menu.items.map {
-      ["title": $0.title, "key": $0.keyEquivalent == "\r" ? "return" : $0.keyEquivalent,
-       "command": $0.representedObject as? String ?? "", "enabled": $0.isEnabled,
-       "cmdModifier": $0.keyEquivalentModifierMask.contains(.command)]
-    }
-  }
 }
 
 /// JS module `FLAppShell` (CONTRACTS.md §2): App Nap prevention, the Session menu, bring-to-front.
@@ -79,7 +70,6 @@ final class FLAppShell: RCTEventEmitter {
   private static weak var current: FLAppShell?
   private static let activityLock = NSLock()
   private static var activity: NSObjectProtocol?
-  private static var activityBeganAt: Date?
   private var hasListeners = false
 
   private static var quitHooked = false
@@ -131,7 +121,6 @@ final class FLAppShell: RCTEventEmitter {
     guard Self.activity == nil else { return }
     Self.activity = ProcessInfo.processInfo.beginActivity(
       options: [.userInitiated, .idleSystemSleepDisabled], reason: "Focus session")
-    Self.activityBeganAt = Date()
     flShellLog("[FLAppShell] session activity began (App Nap off)")
   }
 
@@ -140,12 +129,38 @@ final class FLAppShell: RCTEventEmitter {
     guard let token = Self.activity else { return }
     ProcessInfo.processInfo.endActivity(token)
     Self.activity = nil
-    Self.activityBeganAt = nil
     flShellLog("[FLAppShell] session activity ended")
   }
 
   @objc func stopOllama() {
     FLOllama.quitNow()
+  }
+
+  /// { memoryBytes, appleSilicon, chip, gpu: null } for onboarding's recommendation. Not logged or stored.
+  @objc func hardware(_ resolve: @escaping RCTPromiseResolveBlock,
+                      reject: @escaping RCTPromiseRejectBlock) {
+    resolve([
+      "memoryBytes": Double(ProcessInfo.processInfo.physicalMemory),
+      // hw.optional.arm64 is 1 on Apple silicon, also for an Intel build under Rosetta (missing on Intel Macs).
+      "appleSilicon": Self.sysctlInt("hw.optional.arm64") == 1,
+      "chip": Self.sysctlString("machdep.cpu.brand_string").map { $0 as Any } ?? NSNull(),
+      "gpu": NSNull(),
+    ])
+  }
+
+  private static func sysctlInt(_ name: String) -> Int32? {
+    var value: Int32 = 0
+    var size = MemoryLayout<Int32>.size
+    return sysctlbyname(name, &value, &size, nil, 0) == 0 ? value : nil
+  }
+
+  private static func sysctlString(_ name: String) -> String? {
+    var size = 0
+    guard sysctlbyname(name, nil, &size, nil, 0) == 0, size > 0 else { return nil }
+    var bytes = [CChar](repeating: 0, count: size)
+    guard sysctlbyname(name, &bytes, &size, nil, 0) == 0 else { return nil }
+    let s = String(cString: bytes).trimmingCharacters(in: .whitespaces)
+    return s.isEmpty ? nil : s
   }
 
   @objc func bringToFront() {
@@ -154,65 +169,6 @@ final class FLAppShell: RCTEventEmitter {
       NSApp.activate(ignoringOtherApps: true)
       NSApp.windows.first { !($0 is NSPanel) && $0.canBecomeMain }?.makeKeyAndOrderFront(nil)
       flShellLog("[FLAppShell] bringToFront")
-    }
-  }
-
-  // MARK: Debug (dev harness only)
-
-  @objc func debugInfo(_ resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
-    Self.activityLock.lock()
-    let active = Self.activity != nil
-    let since = Self.activityBeganAt
-    Self.activityLock.unlock()
-    let listening = hasListeners
-    DispatchQueue.main.async {
-      let main = NSApp.windows.first { !($0 is NSPanel) && $0.canBecomeMain }
-      let mainKey: Bool = main?.isKeyWindow ?? false
-      let mainVisible: Bool = main?.isVisible ?? false
-      resolve([
-        "activityActive": active,
-        "activityAgeS": since.map { Date().timeIntervalSince($0) as Any } ?? NSNull(),
-        "menu": MainActor.assumeIsolated { FLShellMenu.describe() },
-        "jsListening": listening,
-        "appIsActive": NSApp.isActive,
-        "appIsHidden": NSApp.isHidden,
-        "mainWindowKey": mainKey,
-        "mainWindowVisible": mainVisible,
-      ])
-    }
-  }
-
-  /// Synthesizes ⌘+key (k, return, period) into the app's event queue, i.e. the real key-equivalent path.
-  @objc func debugKey(_ key: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
-    let table: [String: (chars: String, code: UInt16)] = ["k": ("k", 40), "return": ("\r", 36), "period": (".", 47)]
-    guard let entry = table[key] else {
-      reject("E_INVALID_ARG", "key must be k | return | period", nil)
-      return
-    }
-    DispatchQueue.main.async {
-      let main = NSApp.windows.first { !($0 is NSPanel) && $0.canBecomeMain }
-      let wasKey: Bool = main?.isKeyWindow ?? false
-      guard let event = NSEvent.keyEvent(
-        with: .keyDown, location: .zero, modifierFlags: [.command], timestamp: ProcessInfo.processInfo.systemUptime,
-        windowNumber: main?.windowNumber ?? 0, context: nil, characters: entry.chars,
-        charactersIgnoringModifiers: entry.chars, isARepeat: false, keyCode: entry.code)
-      else {
-        reject("E_INVALID_ARG", "could not create key event", nil)
-        return
-      }
-      NSApp.postEvent(event, atStart: false)
-      resolve(["posted": true, "mainWindowWasKey": wasKey, "appIsActive": NSApp.isActive])
-    }
-  }
-
-  /// Hides (or unhides without activating) LarpLess, to test background behaviour.
-  @objc func debugSetHidden(_ hidden: Bool, resolve: @escaping RCTPromiseResolveBlock,
-                            reject: @escaping RCTPromiseRejectBlock) {
-    DispatchQueue.main.async {
-      if hidden { NSApp.hide(nil) } else { NSApp.unhideWithoutActivation() }
-      DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-        resolve(["appIsHidden": NSApp.isHidden, "appIsActive": NSApp.isActive])
-      }
     }
   }
 }

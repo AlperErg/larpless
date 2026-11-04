@@ -1,6 +1,6 @@
 /**
  * Dev-only, read-only introspection of the rendered UI for headless agents
- * (installed on __FL.ui by DevToolsPage.installUiIntrospection).
+ * (installed on __FL.ui by installUiIntrospection).
  *
  *   __FL.ui.text('page-session')        visible text under a testID (or the whole app)
  *   __FL.ui.measure('session-timer')    window frame {x,y,w,h}
@@ -8,6 +8,13 @@
  *
  * Walks React's fiber tree through the DevTools global hook. Never returns image data.
  */
+import { applyFullFixture } from '../../fixtures/apply';
+import type { FixtureName } from '../../fixtures/apply';
+import { useAppStore } from '../../store/appStore';
+import { useNavStore } from '../../store/navStore';
+import type { Route } from '../../store/navStore';
+import { useSessionStore } from '../../store/sessionStore';
+import { caughtErrors } from '../layout/ErrorBoundary';
 import { useViewport } from '../lib/viewport';
 
 interface Fiber {
@@ -210,4 +217,55 @@ export function uiType(testID: string, text: string, index = 0): boolean {
   if (!p?.onChangeText) return false;
   p.onChangeText(text);
   return true;
+}
+
+/** Read-only UI introspection for headless checks: node scripts/js-eval.mjs 8081 "__FL.ui.state()". */
+export function installUiIntrospection(): void {
+  const g = globalThis as unknown as { __FL?: Record<string, unknown> };
+  if (!__DEV__ || !g.__FL) return;
+  g.__FL.ui = {
+    nav: useNavStore,
+    route: () => useNavStore.getState().route,
+    go: (r: Route) => {
+      useNavStore.getState().go(r);
+      return useNavStore.getState().route;
+    },
+    palette: (open = true) => {
+      useNavStore.getState().setPaletteOpen(open);
+      return useNavStore.getState().paletteOpen;
+    },
+    fixture: (name: FixtureName) => {
+      applyFullFixture(name);
+      return { status: useSessionStore.getState().status, route: useNavStore.getState().route };
+    },
+    errors: () => caughtErrors.slice(),
+    text: uiText,
+    label: uiLabel,
+    measure: uiMeasure,
+    overflow: uiOverflow,
+    style: uiStyle,
+    press: uiPress,
+    type: uiType,
+    /** Pin the root to w×h (dev layout checks); call with no args to reset. */
+    viewport: (w?: number, h?: number) => {
+      useViewport.getState().setEmulate(w && h ? { w, h } : null);
+      return useViewport.getState().emulate;
+    },
+    state: () => {
+      const s = useSessionStore.getState();
+      const a = useAppStore.getState();
+      const n = useNavStore.getState();
+      return {
+        route: n.route,
+        paletteOpen: n.paletteOpen,
+        status: s.status,
+        chunks: s.chunks.length,
+        current: s.current ? s.current.kind : null,
+        modules: a.modules.length,
+        sessions: a.sessions.length,
+        onboarded: a.settings.onboarded,
+        renderErrors: caughtErrors.length,
+      };
+    },
+  };
 }

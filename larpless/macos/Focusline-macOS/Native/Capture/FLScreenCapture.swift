@@ -24,7 +24,7 @@ final class FLScreenCapture: NSObject {
 
   /// `activeWindowInfo()` plus the frontmost window's bounds in global display coordinates (top-left
   /// origin, like CGDisplayBounds), so capture can pick the display it is on. Bounds stay native-side.
-  private static func frontmostWindow() -> (info: [String: Any], bounds: CGRect?) {
+  static func frontmostWindow() -> (info: [String: Any], bounds: CGRect?) {
     guard let app = NSWorkspace.shared.frontmostApplication else {
       return (["appName": NSNull(), "bundleId": NSNull(), "windowTitle": NSNull(), "isSelf": false], nil)
     }
@@ -79,23 +79,6 @@ final class FLScreenCapture: NSObject {
     resolve(Self.activeWindowInfo())
   }
 
-  /// Dev only (not part of the contract): native timing of `activeWindowInfo()` over `n` runs.
-  @objc func benchActiveWindow(_ n: NSNumber,
-                               resolve: @escaping RCTPromiseResolveBlock,
-                               reject: @escaping RCTPromiseRejectBlock) {
-    let runs = max(1, min(200, n.intValue))
-    var total = 0.0
-    var maxMs = 0.0
-    for _ in 0..<runs {
-      let t0 = CACurrentMediaTime()
-      _ = Self.activeWindowInfo()
-      let ms = (CACurrentMediaTime() - t0) * 1000
-      total += ms
-      maxMs = max(maxMs, ms)
-    }
-    resolve(["runs": runs, "avgMs": total / Double(runs), "maxMs": maxMs])
-  }
-
   // MARK: capture
 
   @objc func capture(_ opts: NSDictionary,
@@ -117,29 +100,8 @@ final class FLScreenCapture: NSObject {
     Task.detached(priority: .userInitiated) {
       let t0 = CACurrentMediaTime()
       do {
-        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-        // The display the frontmost window is on, so the screenshot matches the app name and title.
-        let targetID = Self.displayID(for: front.bounds, among: content.displays.map(\.displayID))
-        guard let display = content.displays.first(where: { $0.displayID == targetID }) ?? content.displays.first
-        else {
-          reject("E_CAPTURE", "No display available to capture", nil)
-          return
-        }
-        let ownPid = ProcessInfo.processInfo.processIdentifier
-        let ownApps = content.applications.filter { $0.processID == ownPid }
-        let filter = SCContentFilter(display: display, excludingApplications: ownApps, exceptingWindows: [])
-
-        let cfg = SCStreamConfiguration()
-        let dw = Double(max(1, display.width))
-        let dh = Double(max(1, display.height))
-        let w = min(maxWidth, dw)
-        cfg.width = Int(w.rounded())
-        cfg.height = max(1, Int((w * dh / dw).rounded()))
-        cfg.showsCursor = false
-        cfg.capturesAudio = false
-
-        let tShot = CACurrentMediaTime()
-        let cg = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: cfg)
+        let shot = try await Self.screenshot(maxWidth: maxWidth, near: front.bounds)
+        let cg = shot.image
         let tEnc = CACurrentMediaTime()
         let width = cg.width
         let height = cg.height
@@ -151,8 +113,8 @@ final class FLScreenCapture: NSObject {
         let tEnd = CACurrentMediaTime()
         FLCaptureLog.log(String(
           format: "[FLScreenCapture] capture %dx%d display=%u%@ jpeg=%d B excludedApps=%d total=%.0f ms (content=%.0f shot=%.0f encode=%.0f)",
-          width, height, display.displayID, display.displayID == CGMainDisplayID() ? " (main)" : "", jpeg.count, ownApps.count,
-          (tEnd - t0) * 1000, (tShot - t0) * 1000, (tEnc - tShot) * 1000, (tEnd - tEnc) * 1000))
+          width, height, shot.displayID, shot.displayID == CGMainDisplayID() ? " (main)" : "", jpeg.count, shot.excludedApps,
+          (tEnd - t0) * 1000, (shot.shotStart - t0) * 1000, (tEnc - shot.shotStart) * 1000, (tEnd - tEnc) * 1000))
 
         var result = window
         result["jpegBase64"] = base64
@@ -161,12 +123,56 @@ final class FLScreenCapture: NSObject {
         result["capturedAt"] = Date().timeIntervalSince1970 * 1000
         resolve(result)
       } catch {
-        let code = Self.isPermissionError(error) ? "E_PERMISSION" : "E_CAPTURE"
+        let code = Self.errorCode(error)
         let ns = error as NSError
         FLCaptureLog.log("[FLScreenCapture] capture failed \(code): \(ns.domain) \(ns.code) \(ns.localizedDescription)")
         reject(code, error.localizedDescription, error)
       }
     }
+  }
+
+  struct Screenshot {
+    let image: CGImage
+    let displayID: CGDirectDisplayID
+    let excludedApps: Int
+    /// CACurrentMediaTime() when SCScreenshotManager was asked (after the shareable-content query).
+    let shotStart: CFTimeInterval
+  }
+
+  struct NoDisplayError: LocalizedError {
+    var errorDescription: String? { "No display available to capture" }
+  }
+
+  /// An in-memory screenshot (at most `maxWidth` px wide) of the display showing most of `bounds`, without
+  /// LarpLess's own windows or the cursor. Shared by `capture` (JPEG for Ollama) and FLScreenModel (pixels).
+  /// PRIVACY: the caller owns the image and must not keep it beyond its own call.
+  static func screenshot(maxWidth: Double, near bounds: CGRect?) async throws -> Screenshot {
+    let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+    // The display the frontmost window is on, so the screenshot matches the app name and title.
+    let targetID = displayID(for: bounds, among: content.displays.map(\.displayID))
+    guard let display = content.displays.first(where: { $0.displayID == targetID }) ?? content.displays.first
+    else { throw NoDisplayError() }
+    let ownPid = ProcessInfo.processInfo.processIdentifier
+    let ownApps = content.applications.filter { $0.processID == ownPid }
+    let filter = SCContentFilter(display: display, excludingApplications: ownApps, exceptingWindows: [])
+
+    let cfg = SCStreamConfiguration()
+    let dw = Double(max(1, display.width))
+    let dh = Double(max(1, display.height))
+    let w = min(maxWidth, dw)
+    cfg.width = Int(w.rounded())
+    cfg.height = max(1, Int((w * dh / dw).rounded()))
+    cfg.showsCursor = false
+    cfg.capturesAudio = false
+
+    let shotStart = CACurrentMediaTime()
+    let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: cfg)
+    return Screenshot(image: image, displayID: display.displayID, excludedApps: ownApps.count, shotStart: shotStart)
+  }
+
+  /// E_PERMISSION when Screen Recording is missing or was declined, else E_CAPTURE.
+  static func errorCode(_ error: Error) -> String {
+    isPermissionError(error) ? "E_PERMISSION" : "E_CAPTURE"
   }
 
   /// In-memory JPEG via ImageIO (CFMutableData destination, never a file).

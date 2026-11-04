@@ -5,6 +5,7 @@ import { initialAppState, useAppStore } from '../../src/store/appStore';
 import { initialOllamaSetupState, useOllamaStore } from '../../src/store/ollamaStore';
 import { initialScreenModelState, useScreenModelStore } from '../../src/store/screenModelStore';
 import { initialSessionState, useSessionStore } from '../../src/store/sessionStore';
+import { native } from '../../src/native';
 import { OnboardingPage, onboardingSteps } from '../../src/ui/pages/OnboardingPage';
 
 // The Windows flow: platform.ts reads Platform.OS at import, so the switch is mocked for this file only.
@@ -74,14 +75,9 @@ afterEach(() => {
 });
 
 describe('onboardingSteps', () => {
-  it('keeps the Mac flow as it was', () => {
-    expect(onboardingSteps(false, 'vlm')).toEqual(['modules', 'permissions', 'ollama', 'model']);
-    expect(onboardingSteps(false, 'classifier')).toEqual(['modules', 'permissions', 'ollama', 'model']);
-  });
-
-  it('starts Windows with the PC question and follows the chosen model', () => {
-    expect(onboardingSteps(true, 'vlm')).toEqual(['pc', 'modules', 'permissions', 'ollama', 'model']);
-    expect(onboardingSteps(true, 'classifier')).toEqual(['pc', 'modules', 'permissions', 'classifier']);
+  it('starts with the computer question and follows the chosen model', () => {
+    expect(onboardingSteps('vlm')).toEqual(['pc', 'modules', 'permissions', 'ollama', 'model']);
+    expect(onboardingSteps('classifier')).toEqual(['pc', 'modules', 'permissions', 'classifier']);
   });
 });
 
@@ -139,6 +135,27 @@ describe('onboarding on Windows: Your PC', () => {
     await act(async () => back.props.onPress());
     expect(has(r, 'onboarding-pc')).toBe(true);
     act(() => r.unmount());
+  });
+
+  it('recommends the vision LLM for a PC with a dedicated GPU', async () => {
+    seed();
+    const spy = jest.spyOn(native.appShell, 'hardware').mockResolvedValue({
+      memoryBytes: 32 * 2 ** 30,
+      appleSilicon: null,
+      chip: 'AMD Ryzen 7 7840HS w/ Radeon 780M Graphics',
+      gpu: { name: 'NVIDIA GeForce RTX 4070 Laptop GPU', dedicatedBytes: 8 * 2 ** 30 },
+    });
+    let r: ReactTestRenderer;
+    await act(async () => {
+      r = create(<OnboardingPage />);
+    });
+    spy.mockRestore();
+    expect(textOf(r!)).toContain('This PC: NVIDIA GeForce RTX 4070 Laptop GPU (8 GB), 32 GB.');
+    expect(textOf(r!)).toContain('Recommended for this PC');
+    expect(byTestID(r!, 'onboarding-next').props.disabled).toBe(false);
+    await press(r!, 'onboarding-next');
+    expect(useAppStore.getState().settings.classifierMode).toBe('vlm');
+    act(() => r!.unmount());
   });
 
   it('offers only the vision LLM in a build without the screen model', async () => {

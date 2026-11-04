@@ -12,3 +12,9 @@ export function applyFixture(name: FixtureName): void {
     useAppStore.setState({ modules: fixtureModules, sessions: fixtureSessions });
   }
 }
+
+/** A fixture plus the fixture modules and history, so names, colours and heatmaps are populated. */
+export function applyFullFixture(name: FixtureName): void {
+  useAppStore.setState({ modules: fixtureModules, sessions: fixtureSessions });
+  applyFixture(name);
+}

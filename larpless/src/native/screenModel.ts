@@ -13,6 +13,7 @@ export const screenModel: ScreenModelApi = {
     return () => sub.remove();
   },
   classify: (input) => M.classify(input),
+  warmUp: () => M.warmUp(),
   unload: () => M.unload(),
 };
 

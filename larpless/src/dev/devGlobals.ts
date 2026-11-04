@@ -2,9 +2,7 @@
  * Dev-only handle for headless verification by agents (see scripts/js-eval.mjs).
  *
  *   node scripts/js-eval.mjs 8081 "__FL.ping()"
- *   node scripts/js-eval.mjs 8082 "__FL.harness.A()"
  *
- * Harnesses register runners with registerHarness('A', async () => ({ ...results })).
  * PRIVACY: results must never contain image data (base64, pixels) — report sizes and timings only.
  */
 import { NativeEventEmitter, NativeModules } from 'react-native';
@@ -17,14 +15,6 @@ import { useScreenModelStore } from '../store/screenModelStore';
 import { applyFixture } from '../fixtures/apply';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-type Runner = () => Promise<unknown>;
-
-const harness: Record<string, Runner> = {};
-
-export function registerHarness(name: string, run: Runner): void {
-  harness[name] = run;
-}
-
 export function installDevGlobals(): void {
   if (!__DEV__) return;
   (globalThis as Record<string, unknown>).__FL = {
@@ -36,7 +26,6 @@ export function installDevGlobals(): void {
     useOllamaStore,
     useScreenModelStore,
     applyFixture,
-    harness,
     storage: AsyncStorage,
     ping: (): Promise<string> => NativeModules.FLPing?.ping() ?? Promise.resolve('FLPing missing'),
     pingRoundTrip,

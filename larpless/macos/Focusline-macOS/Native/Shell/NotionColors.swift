@@ -104,11 +104,6 @@ enum FLNotionFonts {
   static let interSemiBold = "Inter-SemiBold"
   static let serifRegular = "InstrumentSerif-Regular"
   static let serifItalic = "InstrumentSerif-Italic"
-
-  /// True when the bundled font is registered (ATSApplicationFontsPath); false means SwiftUI falls back to system.
-  static func isAvailable(_ postScriptName: String) -> Bool {
-    NSFont(name: postScriptName, size: 12) != nil
-  }
 }
 
 /// WS-E's brief refers to `NotionColors`; keep that spelling available.

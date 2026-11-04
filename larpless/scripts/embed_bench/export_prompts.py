@@ -1,10 +1,11 @@
-"""Builds the fixed SigLIP prompt embeddings the Windows FLScreenModel ships with, and checks the pinned
+"""Builds the fixed SigLIP prompt embeddings FLScreenModel ships with (Windows and macOS), and checks the pinned
 ONNX files the app downloads against the PyTorch models the bench measured.
 
 Run from larpless/:
     scripts\\embed_bench\\.venv\\Scripts\\python -I scripts\\embed_bench\\export_prompts.py
 
-Writes windows/LarpLess/Assets/Models/FLScreenModelPrompts.json:
+Writes windows/LarpLess/Assets/Models/FLScreenModelPrompts.json and the identical macOS copy in
+macos/Focusline-macOS/Native/ScreenModel/ (__tests__/core/screenModelPrompts.test.ts checks they match):
     {"model", "dim", "logitScale", "logitBias", "prompts": [{"id", "embedding": [...]}]}
 Prompt ids: "lib_<subject>" (mean of the subject templates; the logit is linear in the text embedding,
 so the mean embedding gives the mean logit), "study:<i>", "distract:<i>".
@@ -38,6 +39,7 @@ TORCH_MODEL = "google/siglip2-base-patch16-224"
 VISION = ("onnx-community/siglip2-base-patch16-224-ONNX", "ba1f3b0843f24bc5417d38e19c37b287d719b2f4", "onnx/vision_model.onnx")
 MINILM = ("Xenova/all-MiniLM-L6-v2", "751bff37182d3f1213fa05d7196b954e230abad9", "onnx/model.onnx")
 OUT = LARPLESS / "windows" / "LarpLess" / "Assets" / "Models" / "FLScreenModelPrompts.json"
+OUT_MAC = LARPLESS / "macos" / "Focusline-macOS" / "Native" / "ScreenModel" / "FLScreenModelPrompts.json"
 
 
 def subjects() -> list[dict]:
@@ -88,6 +90,7 @@ def main() -> None:
     doc = {"model": f"{VISION[0]}@{VISION[1]}", "dim": len(prompts[0]["embedding"]),
            "logitScale": round(model.logit_scale.exp().item(), 6), "logitBias": round(model.logit_bias.item(), 6), "prompts": prompts}
     OUT.write_text(json.dumps(doc, separators=(",", ":")), encoding="ascii")
+    OUT_MAC.write_bytes(OUT.read_bytes())
     print(f"wrote {OUT.relative_to(LARPLESS)}: {len(prompts)} prompts, dim {doc['dim']}, {OUT.stat().st_size / 1e3:.0f} KB")
 
     # 2. The pinned ONNX vision model must match the PyTorch image tower, and the C++ resize the processor.

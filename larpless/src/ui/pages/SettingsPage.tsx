@@ -144,31 +144,33 @@ export function SettingsPage() {
       </Row>
       <AccountSection />
       <SectionTitle>Local AI</SectionTitle>
-      {IS_WINDOWS ? (
-        <Row
-          label="Screen check"
-          hint={
-            s.classifierMode === 'classifier'
-              ? 'A small on-device classifier reads the screen in under a second, on any PC. Ollama is never opened; unsure screens count as unknown.'
-              : screenModelInstalled
+      <Row
+        label="Screen check"
+        hint={
+          s.classifierMode === 'classifier'
+            ? `A small on-device classifier reads the screen in under a second, on any ${DEVICE}. Ollama is never opened; unsure screens count as unknown.`
+            : screenModelInstalled
+              ? IS_WINDOWS
                 ? 'A vision language model in Ollama reads each screenshot. Best on powerful PCs with a GPU; on CPU alone a check can take 30 s.'
-                : 'A vision language model in Ollama reads each screenshot. Best on powerful PCs with a GPU. On a slower PC, download the on-device classifier below and use it instead.'
-          }>
-          <Segmented
-            testID="settings-classifier"
-            // The classifier with no model would make every check unknown. Already chosen, it stays selectable
-            // so it can be switched back.
-            options={CLASSIFIER_OPTIONS.map((o) =>
-              o.value === 'classifier' && !screenModelInstalled && s.classifierMode !== 'classifier' ? { ...o, disabled: true } : o,
-            )}
-            value={s.classifierMode}
-            onChange={(v) => update({ classifierMode: v })}
-          />
-          <View style={styles.screenModel}>
-            <ScreenModelDownload testID="settings-screen-model" />
-          </View>
-        </Row>
-      ) : null}
+                : 'A vision language model in Ollama reads each screenshot. Fast on Apple silicon; on an M1 Mac a check can take 20 s.'
+              : IS_WINDOWS
+                ? 'A vision language model in Ollama reads each screenshot. Best on powerful PCs with a GPU. On a slower PC, download the on-device classifier below and use it instead.'
+                : 'A vision language model in Ollama reads each screenshot. Fast on Apple silicon. On an older Macbook Air (M1/M2) or any Macbook with 8 GB of memory, download the on-device classifier below and use it instead.'
+        }>
+        <Segmented
+          testID="settings-classifier"
+          // The classifier with no model would make every check unknown. Already chosen, it stays selectable
+          // so it can be switched back.
+          options={CLASSIFIER_OPTIONS.map((o) =>
+            o.value === 'classifier' && !screenModelInstalled && s.classifierMode !== 'classifier' ? { ...o, disabled: true } : o,
+          )}
+          value={s.classifierMode}
+          onChange={(v) => update({ classifierMode: v })}
+        />
+        <View style={styles.screenModel}>
+          <ScreenModelDownload testID="settings-screen-model" />
+        </View>
+      </Row>
       <Row label="Model" hint="Ollama vision model used to read the screen.">
         <MacTextInput
           testID="settings-model"
@@ -286,7 +288,16 @@ export function SettingsPage() {
         <Button testID="settings-acknowledgements" title="View" icon="scale" variant="secondary" onPress={() => go('acknowledgements')} />
       </Row>
       <Row label="Onboarding" hint="Set up modules, permissions, Ollama and the AI model again.">
-        <Button testID="settings-onboarding" title="Run again" variant="secondary" onPress={() => go('onboarding')} />
+        <Button
+          testID="settings-onboarding"
+          title="Run again"
+          variant="secondary"
+          onPress={() => {
+            // A real rerun: quitting partway brings onboarding back on the next launch.
+            update({ onboarded: false, onboardingStep: '' });
+            go('onboarding');
+          }}
+        />
       </Row>
 
       {config.SHOW_DEV_TOOLS ? (

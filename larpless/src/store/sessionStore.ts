@@ -1,4 +1,3 @@
-import { Platform } from 'react-native';
 import { create } from 'zustand';
 import { config, DEFAULT_SETTINGS } from '../config';
 import type { SessionStore, SessionStoreState } from '../contracts/store';
@@ -34,11 +33,12 @@ export const initialSessionState: SessionStoreState = {
 const settings = () => useAppStore.getState().settings;
 
 /**
- * The 'classifier' mode is in effect: the on-device screen model alone, no Ollama. Windows only, the one
- * platform with the screen model; elsewhere the setting is ignored and Ollama's vision LLM reads the screen.
+ * The 'classifier' mode is in effect: the on-device screen model alone, no Ollama. Both platforms have the
+ * screen model (FLScreenModel); a build without it reports `supported: false`, and Settings only offers the mode
+ * once the model is installed.
  */
 export function isClassifierMode(s = settings()): boolean {
-  return Platform.OS === 'windows' && s.classifierMode === 'classifier';
+  return s.classifierMode === 'classifier';
 }
 
 let controller: SessionController | null = null;

@@ -115,11 +115,6 @@ final class FLShellSoundEngine {
   private var rampTimer: DispatchSourceTimer?
   private var chimeUntil: CFTimeInterval = 0
   private var idleWork: DispatchWorkItem?
-  private var muted = false
-  private var chimeCount = 0
-  private var lastError: String?
-  /// Largest per-step gain change of any fade ≥ 300 ms, as a fraction of that fade's span (pop detector).
-  private var maxGainStepRel: Double = 0
 
   static let validIds: Set<String> = ["off", "white", "pink", "brown", "rain", "cafe"]
 
@@ -154,7 +149,7 @@ final class FLShellSoundEngine {
     let hw = engine.outputNode.outputFormat(forBus: 0)
     let sampleRate = hw.sampleRate > 0 ? hw.sampleRate : 48_000
     guard let fmt = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 2) else {
-      lastError = "no format"
+      flShellLog("[FLSound] no output format")
       return false
     }
     format = fmt
@@ -182,7 +177,6 @@ final class FLShellSoundEngine {
     engine.attach(chimePlayer)
     engine.connect(chimePlayer, to: engine.mainMixerNode, format: fmt)
     chimePlayer.volume = 0.55
-    engine.mainMixerNode.outputVolume = muted ? 0 : 1
     engine.prepare()
     configObserver = NotificationCenter.default.addObserver(
       forName: .AVAudioEngineConfigurationChange, object: engine, queue: nil
@@ -213,7 +207,6 @@ final class FLShellSoundEngine {
       flShellLog("[FLSound] engine started")
       return true
     } catch {
-      lastError = error.localizedDescription
       flShellLog("[FLSound] engine start failed: \(error.localizedDescription)")
       return false
     }
@@ -281,10 +274,6 @@ final class FLShellSoundEngine {
       // Equal-power curves: fade-ins follow sin, fade-outs follow cos (no loudness dip mid-crossfade).
       let shaped = r.to >= r.from ? sin(p * .pi / 2) : 1 - cos(p * .pi / 2)
       let g = r.from + (r.to - r.from) * Float(shaped)
-      let span = abs(r.to - r.from)
-      if r.duration >= 0.3, span > 0.0001 {
-        maxGainStepRel = max(maxGainStepRel, Double(abs(g - (gains[key] ?? 0)) / span))
-      }
       setGain(key, g)
       if p >= 1 { ramps[key] = nil }
     }
@@ -345,7 +334,6 @@ final class FLShellSoundEngine {
     }
     chimePlayer.scheduleBuffer(buffer, at: nil, options: [.interrupts])
     if !chimePlayer.isPlaying { chimePlayer.play() }
-    chimeCount += 1
     chimeUntil = CACurrentMediaTime() + Double(buffer.frameLength) / fmt.sampleRate
     scheduleIdlePauseIfSilent()
     flShellLog("[FLSound] chime \(kind)")
@@ -381,82 +369,5 @@ final class FLShellSoundEngine {
       for i in 0..<n { dst[i] = left[i] }
     }
     return buf
-  }
-
-  // MARK: Debug
-
-  func debugState(_ done: @escaping ([String: Any]) -> Void) {
-    queue.async {
-      var targets: [String: Any] = [:]
-      for (k, r) in self.ramps { targets[k] = r.to }
-      done([
-        "configured": self.configured,
-        "engineRunning": self.configured && self.engine.isRunning,
-        "currentId": self.currentId,
-        "voice": self.voiceKey(for: self.currentId) ?? NSNull(),
-        "volume": self.volume,
-        "duck": self.duckFactor,
-        "gains": self.gains,
-        "rampsInFlight": targets,
-        "sampleRate": self.format?.sampleRate ?? 0,
-        "loops": self.loops.keys.sorted(),
-        "muted": self.muted,
-        "chimeCount": self.chimeCount,
-        "maxGainStepRel": (self.maxGainStepRel * 1000).rounded() / 1000,
-        "lastError": self.lastError ?? NSNull(),
-      ])
-    }
-  }
-
-  /// Silences the final output (main mixer) while leaving every voice running, so automated checks can
-  /// measure the voices through taps without making noise on the human's speakers.
-  func debugSetMuted(_ on: Bool) {
-    queue.async {
-      self.maxGainStepRel = 0   // each automated run starts a fresh pop measurement
-      self.muted = on
-      if self.configured { self.engine.mainMixerNode.outputVolume = on ? 0 : 1 }
-    }
-  }
-
-  /// Taps every voice mixer + the chime player and returns an RMS envelope (one row per tap buffer).
-  func debugMeter(durationMs: Double, _ done: @escaping ([String: Any]) -> Void) {
-    queue.async {
-      guard self.configureIfNeeded() else { done(["ok": false, "error": self.lastError ?? "not configured"]); return }
-      let lock = NSLock()
-      var rows: [String: [[Double]]] = [:]   // key → [[tMs, rms, peakStep]]
-      let t0 = CACurrentMediaTime()
-      var tapped: [AVAudioNode] = []
-      func tap(_ node: AVAudioNode, _ key: String) {
-        node.installTap(onBus: 0, bufferSize: 1024, format: nil) { buffer, _ in
-          guard let ch = buffer.floatChannelData?[0] else { return }
-          let n = Int(buffer.frameLength)
-          var sum: Double = 0
-          var maxStep: Float = 0
-          var prev = n > 0 ? ch[0] : 0
-          for i in 0..<n {
-            let v = ch[i]
-            sum += Double(v * v)
-            maxStep = max(maxStep, abs(v - prev))
-            prev = v
-          }
-          let rms = n > 0 ? (sum / Double(n)).squareRoot() : 0
-          let t = (CACurrentMediaTime() - t0) * 1000
-          lock.lock()
-          rows[key, default: []].append([t.rounded(), (rms * 10_000).rounded() / 10_000, Double(maxStep)])
-          lock.unlock()
-        }
-        tapped.append(node)
-      }
-      for (kind, voice) in self.noise { tap(voice.mixer, kind.rawValue) }
-      for (id, loop) in self.loops { tap(loop.mixer, id) }
-      tap(self.chimePlayer, "chime")
-      self.queue.asyncAfter(deadline: .now() + durationMs / 1000) {
-        for node in tapped { node.removeTap(onBus: 0) }
-        lock.lock()
-        let out = rows
-        lock.unlock()
-        done(["ok": true, "engineRunning": self.engine.isRunning, "rows": out])
-      }
-    }
   }
 }
