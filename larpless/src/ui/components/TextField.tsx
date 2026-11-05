@@ -33,7 +33,7 @@ export function TextField({ style, onFocus, onBlur, ...props }: MacTextInputProp
       {...props}
       onFocus={handleFocus}
       onBlur={handleBlur}
-      style={[styles.input, style, border]}
+      style={[styles.box, styles.text, style, border]}
     />
   );
 }
@@ -41,14 +41,15 @@ export function TextField({ style, onFocus, onBlur, ...props }: MacTextInputProp
 /**
  * macOS 27 crashes inside react-native-macos' NSSecureTextField when it
  * becomes first responder. Keep the native input as a normal text field and
- * render a mask over its value instead.
+ * render a mask over its value instead. The input fills the box (so the caret
+ * sits where a plain field's would) and the mask is drawn over its text rect.
  */
 function MaskedTextField({ style, ...props }: MacTextInputProps) {
   const value = typeof props.value === 'string' ? props.value : '';
   const placeholder = typeof props.placeholder === 'string' ? props.placeholder : '';
 
   return (
-    <View style={[styles.input, style]}>
+    <View style={[styles.box, style]}>
       <MacTextInput
         {...props}
         secureTextEntry={false}
@@ -56,44 +57,52 @@ function MaskedTextField({ style, ...props }: MacTextInputProps) {
         autoCorrect={false}
         autoCapitalize="none"
         placeholderTextColor="transparent"
-        style={[styles.maskedInput, styles.maskedInputLayout]}
+        style={[styles.text, styles.maskedInput]}
       />
-      <NativeText pointerEvents="none" style={[styles.mask, !value && styles.placeholder]}>
-        {value ? '•'.repeat(value.length) : placeholder}
+      <NativeText pointerEvents="none" numberOfLines={1} style={[styles.mask, !value && styles.placeholder]}>
+        {value ? '\u2022'.repeat(value.length) : placeholder}
       </NativeText>
     </View>
   );
 }
 
+/** Horizontal padding inside the border. */
+const PAD_X = space.sm + 2;
+/**
+ * react-native-macos turns `padding` into the NSTextField cell's text inset and draws the
+ * line from the top of it, so a fixed-height field needs vertical padding to centre the
+ * text: (32 − 2 border − ~17 line) / 2. Windows' TextBox centres on its own.
+ */
+const PAD_Y = IS_WINDOWS ? 0 : Math.floor((layout.controlHeight - 2 - 17) / 2);
+/** NSTextFieldCell insets its text 2pt from the left of the title rect; the mask has to match. */
+const CELL_INSET_X = 2;
+
 const styles = themed(() => StyleSheet.create({
-  input: {
+  box: {
     height: layout.controlHeight,
-    paddingHorizontal: space.sm + 2,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius,
     backgroundColor: colors.raised,
+  },
+  text: {
+    paddingHorizontal: PAD_X,
+    paddingVertical: PAD_Y,
     fontFamily: fonts.regular,
     fontSize: 14,
     color: colors.text,
   },
   focused: { borderColor: colors.accent },
   maskedInput: {
+    flex: 1,
     color: 'transparent',
-    borderWidth: 0,
     backgroundColor: 'transparent',
-  },
-  maskedInputLayout: {
-    height: layout.controlHeight,
-    paddingHorizontal: space.sm + 2,
   },
   mask: {
     position: 'absolute',
-    left: space.sm + 2,
-    right: space.sm + 2,
-    top: 0,
-    height: layout.controlHeight,
-    lineHeight: 26,
+    left: PAD_X + CELL_INSET_X,
+    right: PAD_X,
+    top: PAD_Y,
     fontFamily: fonts.regular,
     fontSize: 14,
     color: colors.text,

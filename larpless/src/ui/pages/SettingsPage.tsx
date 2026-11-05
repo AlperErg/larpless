@@ -13,7 +13,7 @@ import { useScreenModelStore } from '../../store/screenModelStore';
 import { useSessionStore } from '../../store/sessionStore';
 import { normalizeSupabaseProjectUrl } from '../../social/supabase';
 import { useSocialStore } from '../../store/socialStore';
-import { Button, CodeBlock, MacPressable, MacTextInput, ModelDownload, ScreenModelDownload, Segmented, Switch, Text } from '../components';
+import { Button, CodeBlock, MacPressable, ModelDownload, ScreenModelDownload, Segmented, Switch, Text } from '../components';
 import { TextField } from '../components/TextField';
 import { Page } from '../layout/Page';
 import { isLive } from '../lib/actions';
@@ -22,7 +22,7 @@ import { APP_VERSION, openFeedback, openLink, PRIVACY_URL, TERMS_URL } from '../
 import { APPEARANCE_OPTIONS, CLASSIFIER_OPTIONS, POMODORO_OPTIONS, POWER_OPTIONS, SOUNDS, SOUND_ICON, SOUND_LABEL, STRICTNESS_OPTIONS } from '../lib/labels';
 import { ollamaLine } from '../layout/Sidebar';
 import { DEVICE, IS_WINDOWS } from '../platform';
-import { colors, fonts, layout, radius, space, tag, themed } from '../theme';
+import { colors, space, tag, themed } from '../theme';
 
 /** Local mirror of settings so controls respond instantly; every change also goes to updateSettings. */
 function useSettingsDraft(): [Settings, (patch: Partial<Settings>) => void] {
@@ -156,16 +156,13 @@ export function SettingsPage() {
       {ownServer ? (
         <>
           <Row label="Project URL" hint="Supabase → Project Settings → API → Project URL (not the /rest/v1/ path).">
-            <MacTextInput
+            <TextField
               testID="settings-supabase-url"
               value={supabaseUrl}
               onChangeText={setSupabaseUrl}
               onBlur={commitSupabase}
               onSubmitEditing={commitSupabase}
-              autoCapitalize="none"
-              autoCorrect={false}
               placeholder="https://your-project.supabase.co"
-              enableFocusRing={false}
               style={styles.input}
             />
           </Row>
@@ -180,7 +177,7 @@ export function SettingsPage() {
               onSubmitEditing={commitSupabase}
               secureTextEntry
               placeholder="sb_publishable_…"
-              style={styles.supabaseKey}
+              style={styles.input}
             />
             {keyRejected ? (
               <Text testID="settings-supabase-key-error" variant="small" color={tag.red.text}>
@@ -220,26 +217,22 @@ export function SettingsPage() {
         </View>
       </Row>
       <Row label="Model" hint="Ollama vision model used to read the screen.">
-        <MacTextInput
+        <TextField
           testID="settings-model"
           value={model}
           onChangeText={setModel}
           onBlur={commitModel}
           onSubmitEditing={commitModel}
-          enableFocusRing={false}
-          autoCorrect={false}
           style={styles.input}
         />
       </Row>
       <Row label="Ollama URL" hint="Must be on this computer: localhost or 127.0.0.1.">
-        <MacTextInput
+        <TextField
           testID="settings-url"
           value={url}
           onChangeText={setUrl}
           onBlur={commitUrl}
           onSubmitEditing={commitUrl}
-          enableFocusRing={false}
-          autoCorrect={false}
           style={styles.input}
         />
         {urlRejected ? (
@@ -529,24 +522,11 @@ const styles = themed(() => StyleSheet.create({
   rowControl: { flex: 1, alignItems: 'flex-start' },
   inline: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
   statusText: { marginRight: space.sm },
-  input: {
-    alignSelf: 'stretch',
-    maxWidth: 320,
-    height: layout.controlHeight,
-    paddingHorizontal: space.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius,
-    backgroundColor: colors.raised,
-    fontFamily: fonts.regular,
-    fontSize: 14,
-    color: colors.text,
-  },
+  input: { alignSelf: 'stretch', maxWidth: 320 },
   volBar: { flexDirection: 'row', marginHorizontal: space.xs },
   volStep: { width: 14, height: 14, borderRadius: 2, marginRight: 3 },
   volPct: { marginLeft: space.sm, width: 36 },
   gapLeft: { marginLeft: space.md },
   code: { alignSelf: 'stretch', maxWidth: 420, marginTop: space.xs },
   screenModel: { alignSelf: 'stretch', maxWidth: 420, marginTop: space.sm },
-  supabaseKey: { alignSelf: 'stretch', maxWidth: 420 },
 }));
