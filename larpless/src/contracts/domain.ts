@@ -18,6 +18,8 @@ export interface StudyModule {
 export const ACTIVITY_CATEGORIES = [
   'Social media',
   'Video',
+  // After Video: normalizeActivityCategory matches substrings in this order, so "Music video" stays Video.
+  'Music',
   'Gaming',
   'Shopping',
   'News',

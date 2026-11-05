@@ -20,6 +20,16 @@ export interface SiteEntry {
 /** First match wins. Put specific patterns (Shorts) before broad ones (YouTube). */
 export const SITE_CATALOG: readonly SiteEntry[] = [
   { pattern: /\byoutube shorts\b|youtube\.com\/shorts\b/i, mode: 'distract', category: 'Video', panelLabel: 'YouTube Shorts' },
+  // Music before Amazon and YouTube, which would otherwise claim Amazon Music and YouTube Music.
+  { pattern: /\bspotify\b/i, mode: 'distract', category: 'Music', panelLabel: 'Spotify' },
+  // macOS names the Apple Music app just "Music"; anchor on the app name so "Music Theory" titles don't match.
+  { pattern: /\bapple music\b|music\.apple\.com\b|^music(\s|$)/i, mode: 'distract', category: 'Music', panelLabel: 'Apple Music' },
+  // App name or site only: "tidal" alone is also physics/oceanography.
+  { pattern: /^tidal\b|\btidal\.com\b/i, mode: 'distract', category: 'Music', panelLabel: 'Tidal' },
+  { pattern: /\byoutube music\b|music\.youtube\.com\b/i, mode: 'distract', category: 'Music', panelLabel: 'YouTube Music' },
+  { pattern: /\bamazon music\b|music\.amazon\./i, mode: 'distract', category: 'Music', panelLabel: 'Amazon Music' },
+  { pattern: /\bsoundcloud\b/i, mode: 'distract', category: 'Music', panelLabel: 'SoundCloud' },
+  { pattern: /\bdeezer\b/i, mode: 'distract', category: 'Music', panelLabel: 'Deezer' },
   { pattern: /\binstagram\b/i, mode: 'distract', category: 'Social media', panelLabel: 'Instagram' },
   { pattern: /\btiktok\b/i, mode: 'distract', category: 'Social media', panelLabel: 'TikTok' },
   { pattern: /\bfacebook\b/i, mode: 'distract', category: 'Social media', panelLabel: 'Facebook' },

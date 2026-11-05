@@ -30,5 +30,7 @@ describe('sites', () => {
     expect(normalizeActivityCategory('Messaging')).toBe('Chatting');
     expect(normalizeActivityCategory('Planning a party')).toBeNull();
     expect(normalizeActivityCategory('Social media')).toBe('Social media');
+    expect(normalizeActivityCategory('music')).toBe('Music');
+    expect(normalizeActivityCategory('Music video')).toBe('Video');
   });
 });

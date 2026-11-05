@@ -12,6 +12,12 @@ describe('rules.matchDistraction', () => {
       ['Safari', 'Twitter', 'Social media'],
       ['Safari', 'Netflix', 'Video'],
       ['Safari', 'Twitch', 'Video'],
+      ['Spotify', 'Spotify Premium', 'Music'],
+      ['Music', 'Midnight City', 'Music'],
+      ['TIDAL', 'Home', 'Music'],
+      ['Safari', 'Tidal – listen.tidal.com', 'Music'],
+      ['Chrome', 'YouTube Music', 'Music'],
+      ['Safari', 'Amazon Music', 'Music'],
       ['Discord', '#general', 'Chatting'],
       ['Messenger', 'Chats', 'Chatting'],
       ['Steam', 'Library', 'Gaming'],
@@ -30,13 +36,16 @@ describe('rules.matchDistraction', () => {
     expect(matchDistraction('Safari', 'netflix.com')).toEqual({ activity: 'Video' });
     expect(matchDistraction('Safari', 'box.com files')).toBeNull();
     expect(matchDistraction('WhatsApp', 'Group project')).toBeNull();
+    expect(matchDistraction('Preview', 'Music Theory – week 3.pdf')).toBeNull();
+    expect(matchDistraction('Safari', 'Tidal forces – Wikipedia')).toBeNull();
+    expect(matchDistraction('Safari', 'Summer Nights (Official Music Video) – YouTube')).toBeNull();
     expect(matchDistraction(null, null)).toBeNull();
     expect(matchDistraction('', '')).toBeNull();
   });
 
   it('exports the rule list for Settings', () => {
     expect(DISTRACTION_RULES.map((r) => r.label)).toContain('Instagram');
-    expect(DISTRACTION_RULES.length).toBe(13);
+    expect(DISTRACTION_RULES.length).toBe(20);
   });
 });
 
