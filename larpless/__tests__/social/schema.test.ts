@@ -268,7 +268,7 @@ describe('are_friends()', () => {
   it('does not reveal other people’s friendships (security invoker)', async () => {
     await seedFriendship('alice', 'bob', 'accepted');
     expect(await areFriends('carol', 'alice', 'bob')).toBe(false);
-    expect(await areFriends('anon', 'alice', 'bob')).toBe(false);
+    await expect(areFriends('anon', 'alice', 'bob')).rejects.toMatchObject({ code: '42501' });
   });
 });
 
@@ -459,5 +459,56 @@ describe('sign-up cap (#14, until there is a CAPTCHA)', () => {
     } finally {
       await db.query("delete from auth.users where starts_with(raw_user_meta_data ->> 'username', 'bulk_')");
     }
+  });
+});
+
+// Catches the mistakes the Supabase Security Advisor lints for, so a new table or function can't
+// quietly ship open: Supabase grants every new table and function in `public` to anon/authenticated.
+describe('hardening', () => {
+  /** Tables, views and functions in `public` created by schema.sql (not by an extension). */
+  const OWN = `not exists (select 1 from pg_depend d where d.objid = c.oid and d.deptype = 'e')`;
+
+  it('every table in public has row-level security on', async () => {
+    const res = await db.query<{ name: string; rls: boolean }>(
+      `select c.relname as name, c.relrowsecurity as rls from pg_class c
+       where c.relnamespace = 'public'::regnamespace and c.relkind in ('r', 'p') and ${OWN}
+       order by 1`,
+    );
+    expect(res.rows.length).toBeGreaterThan(0);
+    expect(res.rows.filter((r) => !r.rls).map((r) => r.name)).toEqual([]);
+  });
+
+  it('every view in public is security_invoker, so it cannot read past RLS', async () => {
+    const res = await db.query<{ name: string }>(
+      `select c.relname as name from pg_class c
+       where c.relnamespace = 'public'::regnamespace and c.relkind in ('v', 'm') and ${OWN}
+         and not coalesce('security_invoker=true' = any (c.reloptions), false)`,
+    );
+    expect(res.rows).toEqual([]);
+  });
+
+  it('every function in public pins search_path', async () => {
+    const res = await db.query<{ name: string }>(
+      `select c.proname as name from pg_proc c
+       where c.pronamespace = 'public'::regnamespace and ${OWN}
+         and not exists (select 1 from unnest(c.proconfig) s where s like 'search_path=%')
+       order by 1`,
+    );
+    expect(res.rows).toEqual([]);
+  });
+
+  it('only the intended security definer functions can be called through the API', async () => {
+    const callable = async (role: string) =>
+      (
+        await db.query<{ name: string }>(
+          `select c.proname as name from pg_proc c
+           where c.pronamespace = 'public'::regnamespace and c.prosecdef and ${OWN}
+             and has_function_privilege($1, c.oid, 'execute')
+           order by 1`,
+          [role],
+        )
+      ).rows.map((r) => r.name);
+    expect(await callable('anon')).toEqual([]);
+    expect(await callable('authenticated')).toEqual(['delete_account', 'find_profile']);
   });
 });

@@ -35,6 +35,9 @@ begin
 end;
 $$;
 
+-- Trigger functions run as triggers without an EXECUTE check; nobody needs to call them directly.
+revoke execute on function public.handle_new_user() from public, anon, authenticated;
+
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
@@ -160,6 +163,8 @@ begin
 end;
 $$;
 
+revoke execute on function public.limit_friend_requests() from public, anon, authenticated;
+
 drop trigger if exists friendships_rate_limit on public.friendships;
 create trigger friendships_rate_limit
   before insert on public.friendships
@@ -206,6 +211,9 @@ as $$
   );
 $$;
 
+revoke execute on function public.are_friends(uuid, uuid) from public, anon;
+grant execute on function public.are_friends(uuid, uuid) to authenticated;
+
 -- Posts ----------------------------------------------------------------------
 -- Stats only: no photos, chunks, app names or window titles.
 
@@ -232,6 +240,7 @@ create or replace function public.valid_breakdown(b jsonb)
 returns boolean
 language sql
 immutable
+set search_path = ''
 as $$
   select case
     when jsonb_typeof(b) <> 'array' then false
@@ -263,6 +272,8 @@ begin
   return new;
 end;
 $$;
+
+revoke execute on function public.limit_posts() from public, anon, authenticated;
 
 drop trigger if exists posts_rate_limit on public.posts;
 create trigger posts_rate_limit
