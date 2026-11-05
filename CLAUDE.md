@@ -18,6 +18,7 @@ scripts/setup-worktree.sh                  # npm ci + pod install (sets the UTF-
 scripts/run-mac.sh 8081                    # Metro on 8081 + Debug build with that port baked in + launch
 scripts/clean-build.sh                     # kill LarpLess, delete macos/build and Focusline-* DerivedData
 scripts/fresh-run-mac.sh 8081              # clean-build + setup-worktree + run-mac
+scripts/release-mac.sh                     # signed, notarized, stapled macos/build/release/LarpLess-<version>.dmg (needs the larpless-notary notarytool profile; --no-notarize to only build + sign)
 node scripts/acknowledgements.mjs          # regenerate src/legal/acknowledgements.json after dependency changes (needs pod install; CI runs --check)
 xcodebuild -workspace macos/Focusline.xcworkspace -scheme Focusline-macOS -configuration Debug build
 ```
