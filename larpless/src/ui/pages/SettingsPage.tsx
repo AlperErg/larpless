@@ -13,13 +13,13 @@ import { useScreenModelStore } from '../../store/screenModelStore';
 import { useSessionStore } from '../../store/sessionStore';
 import { normalizeSupabaseProjectUrl } from '../../social/supabase';
 import { useSocialStore } from '../../store/socialStore';
-import { Button, CodeBlock, MacPressable, ModelDownload, ScreenModelDownload, Segmented, Switch, Text } from '../components';
+import { Button, CodeBlock, MacPressable, ModelDownload, PomodoroPicker, ScreenModelDownload, Segmented, Switch, Text } from '../components';
 import { TextField } from '../components/TextField';
 import { Page } from '../layout/Page';
 import { isLive } from '../lib/actions';
 import { errorText } from '../lib/social';
 import { APP_VERSION, openFeedback, openLink, PRIVACY_URL, TERMS_URL } from '../lib/links';
-import { APPEARANCE_OPTIONS, CLASSIFIER_OPTIONS, POMODORO_OPTIONS, POWER_OPTIONS, SOUNDS, SOUND_ICON, SOUND_LABEL, STRICTNESS_OPTIONS } from '../lib/labels';
+import { APPEARANCE_OPTIONS, CLASSIFIER_OPTIONS, POWER_OPTIONS, SOUNDS, SOUND_ICON, SOUND_LABEL, STRICTNESS_OPTIONS } from '../lib/labels';
 import { ollamaLine } from '../layout/Sidebar';
 import { DEVICE, IS_WINDOWS } from '../platform';
 import { colors, space, tag, themed } from '../theme';
@@ -294,8 +294,14 @@ export function SettingsPage() {
       <Row label="Strictness" hint="Minutes of distraction before a notification.">
         <Segmented testID="settings-strictness" options={STRICTNESS_OPTIONS} value={s.strictness} onChange={(v) => update({ strictness: v })} />
       </Row>
-      <Row label="Pomodoro" hint="Default for new sessions.">
-        <Segmented testID="settings-pomodoro" options={POMODORO_OPTIONS} value={s.pomodoroDefault} onChange={(v) => update({ pomodoroDefault: v })} />
+      <Row label="Pomodoro" hint="Default for new sessions. Custom sets your own study and break lengths.">
+        <PomodoroPicker
+          testID="settings-pomodoro"
+          value={s.pomodoroDefault}
+          custom={s.pomodoroCustom}
+          onChange={(v) => update({ pomodoroDefault: v })}
+          onCustomChange={(c) => update({ pomodoroCustom: c })}
+        />
       </Row>
       <Row label="Demo fast mode" hint="Alerts after 20 s. Check rate stays on the power profile you picked.">
         <Switch testID="settings-demoFast" accessibilityLabel="Demo fast mode" value={s.demoFast} onChange={(v) => update({ demoFast: v })} />

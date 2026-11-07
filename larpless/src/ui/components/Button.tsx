@@ -17,6 +17,8 @@ export interface ButtonProps {
   icon?: IconName;
   disabled?: boolean;
   tooltip?: string;
+  /** false: a click doesn't take keyboard focus (no Tab stop either). */
+  focusable?: boolean;
   testID?: string;
   style?: StyleProp<ViewStyle>;
 }
@@ -30,6 +32,7 @@ export function Button({
   icon,
   disabled,
   tooltip,
+  focusable,
   testID,
   style,
 }: ButtonProps) {
@@ -43,6 +46,7 @@ export function Button({
       accessibilityState={{ disabled: !!disabled }}
       disabled={disabled}
       tooltip={tooltip}
+      focusable={focusable}
       enableFocusRing={false}
       onPress={onPress}
       onHoverIn={() => setHover(true)}

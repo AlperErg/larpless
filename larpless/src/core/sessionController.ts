@@ -532,7 +532,7 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
     if (toBreak && status === 'running') enterBreak(t);
     else if (!toBreak && status === 'break') leaveBreak(t);
     if (event.from === event.to) return;
-    const mins = Math.round(phaseDurationMs(next.preset, next.phase) / 60_000);
+    const mins = Math.round(phaseDurationMs(next, next.phase) / 60_000);
     native.notifications
       .post(
         toBreak
@@ -655,7 +655,7 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
         webcam: { enabled: !demo && settings.webcamEnabled, personPresent: true, phoneVisible: false },
         missingPermissions: [],
         privacy: { framesAnalysed: 0, checksWithoutScreenshot: 0, framesStored: 0 },
-        pomodoro: preset ? initPomodoro(preset, t) : null,
+        pomodoro: preset ? initPomodoro(preset, t, 0, settings.pomodoroCustom) : null,
         alert: { level: 0, distractedSinceMs: null },
         sound: { id: settings.defaultSound, volume: settings.volume },
         lastSummary: null,
@@ -834,7 +834,7 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
         set({ pomodoro: toggle(st.pomodoro, t) });
         if (st.status === 'break') leaveBreak(t);
       } else {
-        const next = toggle(st.pomodoro, t, fallbackPreset());
+        const next = toggle(st.pomodoro, t, fallbackPreset(), deps.getSettings().pomodoroCustom);
         set({ pomodoro: st.status === 'paused' ? freeze(next, t) : next });
       }
       pushPanel();
@@ -854,7 +854,7 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
       if (!isActive()) return;
       const t = now();
       const st = get();
-      const next = initPomodoro(preset, t, st.pomodoro?.completed ?? 0);
+      const next = initPomodoro(preset, t, st.pomodoro?.completed ?? 0, deps.getSettings().pomodoroCustom);
       set({ pomodoro: st.status === 'paused' ? freeze(next, t) : next });
       if (st.status === 'break') leaveBreak(t);
       pushPanel();

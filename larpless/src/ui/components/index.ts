@@ -17,6 +17,7 @@ export { PageHeader } from './PageHeader';
 export { EditableTable } from './EditableTable';
 export { SubjectLibrary } from './SubjectLibrary';
 export { Segmented } from './Segmented';
+export { PomodoroPicker } from './PomodoroPicker';
 export type { SegmentedOption } from './Segmented';
 export { Switch } from './Switch';
 export { CodeBlock } from './CodeBlock';

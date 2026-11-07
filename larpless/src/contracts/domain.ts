@@ -84,7 +84,12 @@ export type PowerProfile = 'eco' | 'medium' | 'high';
  * 'classifier': the on-device screen model alone; Ollama is never started or asked.
  */
 export type ClassifierMode = 'vlm' | 'classifier';
-export type PomodoroPreset = '25/5' | '50/10' | 'demo';
+export type PomodoroPreset = '25/5' | '50/10' | 'custom' | 'demo';
+/** The user's own Pomodoro lengths, in whole minutes (used by the 'custom' preset). */
+export interface PomodoroCustom {
+  focusMin: number;
+  breakMin: number;
+}
 export type PomodoroPhase = 'focus' | 'break' | 'longBreak';
 
 export interface PomodoroState {
@@ -95,6 +100,8 @@ export interface PomodoroState {
   roundsBeforeLong: number;   // 4
   phaseEndsAtMs: number;      // epoch ms; never count ticks
   completed: number;          // finished focus rounds
+  /** Only for the 'custom' preset: the lengths captured when it started, so a later settings edit can't move a running phase. */
+  custom?: PomodoroCustom;
   /** Set only while the session is paused: the phase time left, frozen. Resume moves phaseEndsAtMs and clears it. */
   pausedRemainingMs?: number;
 }
@@ -117,6 +124,8 @@ export interface Settings {
   defaultSound: SoundId;
   volume: number;                       // 0..1
   pomodoroDefault: PomodoroPreset | 'off';
+  /** Study and break lengths for the 'custom' Pomodoro preset. */
+  pomodoroCustom: PomodoroCustom;
   /** Ids of subjects (built-in or own courses) the classifier may not pick. New subjects start on. */
   disabledSubjects: string[];
   onboarded: boolean;
