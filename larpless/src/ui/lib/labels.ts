@@ -29,6 +29,7 @@ export const POMODORO_OPTIONS: { value: PomodoroPreset | 'off'; label: string; i
   { value: 'off', label: 'Off' },
   { value: '25/5', label: '25/5', icon: 'timer' },
   { value: '50/10', label: '50/10', icon: 'timer' },
+  { value: 'custom', label: 'Custom', icon: 'settings' },
 ];
 
 export const APPEARANCE_OPTIONS: { value: Appearance; label: string; icon: IconName }[] = [

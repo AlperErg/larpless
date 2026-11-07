@@ -13,7 +13,7 @@ import {
   Button,
   Callout,
   PrivacyBadge,
-  Segmented,
+  PomodoroPicker,
   SerifTimer,
   StatusDot,
   Muted,
@@ -29,7 +29,7 @@ import { breakdownFromChunks, lookModule } from '../lib/derive';
 import { formatCountdown, formatDuration, formatTime, timeAgo } from '../lib/format';
 import { remainingMs } from '../../core/pomodoro';
 import { useNow } from '../lib/hooks';
-import { POMODORO_OPTIONS, SOUND_ICON, SOUND_LABEL, nextSound } from '../lib/labels';
+import { SOUND_ICON, SOUND_LABEL, nextSound } from '../lib/labels';
 import { space } from '../theme';
 import { DEVICE, MOD } from '../platform';
 import { useAllModules } from '../lib/useAllModules';
@@ -341,13 +341,13 @@ function SessionIdle() {
       </Callout>
       <View style={[styles.block, styles.buttons]}>
         <Button testID="start-session" title="Start session" icon="play" variant="primary" size="lg" onPress={() => startSession()} />
-        <Segmented
-          testID="pomodoro-preset"
-          options={POMODORO_OPTIONS}
+        <PomodoroPicker
           value={preset}
+          custom={settings.pomodoroCustom}
           onChange={(v) => {
             updateSettings({ pomodoroDefault: v }).catch(() => {});
           }}
+          onCustomChange={(c) => updateSettings({ pomodoroCustom: c }).catch(() => {})}
           style={styles.gapLeft}
         />
       </View>

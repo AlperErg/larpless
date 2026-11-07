@@ -41,6 +41,7 @@ export const DEFAULT_SETTINGS: Settings = {
   defaultSound: 'off',
   volume: 0.5,
   pomodoroDefault: 'off',
+  pomodoroCustom: { focusMin: 45, breakMin: 15 }, // = DEFAULT_CUSTOM in core/pomodoro.ts
   disabledSubjects: [],
   onboarded: false,
   onboardingStep: '',

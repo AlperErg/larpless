@@ -5,12 +5,11 @@ import type { PomodoroPreset } from '../../contracts/domain';
 import { useAppStore } from '../../store/appStore';
 import { useNavStore } from '../../store/navStore';
 import { useSessionStore } from '../../store/sessionStore';
-import { Button, Callout, Heatmap, Icon, Segmented, Strong, Text, ToggleList, isAltPress, sessionToggleItem } from '../components';
+import { Button, Callout, Heatmap, Icon, PomodoroPicker, Strong, Text, ToggleList, isAltPress, sessionToggleItem } from '../components';
 import { Page } from '../layout/Page';
 import { isLive, startSession } from '../lib/actions';
 import { streakDays } from '../lib/derive';
 import { formatDuration, greeting } from '../lib/format';
-import { POMODORO_OPTIONS } from '../lib/labels';
 import { colors, space } from '../theme';
 import { ALT, MOD } from '../platform';
 import { useAllModules } from '../lib/useAllModules';
@@ -21,6 +20,7 @@ export function HomePage() {
   const sessions = useAppStore((s) => s.sessions);
   const modules = useAllModules();
   const pomodoroDefault = useAppStore((s) => s.settings.pomodoroDefault);
+  const pomodoroCustom = useAppStore((s) => s.settings.pomodoroCustom);
   const updateSettings = useAppStore((s) => s.updateSettings);
   const status = useSessionStore((s) => s.status);
   const go = useNavStore((s) => s.go);
@@ -67,14 +67,14 @@ export function HomePage() {
               <Text variant="small" style={styles.presetLabel}>
                 Pomodoro
               </Text>
-              <Segmented
-                testID="pomodoro-preset"
-                options={POMODORO_OPTIONS}
+              <PomodoroPicker
                 value={preset}
+                custom={pomodoroCustom}
                 onChange={(v) => {
                   setPreset(v);
                   updateSettings({ pomodoroDefault: v }).catch(() => {});
                 }}
+                onCustomChange={(c) => updateSettings({ pomodoroCustom: c }).catch(() => {})}
               />
             </View>
           </View>

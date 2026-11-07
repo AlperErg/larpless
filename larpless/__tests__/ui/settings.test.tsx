@@ -95,6 +95,22 @@ afterEach(() => {
 });
 
 describe('Settings page', () => {
+  it('Custom pomodoro opens a study/break editor whose −/+ save the minutes', async () => {
+    const r = render();
+    expect(byID(r, 'settings-pomodoro-custom-focus')).toBeUndefined();
+    await press(byTestID(r, 'settings-pomodoro-custom'));
+    expect(settings().pomodoroDefault).toBe('custom');
+    expect(byID(r, 'settings-pomodoro-custom-focus')).toBeDefined();
+
+    // Study steps by 5 (45 → 40 → 35), break by 1 (15 → 16).
+    await press(byTestID(r, 'settings-pomodoro-custom-focus-minus'));
+    await press(byTestID(r, 'settings-pomodoro-custom-focus-minus'));
+    await press(byTestID(r, 'settings-pomodoro-custom-break-plus'));
+    expect(settings().pomodoroCustom).toEqual({ focusMin: 35, breakMin: 16 });
+    expect(textOf(byID(r, 'settings-pomodoro-custom-focus'))).toContain('35');
+    expect(await stored()).toMatchObject({ pomodoroDefault: 'custom', pomodoroCustom: { focusMin: 35, breakMin: 16 } });
+  });
+
   it('focus and sound choices apply at once, persist, and show as selected', async () => {
     const r = render();
     expect(isSelected(r, 'settings-strictness-2')).toBe(true);

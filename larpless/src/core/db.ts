@@ -6,6 +6,7 @@ import { supabaseKeyProblem } from './friendsServer';
 import { DEFAULT_SETTINGS, MODEL_DEFAULT_REV } from '../config';
 import { isLocalUrl } from './ollama';
 import { isPowerProfile } from './powerProfile';
+import { cleanCustom } from './pomodoro';
 import type { Chunk, SessionSummary, Settings, StudyModule } from '../contracts/domain';
 
 export interface KeyValue {
@@ -71,6 +72,8 @@ export function cleanSettings(raw: unknown): Settings {
   out.disabledSubjects = Array.isArray(out.disabledSubjects)
     ? Array.from(new Set(out.disabledSubjects.filter((id): id is string => typeof id === 'string')))
     : [];
+  if (!['off', '25/5', '50/10', 'custom', 'demo'].includes(out.pomodoroDefault)) out.pomodoroDefault = DEFAULT_SETTINGS.pomodoroDefault;
+  out.pomodoroCustom = cleanCustom(out.pomodoroCustom);
   if (out.appearance !== 'system' && out.appearance !== 'light' && out.appearance !== 'dark') {
     out.appearance = DEFAULT_SETTINGS.appearance;
   }

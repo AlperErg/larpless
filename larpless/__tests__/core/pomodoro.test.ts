@@ -1,4 +1,4 @@
-import { freeze, initPomodoro, remainingMs, skip, thaw, tick, toggle } from '../../src/core/pomodoro';
+import { cleanCustom, freeze, initPomodoro, remainingMs, skip, thaw, tick, toggle } from '../../src/core/pomodoro';
 
 const MIN = 60_000;
 
@@ -89,5 +89,27 @@ describe('pomodoro', () => {
     expect(thawed.phaseEndsAtMs).toBe(65 * MIN);
     expect(thawed).not.toHaveProperty('pausedRemainingMs');
     expect(thaw(s, 50 * MIN)).toBe(s); // nothing to thaw
+  });
+
+  it('custom: the user study/break lengths, captured at start, no long break', () => {
+    let s = initPomodoro('custom', 0, 0, { focusMin: 40, breakMin: 8 });
+    expect(s).toMatchObject({ preset: 'custom', phaseEndsAtMs: 40 * MIN, custom: { focusMin: 40, breakMin: 8 } });
+    for (let round = 1; round <= 4; round++) {
+      s = tick(s, s.phaseEndsAtMs).state;
+      expect(s.phase).toBe('break');
+      const breakStart = s.phaseEndsAtMs - 8 * MIN;
+      s = tick(s, s.phaseEndsAtMs).state;
+      expect(s.phaseEndsAtMs - (breakStart + 8 * MIN)).toBe(40 * MIN);
+    }
+    expect(s.completed).toBe(4);
+    // Toggling off and on keeps the captured lengths, not the fallback.
+    s = toggle(toggle(s, 0), 1000, '25/5', { focusMin: 10, breakMin: 2 });
+    expect(s).toMatchObject({ preset: 'custom', phaseEndsAtMs: 1000 + 40 * MIN });
+  });
+
+  it('cleanCustom clamps and rounds to whole minutes within the limits', () => {
+    expect(cleanCustom({ focusMin: 0, breakMin: 999 })).toEqual({ focusMin: 1, breakMin: 60 });
+    expect(cleanCustom({ focusMin: 22.6, breakMin: 'x' })).toEqual({ focusMin: 23, breakMin: 15 });
+    expect(cleanCustom(null)).toEqual({ focusMin: 45, breakMin: 15 });
   });
 });
