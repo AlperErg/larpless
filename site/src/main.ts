@@ -213,7 +213,75 @@ function bindScoreBar() {
   });
 }
 
+const GUIDES = { mac: '#getting-started-on-mac', win: '#getting-started-on-windows' } as const;
+type Os = keyof typeof GUIDES;
+
+function bindTerminal() {
+  const term = document.querySelector<HTMLElement>('#term');
+  if (!term) return;
+  const tabs = Array.from(term.querySelectorAll<HTMLButtonElement>('.term-tab'));
+  const panels = Array.from(term.querySelectorAll<HTMLElement>('.term-lines[data-os]'));
+  const copy = term.querySelector<HTMLButtonElement>('#term-copy');
+  const label = copy?.querySelector<HTMLElement>('.term-copy-label');
+  const status = term.querySelector<HTMLElement>('#term-status');
+  const guide = document.querySelector<HTMLAnchorElement>('[data-guide]');
+  let os: Os = 'mac';
+
+  const select = (next: Os) => {
+    os = next;
+    tabs.forEach((tab) => {
+      const on = tab.dataset.os === next;
+      tab.setAttribute('aria-selected', on ? 'true' : 'false');
+      tab.tabIndex = on ? 0 : -1;
+    });
+    panels.forEach((panel) => (panel.hidden = panel.dataset.os !== next));
+    if (guide) guide.href = guide.href.replace(/#.*$/, GUIDES[next]);
+  };
+
+  if (/Windows/i.test(navigator.userAgent)) select('win');
+
+  tabs.forEach((tab, index) => {
+    tab.addEventListener('click', () => select(tab.dataset.os as Os));
+    tab.addEventListener('keydown', (event) => {
+      if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+      event.preventDefault();
+      const target = tabs[(index + 1) % tabs.length];
+      target.focus();
+      select(target.dataset.os as Os);
+    });
+  });
+
+  let reset = 0;
+  const show = (text: string, done: boolean) => {
+    if (!copy || !label) return;
+    label.textContent = text;
+    if (done) copy.dataset.done = '';
+    else delete copy.dataset.done;
+  };
+  copy?.addEventListener('click', async () => {
+    const panel = panels.find((p) => p.dataset.os === os);
+    if (!panel) return;
+    const text = Array.from(panel.querySelectorAll('.term-cmd'))
+      .map((cmd) => cmd.textContent ?? '')
+      .join('\n');
+    let ok = true;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      ok = false;
+    }
+    show(ok ? 'Copied' : 'Copy failed', ok);
+    if (status) status.textContent = ok ? 'Commands copied to the clipboard' : 'Could not copy. Select the commands instead.';
+    window.clearTimeout(reset);
+    reset = window.setTimeout(() => {
+      show('Copy', false);
+      if (status) status.textContent = '';
+    }, 2000);
+  });
+}
+
 paintHeat();
 revealOnScroll();
 ipadScroll();
 bindScoreBar();
+bindTerminal();

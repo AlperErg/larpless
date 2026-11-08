@@ -1671,3 +1671,484 @@ figure.reveal.in img {
     content: none;
   }
 }
+
+/* GitHub calls to action */
+a.soon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    transform 260ms var(--ease),
+    box-shadow 260ms var(--ease);
+}
+
+a.soon:hover {
+  color: var(--paper-ink);
+  transform: translateY(-2px);
+  box-shadow: 0 14px 32px -14px rgba(244, 241, 234, 0.5);
+}
+
+a.soon:active {
+  transform: translateY(0);
+  box-shadow: 0 4px 12px -8px rgba(244, 241, 234, 0.5);
+  transition-duration: 80ms;
+}
+
+/* clip-path on .soon would cut off the outline, so the ring is drawn as a shadow */
+a.soon:focus-visible {
+  outline: none;
+  clip-path: none;
+  box-shadow:
+    0 0 0 3px var(--bg),
+    0 0 0 5px var(--ink);
+}
+
+.gh-mark {
+  width: 1.15em;
+  height: 1.15em;
+  flex: none;
+  fill: currentColor;
+}
+
+.arrow,
+.ico {
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.arrow {
+  width: 15px;
+  height: 15px;
+  transition: transform 260ms var(--ease);
+}
+
+.ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 44px;
+  padding: 0 8px;
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 15px;
+  text-decoration: none;
+  transition: color 180ms ease;
+}
+
+.ghost:hover {
+  color: var(--ink);
+}
+
+.ghost:hover .arrow {
+  transform: translateX(3px);
+}
+
+/* Download section */
+.closer .section-head {
+  margin-bottom: 32px;
+}
+
+.term {
+  width: 100%;
+  margin: 0 auto;
+  max-width: 44rem;
+  text-align: left;
+  background: var(--code);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.25),
+    0 32px 64px -28px rgba(0, 0, 0, 0.75);
+  overflow: hidden;
+}
+
+.term-bar {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 8px 8px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.term-dots {
+  display: flex;
+  gap: 7px;
+}
+
+.term-dots i {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--heat-0);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.term-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.28);
+}
+
+.term button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--faint);
+  font: 500 13px/1 var(--sans);
+  min-height: 30px;
+  padding: 0 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition:
+    color 160ms ease,
+    background-color 160ms ease;
+}
+
+.term button:hover {
+  color: var(--ink);
+}
+
+.term .term-tab[aria-selected="true"] {
+  color: var(--ink);
+  background: rgba(244, 241, 234, 0.12);
+}
+
+.term-copy {
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.term .term-copy {
+  padding: 0 12px 0 10px;
+}
+
+.term .term-copy:hover {
+  background: var(--hover);
+}
+
+.term-copy .ico {
+  width: 14px;
+  height: 14px;
+}
+
+.term-copy .ico-done,
+.term-copy[data-done] .ico-copy {
+  display: none;
+}
+
+.term-copy[data-done] .ico-done {
+  display: block;
+}
+
+.term .term-copy[data-done] {
+  color: var(--green);
+}
+
+.term-body {
+  padding: 20px 22px 22px;
+}
+
+.term-lines {
+  display: grid;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+
+.term-lines[hidden] {
+  display: none;
+}
+
+.term-line {
+  display: grid;
+  grid-template-columns: 1.5ch 1fr;
+  column-gap: 1ch;
+}
+
+.term-note {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--faint);
+  font-family: var(--sans);
+  font-size: 13px;
+}
+
+.term-p {
+  color: var(--green);
+  user-select: none;
+}
+
+.term-cmd {
+  background: none;
+  padding: 0;
+  border-radius: 0;
+  font-size: inherit;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.term-cmd::selection {
+  background: var(--green);
+  color: var(--bg);
+}
+
+.closer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 12px 20px;
+}
+
+.closer .closer-actions .soon {
+  margin-top: 0;
+}
+
+.closer-meta {
+  margin: 40px auto 0;
+  color: var(--faint);
+  font-size: 13px;
+}
+
+.closer-meta a {
+  color: var(--muted);
+  text-decoration: underline;
+  text-decoration-color: var(--line);
+  text-underline-offset: 3px;
+  transition: text-decoration-color 160ms ease;
+}
+
+.closer-meta a:hover {
+  color: var(--ink);
+  text-decoration-color: currentColor;
+}
+
+a.soon .arrow {
+  width: 1em;
+  height: 1em;
+}
+
+a.soon[href="#download"]:hover .arrow {
+  transform: translateY(2px);
+}
+
+.ghost .gh-mark {
+  width: 1.05em;
+  height: 1.05em;
+}
+
+/* Watch → Custom → Releases */
+.watch-how {
+  margin: 18px auto 0;
+  color: var(--faint);
+  font-size: 14px;
+}
+
+.watch-steps {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+@media (max-width: 420px) {
+  .watch-label {
+    flex-basis: 100%;
+  }
+}
+
+.watch-steps .ui {
+  padding: 3px 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--code);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.chev {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Build it yourself */
+.build {
+  max-width: 44rem;
+  margin: 64px auto 0;
+  text-align: left;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.build summary {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 44px;
+  padding: 20px 4px;
+  list-style: none;
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+.build summary::-webkit-details-marker {
+  display: none;
+}
+
+/* Undo the generic details/summary styles (▸ glyph, 600 weight, padding). */
+.build {
+  padding: 0;
+}
+
+.build summary {
+  font-size: inherit;
+  font-weight: 400;
+}
+
+.build summary::before {
+  content: none;
+}
+
+.build summary:focus-visible {
+  outline-offset: 2px;
+}
+
+.build-title {
+  display: block;
+  color: var(--ink);
+  font-size: 1.05rem;
+  font-weight: 500;
+}
+
+.build-sub {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.build-chev {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-left: auto;
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 300ms var(--ease);
+}
+
+.build summary:hover .build-chev {
+  stroke: var(--ink);
+}
+
+.build[open] .build-chev {
+  transform: rotate(180deg);
+}
+
+.build-body {
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+  padding: 4px 0 28px;
+}
+
+.build[open] .build-body {
+  animation: unfold 420ms var(--ease) both;
+}
+
+@keyframes unfold {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* The command lines arrive one after another as the card comes into view. */
+.closer.reveal .term-lines > .term-line {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.closer.reveal.in .term-lines > .term-line {
+  animation: rise 560ms var(--ease) both;
+  animation-delay: calc(260ms + var(--i, 0) * 90ms);
+}
+
+.term-line:nth-child(2) { --i: 1; }
+.term-line:nth-child(3) { --i: 2; }
+.term-line:nth-child(4) { --i: 3; }
+
+@media (max-width: 560px) {
+  .term-bar {
+    grid-template-columns: auto 1fr;
+    padding-left: 8px;
+  }
+
+  .term-dots {
+    display: none;
+  }
+
+  .term-tabs {
+    justify-self: start;
+  }
+
+  .term-body {
+    padding: 16px 16px 18px;
+  }
+
+  .term-lines {
+    font-size: 12.5px;
+  }
+
+  .term-line:not(.term-note) {
+    padding-block: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  a.soon,
+  .arrow {
+    transition: none;
+  }
+
+  a.soon:hover,
+  .ghost:hover .arrow {
+    transform: none;
+  }
+
+  .build-chev,
+  .build[open] .build-body,
+  .closer.reveal .term-lines > .term-line,
+  .closer.reveal.in .term-lines > .term-line {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}

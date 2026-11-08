@@ -85,9 +85,9 @@
         <a class="brand" href="#top">LarpLess</a>
         <nav class="nav" aria-label="Page">
           <a class="nav-link" href="#how">How it works</a>
-          <a class="nav-link" href="#friends">Friends</a>
           <a class="nav-link" href="#privacy">Privacy</a>
-          <button type="button" class="soon" disabled>Coming soon</button>
+          <a class="nav-link" href="#friends">Friends</a>
+          <a class="soon gh" href="https://github.com/AlperErg/larpless" rel="noopener"><svg class="gh-mark" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg><span>GitHub</span></a>
         </nav>
       </div>
     </header>
@@ -102,7 +102,8 @@
                 <span class="lede">Break down your study session into what you were actually doing.</span>
               </h1>
               <div class="poster-action">
-                <button type="button" class="soon soon-lg" disabled>Coming soon</button>
+                <a class="soon soon-lg" href="#download"><span>Get LarpLess</span><svg class="arrow" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v9.5M4 8.5l4 4 4-4"/></svg></a>
+                <a class="ghost" href="https://github.com/AlperErg/larpless" rel="noopener"><svg class="gh-mark" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg><span>Free and open source</span></a>
               </div>
             </div>
             <div class="ipad" id="ipad">
@@ -197,11 +198,11 @@
           <ol class="steps">
             <li>
               <h3>The screen</h3>
-              <p>A known distraction is spotted immediately from the window title. When you open a new window, a screenshot is analysed to see if you are studying.</p>
+              <p>Known distractions and study tools are recognised from the app and window title alone. Otherwise a screenshot is read by an AI model on your computer, which judges what's on screen: a YouTube lecture counts as study, YouTube Shorts don't.</p>
             </li>
             <li>
               <h3>The webcam</h3>
-              <p>An on-device computer vision model checks that you are there and looks for a phone.</p>
+              <p>Every second, an on-device vision model checks that you're there and looks for a phone. You are marked as distracted if you have your phone at hand or marked away if you are away.</p>
             </li>
           </ol>
 
@@ -283,6 +284,32 @@
           </div>
         </section>
 
+        <section class="band" id="privacy">
+          <div class="section-head">
+            <h2>Privacy.</h2>
+            <p>Everything runs on your device using on-device AI models.</p>
+          </div>
+
+          <ol class="steps">
+            <li>
+              <h3>Nothing is saved</h3>
+              <p>Screenshots and camera frames only exist in memory while they're analysed, then they're discarded. They're never written to disk.</p>
+            </li>
+            <li>
+              <h3>Analysis is offline</h3>
+              <p>A study session is analysed completely offline using a local AI model on your device, so your screen and camera never reach the internet.</p>
+            </li>
+            <li>
+              <h3>Storage</h3>
+              <p>Only the analysis of what you did during your study session is stored on your device. No screenshots, camera frames, or even window titles are stored.</p>
+            </li>
+            <li>
+              <h3>Stats only</h3>
+              <p>Only your score and its breakdown is shared when you choose to share your session.</p>
+            </li>
+          </ol>
+        </section>
+
         <section class="band" id="friends">
           <div class="section-head">
             <h2>Friends.</h2>
@@ -342,35 +369,59 @@
           </div>
         </section>
 
-        <section class="band" id="privacy">
+        <section class="band closer" id="download">
           <div class="section-head">
-            <h2>Privacy.</h2>
-            <p>Everything runs on your device using on-device AI models.</p>
+            <h2>Get LarpLess.</h2>
+            <p>The installer for Mac and Windows is on its way. Watch the project on GitHub and you'll get an email the day it's out.</p>
           </div>
 
-          <ol class="steps">
-            <li>
-              <h3>Recordings are never kept</h3>
-              <p>Screen and camera recordings are analysed and deleted during an active session. They are never retained.</p>
-            </li>
-            <li>
-              <h3>Analysis is offline</h3>
-              <p>A study session is analysed completely offline using local AI models on your device, meaning your screen and camera recordings never reach the internet.</p>
-            </li>
-            <li>
-              <h3>Storage</h3>
-              <p>Only the analysis of what you did during your study session is stored on your device. No screenshots, camera recordings, or even window titles are stored.</p>
-            </li>
-            <li>
-              <h3>Stats only</h3>
-              <p>Only your score and its breakdown is shared when you choose to share your session.</p>
-            </li>
-          </ol>
-        </section>
+          <div class="closer-actions">
+            <a class="soon soon-lg gh" href="https://github.com/AlperErg/larpless" rel="noopener"><svg class="gh-mark" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg><span>Watch for the release</span></a>
+          </div>
+          <p class="watch-how">
+            <span class="sr">On GitHub, choose Watch, then Custom, then Releases.</span>
+            <span class="watch-steps" aria-hidden="true"><span class="watch-label">On GitHub:</span> <span class="ui">Watch</span><svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5L10.5 8 6 12.5"/></svg><span class="ui">Custom</span><svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5L10.5 8 6 12.5"/></svg><span class="ui">Releases</span></span>
+          </p>
 
-        <section class="band closer" id="download">
-          <h2>Coming soon on Mac and Windows.</h2>
-          <button type="button" class="soon soon-lg" disabled>Coming soon</button>
+          <details class="build" id="build">
+            <summary>
+              <span class="build-text">
+                <span class="build-title">Build it yourself</span>
+                <span class="build-sub">Comfortable with a terminal? It builds and opens with one script.</span>
+              </span>
+              <svg class="build-chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>
+            </summary>
+            <div class="build-body">
+              <div class="term" id="term">
+                <div class="term-bar">
+                  <span class="term-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+                  <div class="term-tabs" role="tablist" aria-label="Platform">
+                    <button type="button" class="term-tab" role="tab" id="os-mac" data-os="mac" aria-selected="true" aria-controls="term-mac" tabindex="0">macOS</button>
+                    <button type="button" class="term-tab" role="tab" id="os-win" data-os="win" aria-selected="false" aria-controls="term-win" tabindex="-1">Windows</button>
+                  </div>
+                  <button type="button" class="term-copy" id="term-copy"><svg class="ico ico-copy" viewBox="0 0 16 16" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.75"/><path d="M10.5 3.25v-.5A1.25 1.25 0 0 0 9.25 1.5h-5.5A1.25 1.25 0 0 0 2.5 2.75v5.5A1.25 1.25 0 0 0 3.75 9.5h.5"/></svg><svg class="ico ico-done" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3.25 3.25L13 5"/></svg><span class="term-copy-label">Copy</span></button>
+                </div>
+                <div class="term-body">
+                  <div class="term-lines" id="term-mac" data-os="mac" role="tabpanel" aria-labelledby="os-mac">
+                    <span class="term-line term-note">Needs macOS 14.5+, Xcode 16.1+, Node 22, CocoaPods and CMake</span>
+                    <span class="term-line"><span class="term-p" aria-hidden="true">$</span><code class="term-cmd">git clone https://github.com/AlperErg/larpless.git</code></span>
+                    <span class="term-line"><span class="term-p" aria-hidden="true">$</span><code class="term-cmd">cd larpless</code></span>
+                    <span class="term-line"><span class="term-p" aria-hidden="true">$</span><code class="term-cmd">./larpless/scripts/fresh-run-mac.sh 8081</code></span>
+                  </div>
+                  <div class="term-lines" id="term-win" data-os="win" role="tabpanel" aria-labelledby="os-win" hidden>
+                    <span class="term-line term-note">Needs Windows 10/11, Visual Studio 2026, .NET 10 and Node 22</span>
+                    <span class="term-line"><span class="term-p" aria-hidden="true">&gt;</span><code class="term-cmd">git clone https://github.com/AlperErg/larpless.git</code></span>
+                    <span class="term-line"><span class="term-p" aria-hidden="true">&gt;</span><code class="term-cmd">cd larpless\larpless; npm ci</code></span>
+                    <span class="term-line"><span class="term-p" aria-hidden="true">&gt;</span><code class="term-cmd">powershell -ExecutionPolicy Bypass -File scripts\run-windows.ps1</code></span>
+                  </div>
+                </div>
+                <p class="sr" id="term-status" aria-live="polite"></p>
+              </div>
+              <a class="ghost build-guide" href="https://github.com/AlperErg/larpless#getting-started-on-mac" rel="noopener" data-guide><span>Full build guide</span><svg class="arrow" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h9.5M8.5 4l4 4-4 4"/></svg></a>
+            </div>
+          </details>
+
+          <p class="closer-meta">Free and open source under the <a href="https://github.com/AlperErg/larpless/blob/main/LICENSE" rel="noopener">AGPL-3.0</a> licence</p>
         </section>
       </div>
     </main>
@@ -383,10 +434,11 @@
         <nav aria-label="Footer">
           <a href="#score">The score</a>
           <a href="#how">How it works</a>
-          <a href="#friends">Friends</a>
           <a href="#privacy">Privacy</a>
+          <a href="#friends">Friends</a>
           <a href="./privacy/">Privacy Policy</a>
           <a href="./terms/">Terms of Use</a>
+          <a href="https://github.com/AlperErg/larpless" rel="noopener">GitHub</a>
         </nav>
       </div>
     </footer>
