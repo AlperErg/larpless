@@ -1,6 +1,6 @@
 # LarpLess Privacy Policy
 
-**Last updated: 4 November 2026**
+**Last updated: 9 November 2026**
 
 LarpLess is a study tracker for Mac and Windows. It looks at your screen and webcam to tell when you're studying, and it's built so that what it sees stays on your computer. This policy explains what LarpLess handles, where it goes, and what you can do about it. LarpLess is open source, so you can check every claim here in the code.
 
@@ -10,7 +10,7 @@ LarpLess is a study tracker for Mac and Windows. It looks at your screen and web
 - Your study history is saved only on your computer.
 - **Friends is off by default.** Until you turn it on, LarpLess sends nothing to me or to anyone else, apart from downloads you start yourself (see [Downloads you start](#downloads-you-start)).
 - If you turn Friends on, my server stores your username, your friend requests and friendships, and the stats of sessions you choose to post.
-- No ads, no analytics, no tracking. I don't sell your data or use it to train AI models.
+- The app has no ads, analytics or tracking. The website counts visits with cookieless analytics (see [The website](#3-the-website)). I don't sell your data or use it to train AI models.
 
 ## Who is responsible
 
@@ -56,7 +56,7 @@ None of this reaches me. You can delete a session on the **History** page. To de
 - **On-device classifier:** downloaded from Hugging Face (`huggingface.co`), which receives your IP address and the names of the files requested. Hugging Face's privacy policy applies.
 - **Ollama:** **Download Ollama** opens `ollama.com` in your browser. **Download model** asks Ollama, which is a separate app on your computer, to fetch the AI model from Ollama's servers. Ollama's privacy policy applies.
 
-LarpLess has no analytics, crash reporting, advertising or tracking, and it doesn't check for updates.
+The app has no analytics, crash reporting, advertising or tracking, and it doesn't check for updates.
 
 ## 2. Friends (only if you turn it on)
 
@@ -113,7 +113,7 @@ You must be **16 or older** to create a Friends account. If I learn that someone
 
 ## 3. The website
 
-The LarpLess website is hosted by Netlify, which processes your IP address and request details to deliver the page and protect it from abuse. The page loads its fonts from Google Fonts, so Google also receives your IP address and browser details. The website sets no cookies and has no analytics or forms. Netlify's and Google's privacy policies apply.
+The LarpLess website is hosted by Netlify, which processes your IP address and request details to deliver the page and protect it from abuse. The page loads its fonts from Google Fonts, so Google also receives your IP address and browser details. The website sets no cookies and has no forms. It counts visits with Umami, a cookieless analytics service: when you load a page or click certain links, the page URL, referrer, browser, operating system, screen size, language and approximate country are sent to Umami through the website's own domain. Umami doesn't store your IP address or follow you across sites, and the website can't identify you from it. Netlify's, Google's and Umami's privacy policies apply.
 
 ## 4. Your rights
 
