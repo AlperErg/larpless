@@ -175,6 +175,20 @@ a:hover {
   top: 12px;
 }
 
+.skip:hover {
+  color: var(--bg);
+}
+
+@media (max-width: 720px) {
+  .top {
+    transition: transform 320ms var(--ease);
+  }
+
+  .top.tucked {
+    transform: translateY(-100%);
+  }
+}
+
 .top {
   position: sticky;
   top: 0;
@@ -438,6 +452,23 @@ a:hover {
   .ipad {
     width: min(100%, calc((100dvh - 11rem) * 2000 / 1364));
     margin-top: 0.5rem;
+  }
+}
+
+/* On phones the whole window shrinks past reading size, so the frame zooms in on
+   the main column: the title, Start session and Pomodoro (x 470–1330, y 210–970 of 2000×1364). */
+@media (max-width: 600px) {
+  .ipad {
+    width: 100%;
+    aspect-ratio: 860 / 760;
+  }
+
+  .ipad-screen img {
+    width: 232.56%;
+    max-width: none;
+    height: auto;
+    margin: -24.42% 0 0 -54.65%;
+    object-fit: fill;
   }
 }
 
@@ -830,7 +861,7 @@ section {
 }
 
 #score .seg-name {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.01em;
   line-height: 1;
@@ -931,6 +962,41 @@ section {
 
 #score .legend li.hot {
   color: var(--ink);
+}
+
+.score-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px;
+  color: var(--faint);
+  font-size: 14px;
+  transition: opacity 400ms ease;
+}
+
+.score-hint .ico {
+  width: 14px;
+  height: 14px;
+}
+
+.score-hint .hint-touch {
+  display: none;
+}
+
+@media (pointer: coarse) {
+  .score-hint .hint-hover,
+  .score-hint .ico {
+    display: none;
+  }
+
+  .score-hint .hint-touch {
+    display: inline;
+  }
+}
+
+/* Once someone has opened a segment, the hint has done its job. */
+#score .summary.explored .score-hint {
+  opacity: 0.45;
 }
 
 @keyframes rise {
@@ -1670,6 +1736,10 @@ figure.reveal.in img {
   .soon::after {
     content: none;
   }
+
+  .top {
+    transition: none;
+  }
 }
 
 /* GitHub calls to action */
@@ -1880,10 +1950,11 @@ a.soon:focus-visible {
 
 .term-note {
   display: block;
-  margin-bottom: 4px;
-  color: var(--faint);
+  margin-bottom: 6px;
+  color: var(--muted);
   font-family: var(--sans);
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 500;
 }
 
 .term-p {

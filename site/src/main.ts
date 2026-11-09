@@ -184,10 +184,36 @@ function bindScoreBar() {
     return -1;
   };
 
+  // Play the split once when the bar first comes into view, so people learn it opens.
+  let touched = false;
+  const explore = () => {
+    touched = true;
+    summary.classList.add('explored');
+  };
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!reduce && 'IntersectionObserver' in window) {
+    const intro = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        intro.disconnect();
+        window.setTimeout(() => {
+          if (touched) return;
+          paint(0);
+          window.setTimeout(() => {
+            if (!touched) paint(null);
+          }, 2600);
+        }, 1100);
+      },
+      { threshold: 0.9 },
+    );
+    intro.observe(zone);
+  }
+
   if (coarse) {
     zone.addEventListener('click', (event) => {
       const index = indexOf(event.target);
       if (index < 0) return;
+      explore();
       paint(segs[index]?.classList.contains('hot') ? null : index);
     });
     return;
@@ -195,7 +221,9 @@ function bindScoreBar() {
 
   zone.addEventListener('pointerover', (event) => {
     const index = indexOf(event.target);
-    if (index >= 0) paint(index);
+    if (index < 0) return;
+    explore();
+    paint(index);
   });
   zone.addEventListener('pointerleave', () => {
     const active = document.activeElement;
@@ -204,7 +232,9 @@ function bindScoreBar() {
   });
   zone.addEventListener('focusin', (event) => {
     const index = indexOf(event.target);
-    if (index >= 0) paint(index);
+    if (index < 0) return;
+    explore();
+    paint(index);
   });
   zone.addEventListener('focusout', (event) => {
     const next = event.relatedTarget;
@@ -245,7 +275,8 @@ function bindTerminal() {
     tab.addEventListener('keydown', (event) => {
       if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
       event.preventDefault();
-      const target = tabs[(index + 1) % tabs.length];
+      const step = event.key === 'ArrowRight' ? 1 : -1;
+      const target = tabs[(index + step + tabs.length) % tabs.length];
       target.focus();
       select(target.dataset.os as Os);
     });
@@ -280,8 +311,27 @@ function bindTerminal() {
   });
 }
 
-paintHeat();
+/** On phones the two-row header tucks away while scrolling down and returns on the way up. */
+function tuckHeader() {
+  const top = document.querySelector<HTMLElement>('.top');
+  if (!top) return;
+  const small = window.matchMedia('(max-width: 720px)');
+  let last = window.scrollY;
+  // Cheap enough (a class toggle) to run on every scroll event without frame batching.
+  const update = () => {
+    const y = window.scrollY;
+    const keep = !small.matches || y < 120 || top.contains(document.activeElement);
+    if (keep || y < last - 4) top.classList.remove('tucked');
+    else if (y > last + 4) top.classList.add('tucked');
+    last = y;
+  };
+  window.addEventListener('scroll', update, { passive: true });
+  top.addEventListener('focusin', () => top.classList.remove('tucked'));
+  small.addEventListener('change', update);
+}
+
 revealOnScroll();
 ipadScroll();
 bindScoreBar();
 bindTerminal();
+tuckHeader();

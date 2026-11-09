@@ -26,7 +26,7 @@
     <meta property="og:image:type" content="image/png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content="LarpLess. Break down your study session into what you were actually doing. Coming soon." />
+    <meta property="og:image:alt" content="LarpLess. Break down your study session into what you were actually doing." />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="LarpLess: Study tracker for Mac and Windows" />
     <meta
@@ -34,7 +34,7 @@
       content="Break down your study session into what you were actually doing. On-device study tracker for Mac and Windows. Screenshots never leave your computer."
     />
     <meta name="twitter:image" content="__SITE_ORIGIN__/og.png" />
-    <meta name="twitter:image:alt" content="LarpLess. Break down your study session into what you were actually doing. Coming soon." />
+    <meta name="twitter:image:alt" content="LarpLess. Break down your study session into what you were actually doing." />
     <link rel="icon" href="./logo.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./logo.png" />
     <link rel="preload" href="./home.webp" as="image" type="image/webp" />
@@ -136,7 +136,7 @@
                 <p class="time">1:42:10</p>
                 <p class="when">Thursday afternoon</p>
               </div>
-              <p class="pct"><span>86%</span> focused</p>
+              <p class="pct"><span>84%</span> focused</p>
             </div>
             <div class="score-hit">
               <div class="bar">
@@ -186,6 +186,11 @@
                 <li data-seg><i class="swatch gone" aria-hidden="true"></i> Away 8%</li>
               </ul>
             </div>
+            <p class="score-hint">
+              <svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5l8.5 5.2-3.9.9 2.2 4.1-1.7.9-2.2-4.1-2.9 2.6z"/></svg>
+              <span class="hint-hover">Hover a colour to see its minutes. Study splits into subjects.</span>
+              <span class="hint-touch">Tap a colour to see its minutes. Study splits into subjects.</span>
+            </p>
           </div>
         </section>
 
@@ -313,7 +318,7 @@
         <section class="band" id="friends">
           <div class="section-head">
             <h2>Friends.</h2>
-            <p>Post the score. Let your friends keep you accountable.</p>
+            <p>Post your score. Let your friends keep you accountable.</p>
           </div>
           <div class="feed">
             <article class="post">
@@ -324,7 +329,7 @@
               <p class="caption">Problem sets until the library closed.</p>
               <div class="post-stats">
                 <p><span>1:42:10</span></p>
-                <p><span>86%</span> focused</p>
+                <p><span>84%</span> focused</p>
               </div>
               <div class="bar" role="img" aria-label="Study 62 percent, break 18 percent, distracted 12 percent, away 8 percent">
                 <span class="seg bio" style="flex: 62"></span>
@@ -352,7 +357,7 @@
                 <p><span>54:20</span></p>
                 <p><span>71%</span> focused</p>
               </div>
-              <div class="bar" role="img" aria-label="History 71 percent, distracted 19 percent, away 10 percent">
+              <div class="bar" role="img" aria-label="Study 71 percent, distracted 19 percent, away 10 percent">
                 <span class="seg bio" style="flex: 71"></span>
                 <span class="seg drift" style="flex: 19"></span>
                 <span class="seg gone" style="flex: 10"></span>
@@ -409,7 +414,7 @@
                     <span class="term-line"><span class="term-p" aria-hidden="true">$</span><code class="term-cmd">./larpless/scripts/fresh-run-mac.sh 8081</code></span>
                   </div>
                   <div class="term-lines" id="term-win" data-os="win" role="tabpanel" aria-labelledby="os-win" hidden>
-                    <span class="term-line term-note">Needs Windows 10/11, Visual Studio 2026, .NET 10 and Node 22</span>
+                    <span class="term-line term-note">Needs Windows 10/11, Visual Studio 2026, Node 22 and .NET 10</span>
                     <span class="term-line"><span class="term-p" aria-hidden="true">&gt;</span><code class="term-cmd">git clone https://github.com/AlperErg/larpless.git</code></span>
                     <span class="term-line"><span class="term-p" aria-hidden="true">&gt;</span><code class="term-cmd">cd larpless\larpless; npm ci</code></span>
                     <span class="term-line"><span class="term-p" aria-hidden="true">&gt;</span><code class="term-cmd">powershell -ExecutionPolicy Bypass -File scripts\run-windows.ps1</code></span>
