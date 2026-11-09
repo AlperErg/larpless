@@ -1889,7 +1889,7 @@ a.soon:focus-visible {
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 12px;
-  padding: 8px 8px 8px 16px;
+  padding: 8px 16px;
   border-bottom: 1px solid var(--line);
 }
 
@@ -1925,7 +1925,7 @@ a.soon:focus-visible {
   justify-self: end;
   display: flex;
   align-self: stretch;
-  margin: -8px -8px -8px 0;
+  margin: -8px -16px -8px 0;
 }
 
 .win-controls i {
@@ -2390,28 +2390,19 @@ html:has(.sheet[open]) {
 .term-line:nth-child(4) { --i: 3; }
 
 @media (max-width: 560px) {
-  /* Narrow: only the active platform's chrome takes room, and the tabs centre in what's left. */
+  /* Narrow: keep equal side columns so the tabs stay centred on the window; the chrome shrinks to fit. */
   .term-bar {
-    grid-template-columns: auto 1fr auto;
-    padding-left: 12px;
-  }
-
-  .term[data-os="win"] .term-dots,
-  .term[data-os="mac"] .win-controls {
-    display: none;
-  }
-
-  .term[data-os="win"] .term-bar {
-    padding-left: 8px;
-  }
-
-  .term-tabs {
-    grid-column: 2;
-    justify-self: center;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    gap: 8px;
+    padding-inline: 12px;
   }
 
   .win-controls {
-    grid-column: 3;
+    margin-right: -12px;
+  }
+
+  .term button {
+    padding: 0 12px;
   }
 
   .win-controls i {
@@ -2428,6 +2419,18 @@ html:has(.sheet[open]) {
 
   .term-line:not(.term-note) {
     padding-block: 2px;
+  }
+}
+
+@media (max-width: 460px) {
+  /* Phones: only the close button fits beside the centred tabs. */
+  .win-controls .win-min,
+  .win-controls .win-max {
+    display: none;
+  }
+
+  .win-controls i {
+    width: 40px;
   }
 }
 
