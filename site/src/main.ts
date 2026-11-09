@@ -311,7 +311,7 @@ function bindTerminal() {
   });
 }
 
-/** On phones the two-row header tucks away while scrolling down and returns on the way up. */
+/** On phones the header tucks away while scrolling down and returns on the way up. */
 function tuckHeader() {
   const top = document.querySelector<HTMLElement>('.top');
   if (!top) return;
@@ -330,8 +330,37 @@ function tuckHeader() {
   small.addEventListener('change', update);
 }
 
+/** Phone menu: a native modal dialog styled as a sheet dropping from the top (Esc, focus trap and focus return come free). */
+function bindMenu() {
+  const button = document.querySelector<HTMLButtonElement>('#menu-btn');
+  const sheet = document.querySelector<HTMLDialogElement>('#menu');
+  if (!button || !sheet || typeof sheet.showModal !== 'function') return;
+
+  button.addEventListener('click', () => {
+    sheet.showModal();
+    button.setAttribute('aria-expanded', 'true');
+  });
+  sheet.addEventListener('close', () => button.setAttribute('aria-expanded', 'false'));
+  // Picking a section closes the sheet; the link's own jump still happens.
+  sheet.querySelectorAll('a').forEach((link) => link.addEventListener('click', () => sheet.close()));
+  // A tap on the dimmed backdrop lands on the dialog element itself, outside its box.
+  sheet.addEventListener('click', (event) => {
+    if (event.target !== sheet) return;
+    const box = sheet.getBoundingClientRect();
+    const inside =
+      event.clientX >= box.left && event.clientX <= box.right && event.clientY >= box.top && event.clientY <= box.bottom;
+    if (!inside) sheet.close();
+  });
+  // Past phone width the menu button is gone, so don't leave the sheet open.
+  window.matchMedia('(min-width: 721px)').addEventListener('change', (event) => {
+    if (event.matches && sheet.open) sheet.close();
+  });
+}
+
+paintHeat();
 revealOnScroll();
 ipadScroll();
 bindScoreBar();
 bindTerminal();
 tuckHeader();
+bindMenu();
