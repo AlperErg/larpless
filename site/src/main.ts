@@ -1,29 +1,6 @@
 const tones = ['green', 'red', 'gray', 'blue'] as const;
 type Tone = (typeof tones)[number];
 
-function selectPanel(tab: HTMLButtonElement) {
-  const tabs = document.querySelectorAll<HTMLButtonElement>('[data-panel]');
-  const stage = document.querySelector<HTMLElement>('#stage');
-  const time = document.querySelector<HTMLElement>('#float-time');
-  const label = document.querySelector<HTMLElement>('#float-label');
-  const note = document.querySelector<HTMLElement>('#panel-note');
-  if (!stage || !time || !label || !note) return;
-
-  const tone = tab.dataset.tone;
-  if (!tone || !tones.includes(tone as Tone)) return;
-
-  tabs.forEach((other) => {
-    const on = other === tab;
-    other.setAttribute('aria-selected', on ? 'true' : 'false');
-    other.tabIndex = on ? 0 : -1;
-  });
-
-  stage.dataset.tone = tone;
-  time.textContent = tab.dataset.time ?? '';
-  label.textContent = tab.dataset.label ?? '';
-  note.textContent = tab.dataset.note ?? '';
-}
-
 const SCORE_WEEKS = [
   '0000000',
   '0000000',
@@ -149,17 +126,158 @@ function revealOnScroll() {
   nodes.forEach((node) => observer.observe(node));
 }
 
-document.querySelectorAll<HTMLButtonElement>('[data-panel]').forEach((tab, index, tabs) => {
-  tab.addEventListener('click', () => selectPanel(tab));
-  tab.addEventListener('keydown', (event) => {
-    if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
-    event.preventDefault();
-    const next = event.key === 'ArrowRight' ? index + 1 : index - 1;
-    const target = tabs[(next + tabs.length) % tabs.length];
-    target.focus();
-    selectPanel(target);
+/**
+ * The floating-panel demo in "How it works". Like the real panel, the session clock runs while you
+ * study, drift or step away, and a break counts down. While it's on screen and untouched, it tours
+ * the four states; picking a state yourself ends the tour.
+ */
+function bindPanelDemo() {
+  const stage = document.querySelector<HTMLElement>('#stage');
+  const time = document.querySelector<HTMLElement>('#float-time');
+  const label = document.querySelector<HTMLElement>('#float-label');
+  const note = document.querySelector<HTMLElement>('#panel-note');
+  const chips = document.querySelector<HTMLElement>('.panel-tools .chips');
+  const tools = document.querySelector<HTMLElement>('.panel-tools');
+  const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-panel]'));
+  if (!stage || !time || !label || !note || !chips || !tools || tabs.length === 0) return;
+
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const toSecs = (text: string | undefined) => {
+    const [m, sec] = (text ?? '0:0').split(':').map(Number);
+    return (m || 0) * 60 + (sec || 0);
+  };
+  const fmt = (secs: number) => {
+    const m = Math.floor(secs / 60);
+    return `${String(m).padStart(2, '0')}:${String(secs % 60).padStart(2, '0')}`;
+  };
+
+  let current = tabs.find((tab) => tab.getAttribute('aria-selected') === 'true') ?? tabs[0];
+  let elapsed = toSecs(tabs[0].dataset.time);
+  let breakLeft = toSecs(tabs.find((tab) => tab.dataset.tone === 'blue')?.dataset.time);
+  const breakStart = breakLeft;
+  const isBreak = () => current.dataset.tone === 'blue';
+  const paintTime = () => {
+    time.textContent = fmt(isBreak() ? breakLeft : elapsed);
+  };
+
+  // The text changes at once (so it's never stale, even mid-click or in a background tab);
+  // the motion is only visual: the new label rises into place and sharpens.
+  const swapLabel = (text: string) => {
+    if (label.textContent === text) return;
+    label.textContent = text;
+    if (reduce.matches || typeof label.animate !== 'function') return;
+    label.getAnimations().forEach((animation) => animation.cancel());
+    label.animate(
+      [
+        { opacity: 0, transform: 'translateY(7px)', filter: 'blur(3px)' },
+        { opacity: 1, transform: 'none', filter: 'blur(0)' },
+      ],
+      { duration: 360, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' },
+    );
+  };
+
+  const select = (tab: HTMLButtonElement) => {
+    const tone = tab.dataset.tone;
+    if (!tone || !tones.includes(tone as Tone)) return;
+    const enteringBreak = tone === 'blue' && !isBreak();
+    current = tab;
+    tabs.forEach((other) => {
+      const on = other === tab;
+      other.setAttribute('aria-selected', on ? 'true' : 'false');
+      other.tabIndex = on ? 0 : -1;
+    });
+    if (enteringBreak) breakLeft = breakStart;
+    stage.dataset.tone = tone;
+    swapLabel(tab.dataset.label ?? '');
+    note.textContent = tab.dataset.note ?? '';
+    paintTime();
+  };
+
+  // The clock: one tick a second, only while the demo is on screen and the tab is visible.
+  let onScreen = false;
+  let clock = 0;
+  const runClock = () => {
+    const want = onScreen && !document.hidden;
+    if (want && !clock) {
+      clock = window.setInterval(() => {
+        if (isBreak()) breakLeft = Math.max(0, breakLeft - 1);
+        else elapsed += 1;
+        paintTime();
+      }, 1000);
+    } else if (!want && clock) {
+      window.clearInterval(clock);
+      clock = 0;
+    }
+  };
+
+  // The tour: the active chip's progress line is the timer; its animationend advances the state.
+  let touring = !reduce.matches;
+  let held = false;
+  const syncTour = () => {
+    chips.classList.toggle('tour', touring);
+    chips.classList.toggle('tour-paused', touring && (held || !onScreen || document.hidden));
+  };
+  const endTour = () => {
+    if (!touring) return;
+    touring = false;
+    note.setAttribute('aria-live', 'polite');
+    syncTour();
+  };
+  chips.addEventListener('animationend', (event) => {
+    if (!touring || event.animationName !== 'chip-fill') return;
+    const next = tabs[(tabs.indexOf(current) + 1) % tabs.length];
+    select(next);
   });
-});
+  // Hovering or focusing the demo holds the tour so people can read it.
+  const hold = (on: boolean) => {
+    held = on;
+    syncTour();
+  };
+  for (const area of [stage, tools]) {
+    area.addEventListener('pointerenter', () => hold(true));
+    area.addEventListener('pointerleave', () => hold(tools.contains(document.activeElement)));
+  }
+  tools.addEventListener('focusin', () => hold(true));
+  tools.addEventListener('focusout', (event) => {
+    if (!(event.relatedTarget instanceof Node && tools.contains(event.relatedTarget))) hold(false);
+  });
+  reduce.addEventListener('change', () => {
+    if (reduce.matches) endTour();
+  });
+
+  tabs.forEach((tab, index) => {
+    tab.addEventListener('click', () => {
+      endTour();
+      select(tab);
+    });
+    tab.addEventListener('keydown', (event) => {
+      if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+      event.preventDefault();
+      const next = event.key === 'ArrowRight' ? index + 1 : index - 1;
+      const target = tabs[(next + tabs.length) % tabs.length];
+      target.focus();
+      endTour();
+      select(target);
+    });
+  });
+
+  const seen = new IntersectionObserver(
+    (entries) => {
+      onScreen = entries.some((entry) => entry.isIntersecting);
+      runClock();
+      syncTour();
+    },
+    { threshold: 0.35 },
+  );
+  seen.observe(stage);
+  document.addEventListener('visibilitychange', () => {
+    runClock();
+    syncTour();
+  });
+
+  paintTime();
+  syncTour();
+}
 
 function bindScoreBar() {
   const summary = document.querySelector<HTMLElement>('#score .summary');
@@ -358,6 +476,7 @@ function bindMenu() {
 }
 
 paintHeat();
+bindPanelDemo();
 revealOnScroll();
 ipadScroll();
 bindScoreBar();
