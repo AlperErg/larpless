@@ -1893,17 +1893,59 @@ a.soon:focus-visible {
   border-bottom: 1px solid var(--line);
 }
 
+/* macOS traffic lights */
 .term-dots {
   display: flex;
-  gap: 7px;
+  gap: 8px;
 }
 
 .term-dots i {
-  width: 11px;
-  height: 11px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
-  background: var(--heat-0);
-  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.term-dots i:nth-child(1) {
+  background: #ff5f57;
+  box-shadow: inset 0 0 0 0.5px #e0443e;
+}
+
+.term-dots i:nth-child(2) {
+  background: #febc2e;
+  box-shadow: inset 0 0 0 0.5px #dea123;
+}
+
+.term-dots i:nth-child(3) {
+  background: #28c840;
+  box-shadow: inset 0 0 0 0.5px #1aab29;
+}
+
+/* Windows 11 caption buttons, flush with the top-right corner of the window. */
+.win-controls {
+  justify-self: end;
+  display: flex;
+  align-self: stretch;
+  margin: -8px -8px -8px 0;
+}
+
+.win-controls i {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  color: var(--muted);
+}
+
+.win-controls svg {
+  width: 10px;
+  height: 10px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1;
+}
+
+.term[data-os="win"] .term-dots,
+.term[data-os="mac"] .win-controls {
+  visibility: hidden;
 }
 
 .term-tabs {
@@ -1938,24 +1980,40 @@ a.soon:focus-visible {
   background: rgba(244, 241, 234, 0.12);
 }
 
+.build-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 16px;
+}
+
 .term-copy {
-  justify-self: end;
+  appearance: none;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 16px 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  font: 500 15px/1 var(--sans);
+  cursor: pointer;
+  transition:
+    color 160ms ease,
+    background-color 160ms ease,
+    border-color 160ms ease;
 }
 
-.term .term-copy {
-  padding: 0 12px 0 10px;
-}
-
-.term .term-copy:hover {
+.term-copy:hover {
   background: var(--hover);
 }
 
 .term-copy .ico {
-  width: 14px;
-  height: 14px;
+  width: 15px;
+  height: 15px;
 }
 
 .term-copy .ico-done,
@@ -1967,8 +2025,9 @@ a.soon:focus-visible {
   display: block;
 }
 
-.term .term-copy[data-done] {
+.term-copy[data-done] {
   color: var(--green);
+  border-color: rgba(111, 191, 142, 0.45);
 }
 
 .term-body {
@@ -2331,17 +2390,32 @@ html:has(.sheet[open]) {
 .term-line:nth-child(4) { --i: 3; }
 
 @media (max-width: 560px) {
+  /* Narrow: only the active platform's chrome takes room, and the tabs centre in what's left. */
   .term-bar {
-    grid-template-columns: auto 1fr;
-    padding-left: 8px;
+    grid-template-columns: auto 1fr auto;
+    padding-left: 12px;
   }
 
-  .term-dots {
+  .term[data-os="win"] .term-dots,
+  .term[data-os="mac"] .win-controls {
     display: none;
   }
 
+  .term[data-os="win"] .term-bar {
+    padding-left: 8px;
+  }
+
   .term-tabs {
-    justify-self: start;
+    grid-column: 2;
+    justify-self: center;
+  }
+
+  .win-controls {
+    grid-column: 3;
+  }
+
+  .win-controls i {
+    width: 36px;
   }
 
   .term-body {

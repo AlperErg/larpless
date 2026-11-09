@@ -413,14 +413,18 @@
               <svg class="build-chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>
             </summary>
             <div class="build-body">
-              <div class="term" id="term">
+              <div class="term" id="term" data-os="mac">
                 <div class="term-bar">
                   <span class="term-dots" aria-hidden="true"><i></i><i></i><i></i></span>
                   <div class="term-tabs" role="tablist" aria-label="Platform">
                     <button type="button" class="term-tab" role="tab" id="os-mac" data-os="mac" aria-selected="true" aria-controls="term-mac" tabindex="0">macOS</button>
                     <button type="button" class="term-tab" role="tab" id="os-win" data-os="win" aria-selected="false" aria-controls="term-win" tabindex="-1">Windows</button>
                   </div>
-                  <button type="button" class="term-copy" id="term-copy"><svg class="ico ico-copy" viewBox="0 0 16 16" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.75"/><path d="M10.5 3.25v-.5A1.25 1.25 0 0 0 9.25 1.5h-5.5A1.25 1.25 0 0 0 2.5 2.75v5.5A1.25 1.25 0 0 0 3.75 9.5h.5"/></svg><svg class="ico ico-done" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3.25 3.25L13 5"/></svg><span class="term-copy-label">Copy</span></button>
+                  <span class="win-controls" aria-hidden="true">
+                    <i class="win-min"><svg viewBox="0 0 10 10"><path d="M0.5 5h9"/></svg></i>
+                    <i class="win-max"><svg viewBox="0 0 10 10"><rect x="0.5" y="0.5" width="9" height="9" rx="1.5"/></svg></i>
+                    <i class="win-close"><svg viewBox="0 0 10 10"><path d="M0.5 0.5l9 9M9.5 0.5l-9 9"/></svg></i>
+                  </span>
                 </div>
                 <div class="term-body">
                   <div class="term-lines" id="term-mac" data-os="mac" role="tabpanel" aria-labelledby="os-mac">
@@ -436,9 +440,12 @@
                     <span class="term-line"><span class="term-p" aria-hidden="true">&gt;</span><code class="term-cmd">powershell -ExecutionPolicy Bypass -File scripts\run-windows.ps1</code></span>
                   </div>
                 </div>
-                <p class="sr" id="term-status" aria-live="polite"></p>
               </div>
-              <a class="ghost build-guide" href="https://github.com/AlperErg/larpless#getting-started-on-mac" rel="noopener" data-guide><span>Full build guide</span><svg class="arrow" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h9.5M8.5 4l4 4-4 4"/></svg></a>
+              <div class="build-actions">
+                <button type="button" class="term-copy" id="term-copy"><svg class="ico ico-copy" viewBox="0 0 16 16" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.75"/><path d="M10.5 3.25v-.5A1.25 1.25 0 0 0 9.25 1.5h-5.5A1.25 1.25 0 0 0 2.5 2.75v5.5A1.25 1.25 0 0 0 3.75 9.5h.5"/></svg><svg class="ico ico-done" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3.25 3.25L13 5"/></svg><span class="term-copy-label">Copy as one command</span></button>
+                <a class="ghost build-guide" href="https://github.com/AlperErg/larpless#getting-started-on-mac" rel="noopener" data-guide><span>Full build guide</span><svg class="arrow" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h9.5M8.5 4l4 4-4 4"/></svg></a>
+              </div>
+              <p class="sr" id="term-status" aria-live="polite"></p>
             </div>
           </details>
 

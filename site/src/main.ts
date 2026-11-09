@@ -369,14 +369,24 @@ function bindTerminal() {
   if (!term) return;
   const tabs = Array.from(term.querySelectorAll<HTMLButtonElement>('.term-tab'));
   const panels = Array.from(term.querySelectorAll<HTMLElement>('.term-lines[data-os]'));
-  const copy = term.querySelector<HTMLButtonElement>('#term-copy');
+  const copy = document.querySelector<HTMLButtonElement>('#term-copy');
   const label = copy?.querySelector<HTMLElement>('.term-copy-label');
-  const status = term.querySelector<HTMLElement>('#term-status');
+  const status = document.querySelector<HTMLElement>('#term-status');
   const guide = document.querySelector<HTMLAnchorElement>('[data-guide]');
   let os: Os = 'mac';
 
+  // The shown commands as one line: && stops at the first failure on macOS; Windows PowerShell 5.1
+  // has no &&, so its steps are joined with ;.
+  const oneLine = (which: Os) => {
+    const panel = panels.find((p) => p.dataset.os === which);
+    const cmds = Array.from(panel?.querySelectorAll('.term-cmd') ?? []).map((cmd) => cmd.textContent ?? '');
+    return cmds.join(which === 'mac' ? ' && ' : '; ');
+  };
+
   const select = (next: Os) => {
     os = next;
+    term.dataset.os = next;
+    if (copy) copy.title = oneLine(next);
     tabs.forEach((tab) => {
       const on = tab.dataset.os === next;
       tab.setAttribute('aria-selected', on ? 'true' : 'false');
@@ -386,7 +396,12 @@ function bindTerminal() {
     if (guide) guide.href = guide.href.replace(/#.*$/, GUIDES[next]);
   };
 
-  if (/Windows/i.test(navigator.userAgent)) select('win');
+  // Pick the visitor's platform from what the browser already reports: no request, no storage.
+  // Chromium exposes userAgentData.platform; Safari and Firefox still carry it in the UA string.
+  const platform =
+    (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform ||
+    navigator.userAgent;
+  if (/windows/i.test(platform)) select('win');
 
   tabs.forEach((tab, index) => {
     tab.addEventListener('click', () => select(tab.dataset.os as Os));
@@ -407,12 +422,9 @@ function bindTerminal() {
     if (done) copy.dataset.done = '';
     else delete copy.dataset.done;
   };
+  if (copy) copy.title = oneLine(os);
   copy?.addEventListener('click', async () => {
-    const panel = panels.find((p) => p.dataset.os === os);
-    if (!panel) return;
-    const text = Array.from(panel.querySelectorAll('.term-cmd'))
-      .map((cmd) => cmd.textContent ?? '')
-      .join('\n');
+    const text = oneLine(os);
     let ok = true;
     try {
       await navigator.clipboard.writeText(text);
@@ -420,10 +432,10 @@ function bindTerminal() {
       ok = false;
     }
     show(ok ? 'Copied' : 'Copy failed', ok);
-    if (status) status.textContent = ok ? 'Commands copied to the clipboard' : 'Could not copy. Select the commands instead.';
+    if (status) status.textContent = ok ? 'One-line command copied to the clipboard' : 'Could not copy. Select the commands instead.';
     window.clearTimeout(reset);
     reset = window.setTimeout(() => {
-      show('Copy', false);
+      show('Copy as one command', false);
       if (status) status.textContent = '';
     }, 2000);
   });
