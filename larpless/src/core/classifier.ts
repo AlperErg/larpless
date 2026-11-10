@@ -108,6 +108,24 @@ export interface Classifier {
   unloadUnused(): Promise<void>;
 }
 
+/**
+ * `inner`, with every study verdict's subject passed through `labelFor`. The session uses it to count a
+ * subject that is off as its general subject (subjectLibrary.ts rollUpSubject): the classifier still compares
+ * the hidden subject, so the screen is recognised, but the time is never labelled with it.
+ */
+export function relabelVerdicts<C extends Pick<Classifier, 'classifyCurrent'>>(inner: C, labelFor: (moduleId: string) => string): C {
+  return {
+    ...inner,
+    async classifyCurrent(modules: StudyModule[], ctx?: ClassifyContext) {
+      const r = await inner.classifyCurrent(modules, ctx);
+      const v = r.verdict;
+      if (!v || !v.studying || v.moduleId === null) return r;
+      const moduleId = labelFor(v.moduleId);
+      return moduleId === v.moduleId ? r : { ...r, verdict: { ...v, moduleId } };
+    },
+  };
+}
+
 interface CacheEntry {
   appName: string | null;
   windowTitle: string;
@@ -179,9 +197,9 @@ export function guessStudy(
   const sim = /\bsimulat/i.test(blob);
   const guessed =
     mentioned ??
-    (sim ? named('Computer Architecture') ?? named('Digital Logic') ?? named('Coding') : undefined) ??
+    (sim ? named('Computer Architecture') ?? named('Digital Logic') ?? named('Computer Science') : undefined) ??
     (vm ? named('Operating Systems') ?? named('Cybersecurity') : undefined) ??
-    named('Coding') ??
+    named('Computer Science') ??
     modules[0];
   return {
     studying: true,

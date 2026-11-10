@@ -7,6 +7,7 @@ import { DEFAULT_SETTINGS, MODEL_DEFAULT_REV } from '../config';
 import { isLocalUrl } from './ollama';
 import { isPowerProfile } from './powerProfile';
 import { cleanCustom } from './pomodoro';
+import { isCoreSubject } from './subjectLibrary';
 import type { Chunk, SessionSummary, Settings, StudyModule } from '../contracts/domain';
 
 export interface KeyValue {
@@ -69,8 +70,9 @@ export function cleanSettings(raw: unknown): Settings {
   const savedRev = typeof src.modelDefaultRev === 'number' ? src.modelDefaultRev : 1;
   if (savedRev < MODEL_DEFAULT_REV && out.model === 'qwen3-vl:4b') out.model = DEFAULT_SETTINGS.model;
   out.modelDefaultRev = MODEL_DEFAULT_REV;
+  // Core subjects are always on: an older save may have one turned off.
   out.disabledSubjects = Array.isArray(out.disabledSubjects)
-    ? Array.from(new Set(out.disabledSubjects.filter((id): id is string => typeof id === 'string')))
+    ? Array.from(new Set(out.disabledSubjects.filter((id): id is string => typeof id === 'string' && !isCoreSubject(id))))
     : [];
   if (!['off', '25/5', '50/10', 'custom', 'demo'].includes(out.pomodoroDefault)) out.pomodoroDefault = DEFAULT_SETTINGS.pomodoroDefault;
   out.pomodoroCustom = cleanCustom(out.pomodoroCustom);

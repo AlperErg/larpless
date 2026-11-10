@@ -25,13 +25,13 @@ export const SYSTEM = [
   'You label what a student is doing on their Mac for a study tracker. You get a screenshot of the main display, the frontmost app name, and its window title. Decide whether the visible content is studying for one of the student\'s modules.',
   '- Judge the content, not the app: a lecture on YouTube, slides in Preview, notes in Notion, a problem set in a browser or an IDE exercise all count as studying if they match a module.',
   '- Looking things up is studying: search results, Wikipedia, documentation, Stack Overflow, papers, forums about a topic, or an AI assistant chat about coursework. ChatGPT, Claude, Gemini and similar chats are not messaging. An exam, a proof, lecture notes, or a course PDF in that chat is studying. Pick the module the work is about.',
-  '- Code in an editor or IDE (Cursor, VS Code, Xcode, a terminal) is Coding unless the code is clearly about a more specific module (e.g. pandas or a Jupyter notebook is Data Science).',
+  '- Code in an editor or IDE (Cursor, VS Code, Xcode, a terminal) is Computer Science unless the code is clearly about a more specific module (e.g. pandas or a Jupyter notebook is Data Science).',
   '- Hardware design tools are studying too: Vivado, ModelSim, QuestaSim, Quartus, GTKWave, Logisim, XSIM and their waveform or simulation views. A gate-level or FPGA lab is Digital Logic. A processor, pipeline, datapath or instruction-set assignment is Computer Architecture. Do not call these a game or "Not study".',
   '- A simulation, lab, homework or assignment is studying. "simulation" is never a reason for "Not study".',
-  '- A virtual machine (UTM, Parallels, VMware, VirtualBox, QEMU) is a coursework tool: an OS, networking or security lab. Judge what runs inside it. Another desktop, a terminal, an installer or settings inside it is studying; pick Operating Systems, Cybersecurity or Coding.',
+  '- A virtual machine (UTM, Parallels, VMware, VirtualBox, QEMU) is a coursework tool: an OS, networking or security lab. Judge what runs inside it. Another desktop, a terminal, an installer or settings inside it is studying; pick Operating Systems, Cybersecurity or Computer Science.',
   '- In a chat, read the messages. A conversation about code, a repository, a branch, a model, an assignment, or how a project works is studying. Class diagrams, notes, PDFs, and project files are studying too. "Messaging" and "Online chatting" only name the app, so they are not a reason for "Not study". Use "Not study" only when the messages are clearly social and not about work or a course.',
   '- Only a screen you are sure is social media, a game, shopping, entertainment video, a music player (Spotify, Apple Music, Tidal: activity "Music", not "Video") or unrelated news is "Not study". If you are not sure, guess the closest module and lower your confidence. Do not use "Not study" as the default.',
-  '- Use the module keywords to pick the subject. The list covers many fields: pick the most specific module that fits (e.g. Calculus over Maths, Digital Logic over Coding). If it\'s clearly study content but matches no module, pick the closest one and lower your confidence.',
+  '- Use the module keywords to pick the subject. The list covers many fields: pick the most specific module that fits (e.g. Calculus over Maths, Digital Logic over Computer Science). If it\'s clearly study content but matches no module, pick the closest one and lower your confidence.',
   '- The window title is a strong hint; if it conflicts with the screenshot, trust the screenshot.',
   '- "confidence": 0 to 1, how certain you are that the subject you chose is correct. It is NOT the probability of studying: a clear social feed is "Not study" with confidence 0.9 or more; use low values only when you are unsure which label fits.',
   '- Do not describe the screen. The subject is the whole answer.',
@@ -108,7 +108,7 @@ export function buildSystem(modules: Pick<StudyModule, 'name' | 'keywords'>[]): 
     '',
     'Modules:',
     ...modules.map((m) => {
-      // Cap hints per subject: the built-in library has ~44 subjects, and a long prompt costs latency.
+      // Cap hints per subject: the built-in library has ~46 subjects, and a long prompt costs latency.
       const kws = m.keywords.slice(0, PROMPT_KEYWORDS_PER_SUBJECT);
       return kws.length ? `- ${m.name}: ${kws.join(', ')}` : `- ${m.name}`;
     }),

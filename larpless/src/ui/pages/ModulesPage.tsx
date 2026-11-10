@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
+import { detectableSubjects } from '../../core/subjectLibrary';
 import { useAppStore } from '../../store/appStore';
 import { Button, EditableTable, SubjectLibrary, Text } from '../components';
 import { Page } from '../layout/Page';
@@ -82,7 +83,7 @@ export function ModulesPage() {
     setLastOn(false);
     setDisabled([]);
   };
-  const onCount = all.filter((m) => !disabled.includes(m.id)).length;
+  const onCount = detectableSubjects(all, disabled).length;
 
   const problem = courseNameProblem(drafts);
   return (
@@ -111,8 +112,9 @@ export function ModulesPage() {
         What LarpLess detects
       </Text>
       <Text muted style={styles.lead}>
-        Click a subject to turn it off. LarpLess only labels your time with subjects that are on, and checks run a
-        little faster with fewer of them.
+        Click a subject to turn it off. LarpLess only labels your time with subjects that are on. The outlined
+        core subjects are always on. Time on a Maths or Computing subject that's off counts as Maths or Computer
+        Science.
       </Text>
       <View style={styles.detectBar}>
         <Text variant="small" testID="modules-detect-count">

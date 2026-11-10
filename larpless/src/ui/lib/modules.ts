@@ -1,6 +1,6 @@
 /** Module table drafts ⇄ StudyModule (pure). */
 import type { StudyModule, TagColor } from '../../contracts/domain';
-import { librarySubjectName } from '../../core/subjectLibrary';
+import { isCoreSubject, librarySubjectName } from '../../core/subjectLibrary';
 import { TAG_COLORS } from '../theme';
 
 export interface ModuleDraft {
@@ -91,12 +91,13 @@ export function blankDraft(used: TagColor[]): ModuleDraft {
 
 /**
  * `disabled` with `id` flipped, keeping only ids that still exist in `allIds` (deleted courses drop out).
- * Null when it would turn off the last subject that's on: the classifier needs at least one.
+ * Core subjects are always on, so they never enter the list. Null when it would turn off the last subject
+ * that's on: the classifier needs at least one.
  */
 export function toggleSubject(disabled: readonly string[], id: string, allIds: readonly string[]): string[] | null {
   const known = new Set(allIds);
-  const off = disabled.filter((d) => known.has(d) && d !== id);
-  if (disabled.includes(id)) return off;
+  const off = disabled.filter((d) => known.has(d) && d !== id && !isCoreSubject(d));
+  if (disabled.includes(id) || isCoreSubject(id)) return off;
   if (off.length + 1 >= known.size) return null;
   return [...off, id];
 }

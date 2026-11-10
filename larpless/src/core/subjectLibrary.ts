@@ -3,6 +3,10 @@
  * Users may add their own courses (Modules page), but not under a library subject's name.
  * Keywords are classifier hints (topics, jargon, tools, course-code prefixes). Colours skip gray/red, which
  * mean "away"/"distracted". Pure data: no imports except types.
+ *
+ * Eight core subjects (CORE_SUBJECT_NAMES) are always on (#35). The rest can be turned off. A group's
+ * `general` subject is the catch-all for its area: when a more specific subject of that group is off, its
+ * screens are labelled with the general one (rollUpSubject) instead of whichever other subject looks closest.
  */
 import type { StudyModule, TagColor } from '../contracts/domain';
 
@@ -15,8 +19,22 @@ export interface LibrarySubject {
 
 export interface SubjectGroup {
   title: string;
+  /** The group's catch-all subject (a core subject in `presets`): subjects of this group that are off count as it. */
+  general?: string;
   presets: LibrarySubject[];
 }
+
+/** Always detected: they can't be turned off, so the common subjects are never missing (#35). */
+export const CORE_SUBJECT_NAMES = [
+  'Biology',
+  'Chemistry',
+  'Physics',
+  'Maths',
+  'Computer Science',
+  'History',
+  'Literature',
+  'Economics',
+] as const;
 
 export const SUBJECT_GROUPS: SubjectGroup[] = [
   {
@@ -33,6 +51,7 @@ export const SUBJECT_GROUPS: SubjectGroup[] = [
   },
   {
     title: 'Maths',
+    general: 'Maths',
     presets: [
       { name: 'Maths', icon: 'divide', color: 'blue', keywords: ['equation', 'proof', 'theorem', 'function', 'algebra', 'geometry', 'trigonometry', 'problem set', 'MATH'] },
       { name: 'Calculus', icon: 'sigma', color: 'blue', keywords: ['derivative', 'integral', 'limit', 'differentiation', 'integration', 'series', 'differential equation', 'gradient', 'Taylor'] },
@@ -44,8 +63,9 @@ export const SUBJECT_GROUPS: SubjectGroup[] = [
   },
   {
     title: 'Computing',
+    general: 'Computer Science',
     presets: [
-      { name: 'Coding', icon: 'code', color: 'purple', keywords: ['python', 'javascript', 'typescript', 'java', 'C++', 'function', 'class', 'variable', 'debugging', 'compiler', 'git', 'VS Code', 'Xcode', 'exercise', 'CS'] },
+      { name: 'Computer Science', icon: 'code', color: 'purple', keywords: ['python', 'javascript', 'typescript', 'java', 'C++', 'function', 'class', 'variable', 'debugging', 'compiler', 'git', 'VS Code', 'Xcode', 'exercise', 'coding', 'programming', 'CS'] },
       { name: 'Algorithms', icon: 'puzzle', color: 'blue', keywords: ['algorithm', 'data structure', 'big O', 'complexity', 'sorting', 'recursion', 'dynamic programming', 'graph', 'tree', 'hash table', 'LeetCode'] },
       { name: 'Data Science', icon: 'chartLine', color: 'orange', keywords: ['pandas', 'NumPy', 'dataframe', 'Jupyter', 'notebook', 'visualisation', 'SQL', 'dataset', 'Kaggle', 'feature'] },
       { name: 'Machine Learning', icon: 'bot', color: 'pink', keywords: ['neural network', 'training', 'model', 'loss function', 'gradient descent', 'PyTorch', 'TensorFlow', 'classification', 'transformer', 'overfitting'] },
@@ -107,9 +127,16 @@ export const SUBJECT_GROUPS: SubjectGroup[] = [
   },
 ];
 
+/** Ids that predate a rename. Saved chunks and settings hold ids, so a renamed subject keeps the one it had. */
+const LEGACY_IDS: Record<string, string> = {
+  // "Computer Science" was "Coding" until #35.
+  'computer science': 'lib_coding',
+};
+
 /** Stable id for a library subject, e.g. "Signals & Systems" → "lib_signals_systems". */
 export function librarySubjectId(name: string): string {
-  return `lib_${name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')}`;
+  const key = name.trim().toLowerCase();
+  return LEGACY_IDS[key] ?? `lib_${key.replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')}`;
 }
 
 /** The library as modules (first occurrence of a name wins). */
@@ -143,13 +170,60 @@ export function allSubjects(userCourses: readonly StudyModule[]): StudyModule[] 
   return [...userCourses, ...LIBRARY_MODULES.filter((m) => !taken.has(m.name.toLowerCase()))];
 }
 
+const CORE_IDS: ReadonlySet<string> = new Set(CORE_SUBJECT_NAMES.map(librarySubjectId));
+
+/** True for the library subjects that are always on. */
+export function isCoreSubject(id: string): boolean {
+  return CORE_IDS.has(id);
+}
+
+/** Library subject id → the id of its group's general subject (Algorithms → Computer Science). */
+const GENERAL_OF: ReadonlyMap<string, string> = new Map(
+  SUBJECT_GROUPS.flatMap((g) => {
+    const general = g.general;
+    if (!general) return [];
+    return g.presets.filter((s) => s.name !== general).map((s) => [librarySubjectId(s.name), librarySubjectId(general)] as const);
+  }),
+);
+
+/** The general subject a library subject rolls up to while it's off, or null (most subjects have none). */
+export function generalSubjectId(id: string): string | null {
+  return GENERAL_OF.get(id) ?? null;
+}
+
+/** `disabledIds` without the core subjects, which can't be off (an older save may list one). */
+function offSet(disabledIds: readonly string[]): Set<string> {
+  return new Set(disabledIds.filter((id) => !isCoreSubject(id)));
+}
+
 /**
- * The subjects the classifier may pick: `all` minus the ids in `disabledIds`. Never empty, so the
- * classifier always has a choice; if every subject is off (e.g. the last one on was a deleted course), all of them are used.
+ * The subjects time may be labelled with: `all` minus the ids in `disabledIds`. Core subjects are always in.
+ * Never empty: if nothing would be left (a user course shadows every core name and the rest is off), all are used.
  */
 export function detectableSubjects(all: readonly StudyModule[], disabledIds: readonly string[]): StudyModule[] {
-  if (disabledIds.length === 0) return [...all];
-  const off = new Set(disabledIds);
+  const off = offSet(disabledIds);
+  if (off.size === 0) return [...all];
   const on = all.filter((m) => !off.has(m.id));
   return on.length ? on : [...all];
+}
+
+/**
+ * The subjects the classifier compares: the detectable ones, plus library subjects that are off but have a
+ * general subject that is on. Those stay in as hidden candidates so their screens are still recognised, and
+ * rollUpSubject() relabels them. Dropping them instead sends their screens to whichever other subject looks
+ * closest (bench.py --rollup: 13 of 19 screens reach the right core subject when dropped, 18 of 19 when hidden).
+ */
+export function candidateSubjects(all: readonly StudyModule[], disabledIds: readonly string[]): StudyModule[] {
+  const off = offSet(disabledIds);
+  if (off.size === 0) return [...all];
+  const on = new Set(all.filter((m) => !off.has(m.id)).map((m) => m.id));
+  if (on.size === 0) return [...all];
+  return all.filter((m) => on.has(m.id) || on.has(generalSubjectId(m.id) ?? ''));
+}
+
+/** The subject time on `id` is labelled with: `id` itself, or its general subject while `id` is off. */
+export function rollUpSubject(id: string, all: readonly StudyModule[], disabledIds: readonly string[]): string {
+  if (!offSet(disabledIds).has(id)) return id;
+  const general = generalSubjectId(id);
+  return general && all.some((m) => m.id === general) ? general : id;
 }

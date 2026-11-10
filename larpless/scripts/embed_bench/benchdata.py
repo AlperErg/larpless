@@ -34,6 +34,12 @@ NAMES = [s["name"] for s in SUBJECTS]
 LABELS = NAMES + [NOT_STUDY]
 SLUGS = {s["id"].removeprefix("lib_"): s["name"] for s in SUBJECTS}
 SLUGS["notstudy"] = NOT_STUDY
+# Subject name -> SUBJECT_GROUPS title (Sciences, Computing, Humanities...); custom courses fall under COURSES.
+GROUP_OF = {s["name"]: s.get("group", "-") for s in SUBJECTS}
+GROUPS = list(dict.fromkeys(GROUP_OF.values()))
+COURSES = "Custom courses"
+# Subjects renamed in the library: sidecars written before the rename still count ("accept": ["Coding"]).
+RENAMED = {"Coding": "Computer Science"}
 
 
 # --------------------------------------------------------------------------------------------------
@@ -73,17 +79,22 @@ def expectation(f: Path, side: dict, courses: list[str]) -> tuple[str, set[str]]
     expected = expected_label(f)
     if side.get("course") in courses:
         return side["course"], {side["course"]}
-    return expected, {expected, *side.get("accept", [])}
+    return expected, {expected, *(RENAMED.get(a, a) for a in side.get("accept", []))}
 
 
 def load_like_capture(f: Path, width: int, jpeg_quality: int) -> Image.Image:
     """What the app would hold: resized to the capture width and JPEG round-tripped, all in memory."""
     with Image.open(f) as im:
-        im = im.convert("RGB")
-        if im.width > width:
-            im = im.resize((width, round(im.height * width / im.width)), Image.LANCZOS)
-        buf = io.BytesIO()
-        im.save(buf, format="JPEG", quality=jpeg_quality)
+        return capture_like(im, width, jpeg_quality)
+
+
+def capture_like(im: Image.Image, width: int, jpeg_quality: int) -> Image.Image:
+    """load_like_capture for an image already in memory (e.g. a composite)."""
+    im = im.convert("RGB")
+    if im.width > width:
+        im = im.resize((width, round(im.height * width / im.width)), Image.LANCZOS)
+    buf = io.BytesIO()
+    im.save(buf, format="JPEG", quality=jpeg_quality)
     buf.seek(0)
     out = Image.open(buf)
     out.load()
@@ -158,6 +169,45 @@ def verdict_curves(preds: list[tuple[str | None, float]], items: list[dict]) -> 
             if kept:
                 right = sum(hit(p, it) for p, it in kept)
                 print(f"    >= {tau:.2f}: {len(kept)}/{len(pairs)} answered, {right} right, {len(kept) - right} wrong")
+
+
+def group_of(item: dict) -> str:
+    """The subject area a bench item belongs to: its expected subject's group, COURSES, or "Not study"."""
+    if item["expected"] == NOT_STUDY:
+        return NOT_STUDY
+    return GROUP_OF.get(item["expected"], COURSES)
+
+
+def group_report(name: str, preds: list[tuple[str | None, float]], items: list[dict], sure: float = 0.2) -> None:
+    """Top-1 per subject area, and how many study screens are answered right at >= `sure` confidence (the
+    "confident and correct" share #27 is after). One overall % hides that most study screens are CS."""
+    rows: dict[str, list[tuple[bool, bool]]] = {}
+    for (p, c), it in zip(preds, items):
+        ok = hit(p, it)
+        rows.setdefault(group_of(it), []).append((ok, ok and c >= sure))
+    order = [g for g in [*GROUPS, COURSES, NOT_STUDY] if g in rows]
+    print(f"  {name}, by subject area (top-1 · right at >= {sure:.1f}):")
+    for g in order:
+        r = rows[g]
+        k = sum(ok for ok, _ in r)
+        lo, hi = wilson(k, len(r))
+        sure_txt = "" if g == NOT_STUDY else f" · {sum(s for _, s in r)}/{len(r)} sure"
+        print(f"    {g:<28} {k:>3}/{len(r):<3} ({100 * k / len(r):3.0f}%, CI {100 * lo:.0f}-{100 * hi:.0f}){sure_txt}")
+
+
+def coverage_report(items: list[dict]) -> None:
+    """Which library subjects have study screenshots, per area: an untested subject has no accuracy at all."""
+    counts: dict[str, int] = {}
+    for it in items:
+        counts[it["expected"]] = counts.get(it["expected"], 0) + 1
+    covered = sum(1 for s in SUBJECTS if counts.get(s["name"]))
+    print(f"\nCOVERAGE: {covered} of {len(SUBJECTS)} library subjects have a study screenshot")
+    for g in GROUPS:
+        subs = [s["name"] for s in SUBJECTS if s.get("group", "-") == g]
+        have = [f"{n} {counts[n]}" for n in subs if counts.get(n)]
+        missing = [n for n in subs if not counts.get(n)]
+        print(f"  {g:<28} {sum(counts.get(n, 0) for n in subs):>3} screens  " + ", ".join(have)
+              + (f"  | none: {', '.join(missing)}" if missing else ""))
 
 
 def misses_by_kind(preds: list[tuple[str | None, float]], items: list[dict]) -> None:
