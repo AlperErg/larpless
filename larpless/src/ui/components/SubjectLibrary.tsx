@@ -1,7 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { StudyModule, TagColor } from '../../contracts/domain';
-import { librarySubjectId, SUBJECT_GROUPS } from '../../core/subjectLibrary';
+import { isCoreSubject, librarySubjectId, SUBJECT_GROUPS } from '../../core/subjectLibrary';
 import { space } from '../theme';
 import type { IconName } from './Icon';
 import { Tag } from './Tag';
@@ -26,7 +26,10 @@ interface Item {
   keywords: string[];
 }
 
-/** The built-in subjects LarpLess recognises (hover a tag for its keywords); click to turn one off or on. */
+/**
+ * The built-in subjects LarpLess recognises (hover a tag for its keywords); click to turn one off or on.
+ * Core subjects have a ring and no switch: they can't be turned off.
+ */
 export function SubjectLibrary({ courses = [], disabled = [], onToggle, testID, style }: SubjectLibraryProps) {
   const off = new Set(disabled);
   const groups: { title: string; items: Item[] }[] = [
@@ -45,8 +48,10 @@ export function SubjectLibrary({ courses = [], disabled = [], onToggle, testID, 
           </Text>
           <View style={styles.tags}>
             {group.items.map((s) => {
-              const isOff = off.has(s.id);
-              const hint = onToggle ? `${isOff ? 'Off. Click to turn on.' : 'On. Click to turn off.'}\n` : '';
+              const core = isCoreSubject(s.id);
+              const isOff = !core && off.has(s.id);
+              const state = core ? 'Core subject: always on.' : isOff ? 'Off. Click to turn on.' : 'On. Click to turn off.';
+              const hint = onToggle ? `${state}\n` : '';
               return (
                 <Tag
                   key={s.name}
@@ -55,7 +60,8 @@ export function SubjectLibrary({ courses = [], disabled = [], onToggle, testID, 
                   icon={s.icon}
                   color={isOff ? 'gray' : s.color}
                   tooltip={`${hint}${s.keywords.join(', ')}`}
-                  onPress={onToggle ? () => onToggle(s.id) : undefined}
+                  selected={core && !!onToggle}
+                  onPress={onToggle && !core ? () => onToggle(s.id) : undefined}
                   style={[styles.tag, isOff ? styles.off : null]}
                 />
               );

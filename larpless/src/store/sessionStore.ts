@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { config, DEFAULT_SETTINGS } from '../config';
 import type { SessionStore, SessionStoreState } from '../contracts/store';
-import { createClassifier } from '../core/classifier';
+import { createClassifier, relabelVerdicts } from '../core/classifier';
 import { createOllama } from '../core/ollama';
 import { effectiveProfile } from '../core/powerProfile';
 import { createScreenModelStep } from '../core/screenModel';
@@ -11,7 +11,7 @@ import { fixtureChunks } from '../fixtures/data';
 import { native } from '../native';
 import { appDb, upsertSessionSummary, useAppStore } from './appStore';
 import { useOllamaStore } from './ollamaStore';
-import { allSubjects, detectableSubjects } from '../core/subjectLibrary';
+import { allSubjects, candidateSubjects, rollUpSubject } from '../core/subjectLibrary';
 
 export const initialSessionState: SessionStoreState = {
   status: 'idle',
@@ -51,15 +51,22 @@ export function getSessionController(): SessionController {
       model: () => settings().model,
       timeoutMs: config.CLASSIFY_TIMEOUT_MS,
     });
-    const classifier = createClassifier({
-      native,
-      ollama,
-      now: Date.now,
-      config,
-      getPower: () => effectiveProfile(settings().powerProfile),
-      screenModel: createScreenModelStep({ api: native.screenModel, now: Date.now }),
-      screenModelOnly: () => isClassifierMode(),
-    });
+    // A subject that's off but has a general subject stays a hidden candidate; its time is labelled as the general one.
+    const classifier = relabelVerdicts(
+      createClassifier({
+        native,
+        ollama,
+        now: Date.now,
+        config,
+        getPower: () => effectiveProfile(settings().powerProfile),
+        screenModel: createScreenModelStep({ api: native.screenModel, now: Date.now }),
+        screenModelOnly: () => isClassifierMode(),
+      }),
+      (id) => {
+        const { modules, settings: s } = useAppStore.getState();
+        return rollUpSubject(id, allSubjects(modules), s.disabledSubjects);
+      },
+    );
     controller = createSessionController({
       native,
       db: appDb,
@@ -67,7 +74,7 @@ export function getSessionController(): SessionController {
       getModules: () => allSubjects(useAppStore.getState().modules),
       getDetectModules: () => {
         const { modules, settings: s } = useAppStore.getState();
-        return detectableSubjects(allSubjects(modules), s.disabledSubjects);
+        return candidateSubjects(allSubjects(modules), s.disabledSubjects);
       },
       getSettings: settings,
       classifier,

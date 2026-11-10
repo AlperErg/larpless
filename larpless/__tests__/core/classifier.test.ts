@@ -194,7 +194,7 @@ describe('classifier', () => {
 
     const unsure = guessStudy(
       { studying: false, moduleId: null, activity: 'Browsing', confidence: 0.4, source: 'vlm' },
-      [...fixtureModules, { id: 'lib_coding', name: 'Coding', color: 'purple', keywords: ['python'] }],
+      [...fixtureModules, { id: 'lib_coding', name: 'Computer Science', color: 'purple', keywords: ['python'] }],
       'Chrome',
       'New Tab',
     );
@@ -202,7 +202,7 @@ describe('classifier', () => {
   });
 
   it('WhatsApp labeled online shopping is a guess, and a real shop still is not', () => {
-    const coding = { id: 'lib_coding', name: 'Coding', color: 'purple' as const, keywords: ['python'] };
+    const coding = { id: 'lib_coding', name: 'Computer Science', color: 'purple' as const, keywords: ['python'] };
     const modules = [...fixtureModules, coding];
     const chat = guessStudy(
       { studying: false, moduleId: null, activity: 'Online shopping', confidence: 0.96, source: 'vlm' },
@@ -288,7 +288,7 @@ describe('classifier', () => {
   });
 
   it('a virtual machine is a lab unless a game or feed runs inside it', () => {
-    const coding = { id: 'lib_coding', name: 'Coding', color: 'purple' as const, keywords: ['python'] };
+    const coding = { id: 'lib_coding', name: 'Computer Science', color: 'purple' as const, keywords: ['python'] };
     const os = { id: 'lib_os', name: 'Operating Systems', color: 'blue' as const, keywords: ['kernel', 'scheduling'] };
     const modules = [...fixtureModules, coding, os];
     const vm = guessStudy(

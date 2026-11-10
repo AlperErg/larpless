@@ -169,11 +169,18 @@ describe('db', () => {
   });
 
   it('keeps disabledSubjects as unique strings, and drops anything else', () => {
-    expect(cleanSettings({ disabledSubjects: ['lib_biology', 3, 'lib_biology', null, 'mod_x'] }).disabledSubjects).toEqual([
-      'lib_biology',
+    expect(cleanSettings({ disabledSubjects: ['lib_calculus', 3, 'lib_calculus', null, 'mod_x'] }).disabledSubjects).toEqual([
+      'lib_calculus',
       'mod_x',
     ]);
-    expect(cleanSettings({ disabledSubjects: 'lib_biology' }).disabledSubjects).toEqual([]);
+    expect(cleanSettings({ disabledSubjects: 'lib_calculus' }).disabledSubjects).toEqual([]);
     expect(cleanSettings({}).disabledSubjects).toEqual([]);
+  });
+
+  it('turns core subjects back on in an older save (#35)', () => {
+    // lib_coding is Computer Science: it kept the id it had as "Coding".
+    expect(cleanSettings({ disabledSubjects: ['lib_biology', 'lib_coding', 'lib_maths', 'lib_algorithms'] }).disabledSubjects).toEqual([
+      'lib_algorithms',
+    ]);
   });
 });

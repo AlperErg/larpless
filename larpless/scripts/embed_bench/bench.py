@@ -10,9 +10,12 @@ Run from larpless/ (Windows, after the venv setup in requirements.txt):
     ...bench.py --offline                                       # after the first model download
     ...bench.py --courses                                       # sidecar "course" names as custom courses
     ...bench.py --dir holdout                                   # the frozen holdout (score once, never tune)
+    ...bench.py --subjects-n 3,5,8,15,46 --ablation             # few-module simulation + channel ablation (#28)
+    ...bench.py --composite                                     # study screens with a Spotify/Discord/YouTube window on top
+    ...bench.py --rollup                                        # optional subjects off: do their screens reach the core subject? (#35)
 
 Reads bench/<subject-slug>__<desc>.png|jpg; the file and sidecar format is in benchdata.py. Labels are the
-44 library subjects from src/core/subjectLibrary.ts plus "Not study".
+library subjects from src/core/subjectLibrary.ts plus "Not study".
 
 PRIVACY (CLAUDE.md "Privacy invariants"): images are resized, JPEG-encoded and OCR'd in memory only.
 Nothing is written to disk except model weights (HF_HOME = scripts/embed_bench/.models). Output shows
@@ -57,6 +60,23 @@ p.add_argument("--codes-need-digits", action="store_true",
                help='course-code keywords (BIO, MATH, CS...) only match before a course number, e.g. "MATH 101"')
 p.add_argument("--keyword-report", action="store_true",
                help="list which keywords (from the subject vocabulary only) fired on distractions and wrong subjects")
+p.add_argument("--subjects-n", metavar="N1,N2",
+               help="few-module simulation (#28): score every study screen with only N candidate subjects (the true one + "
+                    "N-1 random library subjects, plus a 'hard' draw from the same subject area), e.g. 3,5,8,15,46")
+p.add_argument("--draws", type=int, default=20, help="with --subjects-n: random draws per N (fixed --seed)")
+p.add_argument("--seed", type=int, default=0)
+p.add_argument("--ablation", action="store_true",
+               help="subject accuracy with each channel combination (image / text / keywords), app weights renormalised")
+p.add_argument("--rollup", action="store_true",
+               help="core-subject simulation (#35): turn optional subjects off (the Computing ones, the Maths ones, then "
+                    "all of them) and score every study screen against where it should land: its own subject if still "
+                    "on, else its area's general subject (Algorithms -> Computer Science). Compares dropping the "
+                    "subjects that are off with keeping them as hidden candidates that are relabelled (the app)")
+p.add_argument("--composite", nargs="?", const="spotify,discord-public,youtube-home", metavar="NAMES",
+               help="multi-window simulation (#28): paste these not-study screenshots (file-name substrings) beside / over "
+                    "every study screenshot, in memory only, and score the result as the study subject")
+p.add_argument("--composite-layouts", default="split,pip",
+               help="split = a side window over the right 40%%; pip = a small window in the bottom-right corner")
 args = p.parse_args()
 sys.stdout.reconfigure(encoding="utf-8")  # Windows consoles default to cp1252; `-I` ignores PYTHONIOENCODING
 
@@ -73,9 +93,11 @@ import torch  # noqa: E402
 
 sys.path.insert(0, str(HERE))  # `python -I` leaves the script's folder off sys.path
 from benchdata import (  # noqa: E402
-    LABELS, NOT_STUDY, SUBJECTS, course_modules, coverage_curve, custom_courses, expectation, expected_label, hit,
-    list_images, load_like_capture, misses_by_kind, pct, report, sidecar, verdict_curves,
+    GROUP_OF, LABELS, NOT_STUDY, SUBJECTS, capture_like, course_modules, coverage_curve, coverage_report, custom_courses,
+    expectation, expected_label, group_report, hit, list_images, load_like_capture, misses_by_kind, pct, report, sidecar,
+    verdict_curves, wilson,
 )
+from PIL import Image  # noqa: E402
 from prompts import DISTRACTION_PROMPTS, IMAGE_TEMPLATES, STUDY_PROMPTS  # noqa: E402
 
 MIN_OCR_CHARS = 40
@@ -228,7 +250,7 @@ def fused_predict(item: dict, prm: dict) -> tuple[str, float]:
     order = np.argsort(probs)[::-1]
     k = int(order[0])
     if prm.get("conf") == "margin":
-        # Top-1 against the runner-up only: similar subjects (Coding / Algorithms / OS) split the mass,
+        # Top-1 against the runner-up only: similar subjects (Computer Science / Algorithms / OS) split the mass,
         # which drags plain probabilities down even when the answer is right.
         conf = probs[k] / (probs[k] + probs[order[1]]) if len(order) > 1 else 1.0
         return MODULES[k]["name"], float(p_study * conf)
@@ -248,13 +270,14 @@ def subject_probs(item: dict, prm: dict) -> np.ndarray:
     img = item["img_subj"]
     known = np.isfinite(img)  # custom courses have no image prompt
     parts: list[tuple[float, np.ndarray]] = []
-    if known.any():
+    # use_img / use_txt / use_kw switch a channel off for --ablation only; the app always uses all three.
+    if known.any() and prm.get("use_img", True):
         p_img = np.zeros(len(img))
         p_img[known] = softmax(img[known], prm["t_img"])
         parts.append((1 - prm["alpha"], p_img))
-    if item["has_text"]:
+    if item["has_text"] and prm.get("use_txt", True):
         parts.append((prm["alpha"], softmax(item["txt_subj"], prm["t_txt"])))
-    if kw.max() > 0 and prm.get("beta", 0.0) > 0:
+    if kw.max() > 0 and prm.get("beta", 0.0) > 0 and prm.get("use_kw", True):
         parts.append((prm["beta"], softmax(kw, prm["t_kw"])))
     total = sum(w for w, _ in parts)
     if total <= 0:
@@ -302,6 +325,283 @@ def leave_one_out(items: list[dict]) -> tuple[list[tuple[str, float]], list[tupl
     plain = [fused_predict(it, prm) for it, prm in zip(items, folds)]
     margin = [fused_predict(it, {**prm, "conf": "margin"}) for it, prm in zip(items, folds)]
     return plain, margin, folds
+
+
+# --------------------------------------------------------------------------------------------------
+# Few-module simulation (--subjects-n) and channel ablation (--ablation)
+# --------------------------------------------------------------------------------------------------
+
+ABLATIONS = [
+    ("image", dict(use_txt=False, use_kw=False)),
+    ("text", dict(use_img=False, use_kw=False)),
+    ("keywords", dict(use_img=False, use_txt=False)),
+    ("image+text", dict(use_kw=False)),
+    ("image+keywords", dict(use_txt=False)),
+    ("text+keywords", dict(use_img=False)),
+    ("all three (app)", dict()),
+]
+
+
+def restrict(item: dict, keep: np.ndarray) -> dict:
+    """The item as if only the `keep` modules were on: the others can't be chosen. Like the app, the study gate
+    still uses every library image prompt (img_margin unchanged); the text margin uses the modules that are on."""
+    out = dict(item)
+    img = item["img_subj"].copy()
+    img[~keep] = np.nan
+    kw = item["kw"].copy()
+    kw[~keep] = 0
+    out.update(img_subj=img, kw=kw)
+    if item["has_text"]:
+        txt = item["txt_subj"].copy()
+        txt[~keep] = -10.0
+        out.update(txt_subj=txt, txt_margin=float(txt[keep].max() - item["txt_dist_max"]))
+    return out
+
+
+def draw_sets(items: list[dict], n: int, draws: int, rng: np.random.Generator) -> tuple[list[list[dict]], list[dict]]:
+    """For each study item: `draws` random candidate sets of n library subjects (the true one + n-1 others) and
+    one hard set (the true subject's area first). Custom courses are always on (they're the user's own)."""
+    names = [s["name"] for s in SUBJECTS]
+    lib = len(SUBJECTS)
+    base = np.zeros(len(MODULES), dtype=bool)
+    base[lib:] = True
+    random_sets: list[list[dict]] = [[] for _ in range(draws)]
+    hard: list[dict] = []
+    for it in items:
+        true = names.index(it["expected"]) if it["expected"] in names else None
+        others = [i for i in range(lib) if i != true]
+        k = max(0, min(n - (1 if true is not None else 0), len(others)))
+        for d in range(draws):
+            keep = base.copy()
+            keep[rng.choice(others, size=k, replace=False)] = True
+            if true is not None:
+                keep[true] = True
+            random_sets[d].append(restrict(it, keep))
+        group = GROUP_OF.get(it["expected"])
+        same = [i for i in others if SUBJECTS[i].get("group") == group]
+        rest = [i for i in others if SUBJECTS[i].get("group") != group]
+        rng.shuffle(same)
+        rng.shuffle(rest)
+        keep = base.copy()
+        keep[(same + rest)[:k]] = True
+        if true is not None:
+            keep[true] = True
+        hard.append(restrict(it, keep))
+    return random_sets, hard
+
+
+def top1(items: list[dict], prm: dict) -> tuple[int, int]:
+    """(right, right at >= 0.2 confidence)."""
+    right = sure = 0
+    for it in items:
+        pred, conf = fused_predict(it, prm)
+        if hit(pred, it):
+            right += 1
+            sure += conf >= 0.2
+    return right, sure
+
+
+def keyword_effect(items: list[dict], prm: dict) -> tuple[int, int]:
+    """(answers keywords turn wrong, answers keywords turn right) vs the same weights without the keyword channel."""
+    hurt = helped = 0
+    no_kw = {**prm, "use_kw": False}
+    for it in items:
+        a, b = hit(fused_predict(it, prm)[0], it), hit(fused_predict(it, no_kw)[0], it)
+        hurt += b and not a
+        helped += a and not b
+    return hurt, helped
+
+
+def subjects_n_report(items: list[dict], ns: list[int], draws: int, seed: int, ablation: bool) -> None:
+    study = [it for it in items if it["expected"] != NOT_STUDY]
+    if not study:
+        return
+    rng = np.random.default_rng(seed)
+    n_study = len(study)
+    print(f"\nFEW-MODULE SIMULATION ({n_study} study screens, {draws} random draws per N + 1 hard draw, seed {seed}; "
+          f"app params; 'fit' = best GRID params on these draws, in-sample so optimistic)")
+    print(f"  {'N':>3}  {'random top-1':>13}  {'sure>=0.2':>9}  {'hard top-1':>10}  {'kw hurt/helped':>14}  "
+          f"{'fit top-1':>9}  fitted params")
+    sims = {}
+    for n in ns:
+        t = time.perf_counter()
+        random_sets, hard = draw_sets(study, n, draws, rng)
+        sims[n] = (random_sets, hard)
+        r = [top1(s, APP_PARAMS) for s in random_sets]
+        right = sum(x for x, _ in r) / draws
+        sure = sum(y for _, y in r) / draws
+        h, _ = top1(hard, APP_PARAMS)
+        eff = [keyword_effect(s, APP_PARAMS) for s in random_sets + [hard]]
+        hurt = sum(a for a, _ in eff) / len(eff)
+        helped = sum(b for _, b in eff) / len(eff)
+        pool = [it for s in random_sets[: min(draws, 5)] for it in s] + hard
+        best = fit(pool)
+        fr = sum(top1(s, best)[0] for s in random_sets) / draws
+        diff = ", ".join(f"{k}={v}" for k, v in best.items() if APP_PARAMS.get(k) != v) or "same as app"
+        print(f"  {n:>3}  {right:5.1f}/{n_study} {100 * right / n_study:3.0f}%  {100 * sure / n_study:8.0f}%  "
+              f"{h:>3}/{n_study} {100 * h / n_study:3.0f}%  {hurt:6.1f}/{helped:<6.1f}  {100 * fr / n_study:8.0f}%  "
+              f"{diff}  ({time.perf_counter() - t:.0f} s)")
+    if ablation:
+        print("\n  CHANNEL ABLATION by N (random top-1 / hard top-1; a screen with no signal for the channels counts as wrong)")
+        print("  " + f"{'channels':<17}" + "".join(f"{f'N={n}':>16}" for n in ns))
+        for name, flags in ABLATIONS:
+            prm = {**APP_PARAMS, **flags}
+            cells = []
+            for n in ns:
+                random_sets, hard = sims[n]
+                r = sum(top1(s, prm)[0] for s in random_sets) / draws
+                cells.append(f"{100 * r / n_study:5.0f}% / {100 * top1(hard, prm)[0] / n_study:3.0f}%")
+            print("  " + f"{name:<17}" + "".join(f"{c:>16}" for c in cells))
+
+
+def ablation_report(items: list[dict]) -> None:
+    """Channel ablation on the full candidate set (when --subjects-n isn't given)."""
+    study = [it for it in items if it["expected"] != NOT_STUDY]
+    print(f"\nCHANNEL ABLATION (all subjects, {len(study)} study screens, app weights renormalised)")
+    for name, flags in ABLATIONS:
+        right, sure = top1(study, {**APP_PARAMS, **flags})
+        lo, hi = wilson(right, len(study))
+        print(f"  {name:<17} {right:>3}/{len(study)} ({100 * right / len(study):3.0f}%, CI {100 * lo:.0f}-{100 * hi:.0f})"
+              f"  sure>=0.2 {sure}")
+
+
+# --------------------------------------------------------------------------------------------------
+# Core subjects and roll-up (--rollup)
+# --------------------------------------------------------------------------------------------------
+
+
+def rollup_report(items: list[dict]) -> None:
+    """With optional subjects off, where do their screens go? Core subjects can't be off; a subject that is off
+    counts as its area's general subject (subjectLibrary.ts rollUpSubject). Two ways to get there:
+      drop:   the subjects that are off can't be chosen; the best of the rest wins (what "off" did before #35)
+      hidden: subjects with a general subject stay candidates, and a win is relabelled as the general one (the app)
+    A screen whose subject is off and has no general subject has no right answer and is left out."""
+    study = [it for it in items if it["expected"] != NOT_STUDY]
+    if not study:
+        return
+    lib = len(SUBJECTS)
+    names = [s["name"] for s in SUBJECTS]
+    general = {s["name"]: s.get("general") for s in SUBJECTS}
+    core = np.array([bool(s.get("core")) for s in SUBJECTS])
+    group = np.array([s.get("group", "-") for s in SUBJECTS])
+    scenarios = [(f"{g} specifics off", (group == g) & ~core) for g in dict.fromkeys(group[[n in general and general[n] is not None for n in names]])]
+    scenarios.append(("only the core subjects on", ~core))
+    print(f"\nROLL-UP ({len(study)} study screens, app params). Core: {', '.join(n for n, c in zip(names, core) if c)}")
+    for title, off in scenarios:
+        is_off = {n: bool(o) for n, o in zip(names, off)}
+        landing = lambda n: general.get(n) if is_off.get(n) else n  # noqa: E731
+        keep_drop = np.ones(len(MODULES), dtype=bool)
+        keep_drop[:lib] = ~off
+        keep_hidden = keep_drop.copy()
+        keep_hidden[:lib] |= off & np.array([general[n] is not None for n in names])
+        rows = {"moved": [], "kept": []}
+        skipped = 0
+        for it in study:
+            target = {landing(a) for a in it["accept"]} - {None}
+            if not target:
+                skipped += 1
+                continue
+            drop = fused_predict(restrict(it, keep_drop), APP_PARAMS)[0]
+            hid = landing(fused_predict(restrict(it, keep_hidden), APP_PARAMS)[0])
+            rows["moved" if is_off.get(it["expected"]) else "kept"].append((it, target, drop, hid))
+        n_all = sum(len(r) for r in rows.values())
+        print(f"  {title} ({int(off.sum())} subjects off; {skipped} screens left out: their subject is off with no general subject)")
+        for key, label in (("moved", "subject off, should reach its general subject"), ("kept", "subject still on")):
+            r = rows[key]
+            if not r:
+                continue
+            d = sum(drop in t for _, t, drop, _ in r)
+            h = sum(hid in t for _, t, _, hid in r)
+            print(f"    {label:<46} drop {d:>2}/{len(r):<2} ({100 * d / len(r):3.0f}%)   hidden {h:>2}/{len(r):<2} ({100 * h / len(r):3.0f}%)")
+            wrong = [(it["file"], drop, hid) for it, t, drop, hid in r if drop not in t or hid not in t]
+            for f, drop, hid in wrong[:12]:
+                print(f"      {f[:44]:<45} drop -> {drop:<22} hidden -> {hid}")
+        d = sum(drop in t for r in rows.values() for _, t, drop, _ in r)
+        h = sum(hid in t for r in rows.values() for _, t, _, hid in r)
+        print(f"    total {n_all}: drop {d} ({100 * d / max(n_all, 1):.0f}%), hidden {h} ({100 * h / max(n_all, 1):.0f}%)")
+
+
+# --------------------------------------------------------------------------------------------------
+# Multi-window composites (--composite)
+# --------------------------------------------------------------------------------------------------
+
+
+def composite(base: Image.Image, overlay: Image.Image, layout: str) -> Image.Image:
+    """A study screen with another window on top, at the base's resolution. In memory only."""
+    out = base.convert("RGB").copy()
+    w, h = out.size
+    ov = overlay.convert("RGB")
+    if layout == "split":
+        # A side window over the right 40%: the overlay centre-cropped to that panel's shape, then resized.
+        pw, ph = int(w * 0.4), h
+        ow, oh = ov.size
+        if ow / oh > pw / ph:
+            cw = int(oh * pw / ph)
+            ov = ov.crop(((ow - cw) // 2, 0, (ow - cw) // 2 + cw, oh))
+        else:
+            ch = int(ow * ph / pw)
+            ov = ov.crop((0, (oh - ch) // 2, ow, (oh - ch) // 2 + ch))
+        out.paste(ov.resize((pw, ph), Image.LANCZOS), (w - pw, 0))
+    elif layout == "pip":
+        # A small window (30% wide) in the bottom-right corner, like a mini player or chat pop-out.
+        pw = int(w * 0.3)
+        ph = int(ov.height * pw / ov.width)
+        m = int(w * 0.02)
+        out.paste(ov.resize((pw, ph), Image.LANCZOS), (w - pw - m, h - ph - m))
+    else:
+        raise ValueError(f"unknown layout {layout}")
+    return out
+
+
+def composite_report(files: list[Path], sides: dict, courses: list[str], items: list[dict], score) -> None:
+    """Scores every study screenshot with each overlay window in each layout, as the study subject (the study
+    window stays in front, so its title is the one the app would see), and compares with the plain screenshot."""
+    wanted = [w.strip() for w in args.composite.split(",") if w.strip()]
+    overlays = [f for f in files if expected_label(f) == NOT_STUDY and any(w in f.stem for w in wanted)]
+    layouts = [x.strip() for x in args.composite_layouts.split(",") if x.strip()]
+    bases = [f for f in files if expected_label(f) != NOT_STUDY]
+    if not overlays or not bases:
+        print("\nCOMPOSITES: no matching overlay or study screenshots")
+        return
+    plain = {it["file"]: it for it in items}
+    print(f"\nCOMPOSITES ({len(bases)} study screens x {len(overlays)} overlays x {len(layouts)} layouts, in memory only; "
+          f"overlays: {', '.join(f.stem.split('__')[1] for f in overlays)})")
+    comp: list[dict] = []
+    t = time.perf_counter()
+    for b in bases:
+        expected, accept = expectation(b, sides[b], courses)
+        for o in overlays:
+            for lay in layouts:
+                def load(b=b, o=o, lay=lay):
+                    with Image.open(b) as bi, Image.open(o) as oi:
+                        return capture_like(composite(bi, oi, lay), args.width, args.jpeg_quality)
+                tag = o.stem.split("__")[1]
+                it = score(f"{b.stem}+{tag}@{lay}", load, sides[b], expected, accept, timed=False, quiet=True)
+                if it is not None:
+                    it.pop("pv")
+                    it.update(base=b.name, overlay=tag, layout=lay)
+                    comp.append(it)
+    print(f"  scored {len(comp)} composites in {time.perf_counter() - t:.0f} s")
+    app = [fused_predict(it, APP_PARAMS) for it in comp]
+    report("app", app, comp)
+    gate_lost = sum(p == NOT_STUDY for p, _ in app)
+    print(f"  study screens called 'not study' (would fire alerts): {gate_lost}/{len(comp)}")
+    flipped = [(it, p) for it, (p, _) in zip(comp, app)
+               if it["base"] in plain and hit(fused_predict(plain[it["base"]], APP_PARAMS)[0], plain[it["base"]]) and not hit(p, it)]
+    print(f"  right on the plain screenshot but wrong with the overlay: {len(flipped)}/{len(comp)}")
+    for key in ("overlay", "layout"):
+        groups: dict[str, list[bool]] = {}
+        for it, (p, _) in zip(comp, app):
+            groups.setdefault(it[key], []).append(hit(p, it))
+        print(f"  by {key}: " + ", ".join(f"{k} {sum(v)}/{len(v)}" for k, v in groups.items()))
+    hurt, helped = keyword_effect(comp, APP_PARAMS)
+    print(f"  keywords turn {hurt} answers wrong and {helped} right (vs the same weights without keywords)")
+    if flipped:
+        print("  flips: " + "; ".join(f"{it['file'][:48]} -> {p}" for it, p in flipped[:15])
+              + (" ..." if len(flipped) > 15 else ""))
+    group_report("app (composites)", app, comp)
+    if args.keyword_report:
+        keyword_report(comp)
 
 
 # --------------------------------------------------------------------------------------------------
@@ -421,13 +721,12 @@ def main() -> None:
 
     items, pixel_batches = [], []
     lat = {"prep": [], "ocr": [], "image": [], "text": []}
-    print(f"\n{'file':<34} {'expected':<15} {'image':<17} {'text':<17} {'keyword':<15} ocr-chars  ms(img/ocr/txt)")
-    for n, f in enumerate(files):
-        side = sides[f]
-        expected, accept = expectation(f, side, courses)
+
+    def score(name: str, load, side: dict, expected: str, accept: set[str], timed: bool, quiet: bool = False):
+        """Scores one capture (`load()` returns it, in memory) into a bench item, or None on error."""
         try:
             t0 = time.perf_counter()
-            capture = load_like_capture(f, args.width, args.jpeg_quality)
+            capture = load()
             pv = img.pixels(capture)
             t1 = time.perf_counter()
             img_emb = img.embed_pixels(pv)
@@ -451,8 +750,8 @@ def main() -> None:
             ocr_chars = len(screen_text)
             del screen_text, text, capture
         except Exception as e:  # noqa: BLE001 - never echo content, only the stage and type
-            print(f"{f.name:<34} error {type(e).__name__}")
-            continue
+            print(f"{name:<34} error {type(e).__name__}")
+            return None
 
         logits = img.logits(img_emb, img_txt_emb)
         lib_subj = np.array([logits[ix].mean() for ix in idx["subjects"]])
@@ -474,8 +773,9 @@ def main() -> None:
             for j, m in enumerate(MODULES[len(SUBJECTS):], start=len(SUBJECTS)):
                 if m.get("base") is not None:
                     img_subj[j] = lib_subj[m["base"]]
-        item = dict(file=f.name, expected=expected, accept=accept, kind=side.get("kind"), img_subj=img_subj, img_margin=img_margin,
+        item = dict(file=name, expected=expected, accept=accept, kind=side.get("kind"), img_subj=img_subj, img_margin=img_margin,
                     txt_subj=txt_subj, txt_margin=txt_margin, has_text=has_text, kw=kw,
+                    txt_dist_max=float(txt_dist.max()) if txt_dist is not None else 0.0,
                     img_pred=LABELS[int(img_scores.argmax())],
                     img_conf=float(1 / (1 + np.exp(-img_scores.max()))) if img.kind == "siglip" else float(softmax(img_scores, 1).max()),
                     txt_pred=(MODULES[int(txt_subj.argmax())]["name"] if txt_margin > 0 else NOT_STUDY) if has_text else None,
@@ -490,16 +790,26 @@ def main() -> None:
             "keywords": {m["id"]: int(v) for m, v in zip(MODULES, kw)},
             "ocrChars": ocr_chars,
         }
-        items.append(item)
-        pixel_batches.append(pv)
-        if n > 0:  # first image warms up the models
+        item["pv"] = pv
+        if timed:
             lat["prep"].append((t1 - t0) * 1000)
             lat["image"].append((t2 - t1) * 1000)
             lat["ocr"].append((t3 - t2) * 1000)
             lat["text"].append((t4 - t3) * 1000)
-        mark = lambda pred: ("✓ " if hit(pred, item) else "✗ ") + (pred or "-")  # noqa: E731
-        print(f"{f.name[:33]:<34} {expected[:14]:<15} {mark(item['img_pred'])[:16]:<17} {mark(item['txt_pred'])[:16]:<17} "
-              f"{mark(item['kw_pred'])[:14]:<15} {ocr_chars:>9}  {(t2 - t1) * 1000:.0f}/{(t3 - t2) * 1000:.0f}/{(t4 - t3) * 1000:.0f}")
+        if not quiet:
+            mark = lambda pred: ("✓ " if hit(pred, item) else "✗ ") + (pred or "-")  # noqa: E731
+            print(f"{name[:33]:<34} {expected[:14]:<15} {mark(item['img_pred'])[:16]:<17} {mark(item['txt_pred'])[:16]:<17} "
+                  f"{mark(item['kw_pred'])[:14]:<15} {ocr_chars:>9}  {(t2 - t1) * 1000:.0f}/{(t3 - t2) * 1000:.0f}/{(t4 - t3) * 1000:.0f}")
+        return item
+
+    print(f"\n{'file':<34} {'expected':<15} {'image':<17} {'text':<17} {'keyword':<15} ocr-chars  ms(img/ocr/txt)")
+    for n, f in enumerate(files):
+        expected, accept = expectation(f, sides[f], courses)
+        item = score(f.name, lambda f=f: load_like_capture(f, args.width, args.jpeg_quality), sides[f], expected, accept,
+                     timed=n > 0)  # the first image warms up the models
+        if item is not None:
+            pixel_batches.append(item.pop("pv"))
+            items.append(item)
 
     if not items:
         sys.exit("no image could be scored")
@@ -524,8 +834,19 @@ def main() -> None:
     verdict_curves(app_preds, items)
     misses_by_kind(app_preds, items)
     print(f"  params fitted on all images: {fit(items)} (app uses {APP_PARAMS})")
+    group_report("fused", fused, items)
+    group_report("app", app_preds, items)
+    coverage_report(items)
     if args.keyword_report:
         keyword_report(items)
+    if args.subjects_n:
+        subjects_n_report(items, [int(x) for x in args.subjects_n.split(",")], args.draws, args.seed, args.ablation)
+    elif args.ablation:
+        ablation_report(items)
+    if args.rollup:
+        rollup_report(items)
+    if args.composite:
+        composite_report(files, sides, courses, items, score)
 
     print("\nLATENCY per image, ms (first image excluded as warm-up)")
     for k, v in lat.items():

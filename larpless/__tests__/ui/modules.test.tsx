@@ -3,7 +3,7 @@ import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import type { StudyModule } from '../../src/contracts/domain';
 import { initialAppState, useAppStore } from '../../src/store/appStore';
-import { LIBRARY_MODULES, librarySubjectId } from '../../src/core/subjectLibrary';
+import { CORE_SUBJECT_NAMES, isCoreSubject, LIBRARY_MODULES, librarySubjectId } from '../../src/core/subjectLibrary';
 import { nextTagColor, toggleSubject } from '../../src/ui/lib/modules';
 import { ModulesPage } from '../../src/ui/pages/ModulesPage';
 
@@ -248,13 +248,27 @@ describe('Choosing which subjects are detected', () => {
     expect(count(r)).toBe(`${total} of ${total} on`);
     expect(allOnButton(r)).toHaveLength(0);
 
-    await press(r, 'subject-Biology');
-    expect(disabled()).toEqual([librarySubjectId('Biology')]);
-    expect((await storedSettings()).disabledSubjects).toEqual([librarySubjectId('Biology')]);
+    await press(r, 'subject-Astronomy');
+    expect(disabled()).toEqual([librarySubjectId('Astronomy')]);
+    expect((await storedSettings()).disabledSubjects).toEqual([librarySubjectId('Astronomy')]);
     expect(count(r)).toBe(`${total - 1} of ${total} on`);
 
-    await press(r, 'subject-Biology');
+    await press(r, 'subject-Astronomy');
     expect(disabled()).toEqual([]);
+    act(() => r.unmount());
+  });
+
+  it('core subjects are not switches and stay on (#35)', async () => {
+    const r = render();
+    const switches = (name: string) =>
+      r.root.findAll((n) => n.props.testID === `subject-${name}` && typeof n.props.onPress === 'function');
+    for (const name of CORE_SUBJECT_NAMES) expect(switches(name)).toHaveLength(0);
+    expect(switches('Astronomy').length).toBeGreaterThan(0);
+
+    // Everything that can be turned off is off: the eight core subjects still count as on.
+    const everything = LIBRARY_MODULES.map((m) => m.id);
+    act(() => useAppStore.setState({ settings: { ...useAppStore.getState().settings, disabledSubjects: everything } }));
+    expect(count(r)).toBe(`${CORE_SUBJECT_NAMES.length} of ${LIBRARY_MODULES.length} on`);
     act(() => r.unmount());
   });
 
@@ -266,15 +280,11 @@ describe('Choosing which subjects are detected', () => {
     act(() => r.unmount());
   });
 
-  it('the last subject on cannot be turned off; Turn all on resets', async () => {
-    const allButHistory = LIBRARY_MODULES.filter((m) => m.name !== 'History').map((m) => m.id);
-    act(() => useAppStore.setState({ settings: { ...useAppStore.getState().settings, disabledSubjects: allButHistory } }));
+  it('Turn all on resets', async () => {
+    const optional = LIBRARY_MODULES.filter((m) => !isCoreSubject(m.id)).map((m) => m.id);
+    act(() => useAppStore.setState({ settings: { ...useAppStore.getState().settings, disabledSubjects: optional } }));
     const r = render();
-    expect(count(r)).toBe(`1 of ${LIBRARY_MODULES.length} on`);
-
-    await press(r, 'subject-History');
-    expect(disabled()).toEqual(allButHistory);
-    expect(count(r)).toBe('Keep at least one subject on.');
+    expect(count(r)).toBe(`${CORE_SUBJECT_NAMES.length} of ${LIBRARY_MODULES.length} on`);
 
     await press(r, 'modules-all-on');
     expect(disabled()).toEqual([]);
@@ -286,5 +296,11 @@ describe('Choosing which subjects are detected', () => {
     expect(toggleSubject(['mod_gone', 'a'], 'b', ['a', 'b', 'c'])).toEqual(['a', 'b']);
     expect(toggleSubject(['a', 'b'], 'b', ['a', 'b', 'c'])).toEqual(['a']);
     expect(toggleSubject(['a', 'b'], 'c', ['a', 'b', 'c'])).toBeNull();
+  });
+
+  it('toggleSubject never turns a core subject off, and drops one an older save turned off', () => {
+    const bio = librarySubjectId('Biology');
+    expect(toggleSubject(['a'], bio, ['a', 'b', bio])).toEqual(['a']);
+    expect(toggleSubject(['a', bio], 'b', ['a', 'b', 'c', bio])).toEqual(['a', 'b']);
   });
 });

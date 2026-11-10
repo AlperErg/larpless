@@ -375,7 +375,7 @@ const SCENES: Scene[] = [
   },
   {
     file: 'maths__code-editor',
-    accept: ['Linear Algebra', 'Coding'],
+    accept: ['Linear Algebra', 'Computer Science'],
     appName: 'Code',
     windowTitle: 'matrix_hw.py — MATH201',
     html: desktop(
