@@ -13,13 +13,10 @@
   status = 301
 
 # Umami analytics, served from this domain so ad blockers don't drop it.
-# status 200 makes these rewrites (proxies), not redirects.
+# status 200 makes this a rewrite (proxy), not a redirect. Events go to
+# /_v/api/send, handled by netlify/edge-functions/umami-send.js so Umami sees
+# the visitor's location instead of the Netlify server's.
 [[redirects]]
   from = "/_v/s.js"
   to = "https://cloud.umami.is/script.js"
-  status = 200
-
-[[redirects]]
-  from = "/_v/api/send"
-  to = "https://gateway.umami.is/api/send"
   status = 200
