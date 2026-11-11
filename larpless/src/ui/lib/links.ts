@@ -10,8 +10,8 @@ import { IS_WINDOWS } from '../platform';
 export const APP_VERSION: string = pkg.version;
 
 /** Rendered from PRIVACY.md and TERMS.md by the website build (site/vite.config.ts). */
-export const PRIVACY_URL = 'https://larpless.netlify.app/privacy/';
-export const TERMS_URL = 'https://larpless.netlify.app/terms/';
+export const PRIVACY_URL = 'https://larpless.app/privacy/';
+export const TERMS_URL = 'https://larpless.app/terms/';
 /** A new GitHub issue from .github/ISSUE_TEMPLATE/feedback.yml. */
 export const FEEDBACK_URL = 'https://github.com/AlperErg/larpless/issues/new';
 
