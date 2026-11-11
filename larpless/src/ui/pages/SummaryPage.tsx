@@ -8,7 +8,7 @@ import type { Chunk, SessionSummary, StudyModule } from '../../contracts/domain'
 import { useAppStore } from '../../store/appStore';
 import { useNavStore } from '../../store/navStore';
 import { useSessionStore } from '../../store/sessionStore';
-import { BreakdownBar, Button, Callout, PrivacyBadge, Tag, Text, ToggleList, ToggleRow } from '../components';
+import { BreakdownBar, Button, Callout, DeleteSession, PrivacyBadge, Tag, Text, ToggleList, ToggleRow } from '../components';
 import type { ToggleItem } from '../components';
 import { SharePanel } from '../components/SharePanel';
 import { Page } from '../layout/Page';
@@ -123,9 +123,10 @@ export function SummaryPage() {
         )}
       </View>
 
-      <View style={[styles.section, styles.row]}>
+      <View style={[styles.section, styles.row, styles.wrap]}>
         <Button testID="summary-done" title="Done" variant="primary" onPress={() => go('home')} />
         <Button title="History" variant="ghost" onPress={() => go('history')} style={styles.gapLeft} />
+        <DeleteSession summary={summary} onDeleted={() => go('history')} style={styles.gapLeft} />
       </View>
     </Page>
   );
@@ -234,6 +235,7 @@ function RelabelChips({ c, modules, onRelabel }: { c: Chunk; modules: StudyModul
 const styles = themed(() => StyleSheet.create({
   flex: { flex: 1 },
   row: { flexDirection: 'row', alignItems: 'center' },
+  wrap: { flexWrap: 'wrap' },
   gapLeft: { marginLeft: space.md },
   block: { marginTop: space.lg },
   section: { marginTop: space.xxl },

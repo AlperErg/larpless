@@ -26,4 +26,5 @@ export { ModelDownload } from './ModelDownload';
 export { ScreenModelDownload } from './ScreenModelDownload';
 export { MacView, MacPressable, MacTextInput, isAltPress, handledKeys } from './mac';
 export type { MacKeyEvent, HandledKey, WindowsHandledKey } from './mac';
+export { DeleteSession } from './DeleteSession';
 export { SessionRowHeader, SessionRowBody, sessionToggleItem } from './SessionRow';

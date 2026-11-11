@@ -295,3 +295,20 @@ describe('posts', () => {
     expect(api.toFeedPost({ ...row, breakdown: null }).breakdown).toEqual([]);
   });
 });
+
+describe('deleting a post', () => {
+  it('deletes only my post of that session', async () => {
+    const f = fakeSupabase();
+    await api.deletePost(f.client, ME, 'sess_1');
+    expect(f.opsFor('posts')).toEqual([
+      ['delete', []],
+      ['eq', ['user_id', ME]],
+      ['eq', ['local_session_id', 'sess_1']],
+    ]);
+  });
+
+  it('reports a server error', async () => {
+    const f = fakeSupabase({ posts: [{ error: { message: 'JWT expired' } }] });
+    await expect(api.deletePost(f.client, ME, 'sess_1')).rejects.toThrow('JWT expired');
+  });
+});

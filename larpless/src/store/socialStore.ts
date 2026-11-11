@@ -37,6 +37,8 @@ export interface SocialActions {
   acceptRequest(friendshipId: string): Promise<void>;
   removeFriendship(friendshipId: string): Promise<void>;
   publish(input: PublishInput): Promise<void>;
+  /** Delete your post of this session from the feed. The session itself stays in local history. */
+  unpublish(sessionId: string): Promise<void>;
 }
 
 export type SocialStore = SocialState & SocialActions;
@@ -162,6 +164,15 @@ export function createSocialStore(getClient: () => SupabaseClient, configured: b
         await api.publishSession(getClient(), requireUser(), input);
         set((s) => ({ postedSessionIds: [...s.postedSessionIds, input.summary.id] }));
         await get().refresh();
+      },
+
+      unpublish: async (sessionId) => {
+        const userId = requireUser();
+        await api.deletePost(getClient(), userId, sessionId);
+        set((s) => ({
+          postedSessionIds: s.postedSessionIds.filter((id) => id !== sessionId),
+          feed: s.feed.filter((p) => !(p.userId === userId && p.localSessionId === sessionId)),
+        }));
       },
     };
   });

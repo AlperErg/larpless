@@ -131,3 +131,28 @@ it('actions need a signed-in user', async () => {
   await expect(store.getState().addFriend('bob')).rejects.toThrow('Sign in first.');
   await expect(store.getState().publish({ summary, breakdown: [], focusPct: 0, streak: 0, caption: '' })).rejects.toThrow('Sign in first.');
 });
+
+it('unpublish deletes my post and forgets the session was posted; a failure keeps both', async () => {
+  const f = fakeSupabase({
+    profiles: [{ data: { id: 'u1', username: 'ada' } }],
+    posts: [{ data: [post('p1', 'u1', 's1'), post('p2', 'u2', 's1')] }, { error: { message: 'JWT expired' } }],
+  });
+  const store = createSocialStore(() => f.client, true);
+  store.getState().init();
+  f.emitAuth({ user: { id: 'u1' } });
+  await flush();
+  expect(isSessionPosted(store.getState(), 's1')).toBe(true);
+
+  await expect(store.getState().unpublish('s1')).rejects.toThrow('JWT expired');
+  expect(isSessionPosted(store.getState(), 's1')).toBe(true);
+
+  await store.getState().unpublish('s1');
+  expect(f.opsFor('posts', 2)).toEqual([
+    ['delete', []],
+    ['eq', ['user_id', 'u1']],
+    ['eq', ['local_session_id', 's1']],
+  ]);
+  expect(isSessionPosted(store.getState(), 's1')).toBe(false);
+  // A friend's post that happens to share the local id stays in the feed.
+  expect(store.getState().feed.map((p) => p.id)).toEqual(['p2']);
+});

@@ -5,6 +5,7 @@ import { formatDay, formatDuration, formatTime } from '../lib/format';
 import { space } from '../theme';
 import { BreakdownBar } from './BreakdownBar';
 import { Button } from './Button';
+import { DeleteSession } from './DeleteSession';
 import { Text } from './Text';
 import type { ToggleItem } from './ToggleList';
 
@@ -28,12 +29,13 @@ export function SessionRowBody({
   s,
   modules,
   onOpen,
-  onDelete,
+  deletable,
 }: {
   s: SessionSummary;
   modules: StudyModule[];
   onOpen?: () => void;
-  onDelete?: () => void;
+  /** Show the two-step Delete control. */
+  deletable?: boolean;
 }) {
   return (
     <View>
@@ -43,9 +45,7 @@ export function SessionRowBody({
           {`Focus ${formatDuration(s.focusS)} of ${formatDuration(s.totalS)} · ${s.pomodoros} pomodoro${s.pomodoros === 1 ? '' : 's'}`}
         </Text>
         {onOpen ? <Button title="Open summary" variant="ghost" onPress={onOpen} style={styles.open} /> : null}
-        {onDelete ? (
-          <Button testID={`delete-session-${s.id}`} title="Delete" variant="danger" onPress={onDelete} style={styles.open} />
-        ) : null}
+        {deletable ? <DeleteSession summary={s} style={styles.open} /> : null}
       </View>
     </View>
   );
@@ -55,7 +55,7 @@ export function sessionToggleItem(
   s: SessionSummary,
   modules: StudyModule[],
   onOpen?: (id: string) => void,
-  onDelete?: (id: string) => void,
+  deletable?: boolean,
 ): ToggleItem {
   return {
     key: s.id,
@@ -65,7 +65,7 @@ export function sessionToggleItem(
         s={s}
         modules={modules}
         onOpen={onOpen ? () => onOpen(s.id) : undefined}
-        onDelete={onDelete ? () => onDelete(s.id) : undefined}
+        deletable={deletable}
       />
     ),
   };
@@ -77,6 +77,6 @@ const styles = StyleSheet.create({
   dur: { width: 64 },
   pct: { width: 44 },
   bar: { flex: 1, marginLeft: space.sm, maxWidth: 260 },
-  bodyRow: { flexDirection: 'row', alignItems: 'center', marginTop: space.xs },
+  bodyRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', marginTop: space.xs },
   open: { marginLeft: space.sm },
 });

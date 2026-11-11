@@ -4,6 +4,7 @@ import type { SessionStatus } from '../../contracts/store';
 import { useAppStore } from '../../store/appStore';
 import { useNavStore } from '../../store/navStore';
 import { useSessionStore } from '../../store/sessionStore';
+import { useSocialStore } from '../../store/socialStore';
 
 export const isLive = (s: SessionStatus) => s === 'running' || s === 'paused' || s === 'break';
 
@@ -35,4 +36,17 @@ export function endSession(): Promise<void> {
     .catch((e: unknown) => {
       console.warn('[ui] end failed:', e instanceof Error ? e.message : String(e));
     });
+}
+
+/**
+ * Delete a finished session and its chunks; History, streaks and stats follow from the session list.
+ * `post` also takes it off the friends' feed, first: if that fails nothing is deleted, so the user can retry.
+ */
+export async function deleteSession(sessionId: string, opts: { post?: boolean } = {}): Promise<void> {
+  const session = useSessionStore.getState();
+  if (isLive(session.status) && session.session?.id === sessionId) throw new Error('End the session before deleting it.');
+  if (opts.post) await useSocialStore.getState().unpublish(sessionId);
+  // The summary page falls back to lastSummary, so drop it too or the deleted session reappears there.
+  if (session.lastSummary?.id === sessionId) useSessionStore.setState({ lastSummary: null });
+  await useAppStore.getState().deleteSession(sessionId);
 }
