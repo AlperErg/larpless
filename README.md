@@ -26,7 +26,7 @@ It was started in one hackathon day with **react-native-macos**. It also runs on
 | **Floating timer** | A panel that floats over every app (and every Space on Mac): a SwiftUI `NSPanel` on Mac, an always-on-top Direct2D window on Windows. It shows green when you're studying, red when you're distracted, grey when you're away and blue on breaks. Hover it for Pomodoro, sound and session controls. |
 | **Now playing** | A strip under the timer shows the current song with its album art, the time left, and previous / play / next. The title is shown, never saved. |
 | **Pomodoro** | Optional: 25 minutes of focus and a 5 minute break (with a 15 minute break after every fourth round), or 50/10. |
-| **Escalating alerts** | Panel turns red → notification + soft chime → second notification + pulse. A "Back on track" flash when you return. Strictness: 2 / 5 / 10 min. |
+| **Escalating alerts** | Panel turns red → notification + soft chime → second notification + pulse. A "Back on track" flash when you return. Strictness: 1 / 2 / 5 / 10 min (the second notification comes at three times that). |
 | **Ambient sound** | White, pink and brown noise generated on the fly (`AVAudioEngine` on Mac, XAudio2 on Windows), ducked during breaks. |
 | **Session Summary** | Duration, focus %, subject breakdown bar, streaks and a heatmap. |
 | **Friends feed** | Off by default. Turned on, Supabase accounts, friend requests and a feed of shared session stats. Posts include stats only. |

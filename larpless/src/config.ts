@@ -31,7 +31,7 @@ export const DEFAULT_SETTINGS: Settings = {
   model: 'qwen3-vl:2b',
   modelDefaultRev: MODEL_DEFAULT_REV,
   ollamaUrl: 'http://127.0.0.1:11434',
-  strictness: 2,
+  strictness: 1,
   powerProfile: 'medium',
   classifierMode: 'vlm',
   demoFast: false,

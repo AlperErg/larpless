@@ -419,7 +419,7 @@ function PermissionsStep({ onBack, onNext }: { onBack: () => void; onNext: () =>
         id="notifications"
         icon="bell"
         title="Notifications"
-        body="A gentle nudge when you drift off for a few minutes."
+        body="A gentle nudge when you drift off for a minute or more."
         status={notif}
         onAllow={() =>
           native.notifications

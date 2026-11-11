@@ -4,7 +4,7 @@ import { evaluate, INITIAL_ALERT } from '../../src/core/alerts';
 import type { AlertEffect, AlertState } from '../../src/core/alerts';
 import { fixtureModules } from '../../src/fixtures/data';
 
-const S: Settings = { ...DEFAULT_SETTINGS, strictness: 2, demoFast: false, soundsEnabled: true };
+const S: Settings = { ...DEFAULT_SETTINGS, strictness: 1, demoFast: false, soundsEnabled: true };
 
 function chunk(kind: ChunkKind, startedAt: number, durationS = 30, extra: Partial<Chunk> = {}): Chunk {
   return {
@@ -42,15 +42,16 @@ function run(kinds: ChunkKind[], settings: Settings = S, durationS = 30, start: 
 const types = (e: AlertEffect[]) => e.map((x) => (x.type === 'chime' ? `chime:${x.kind}` : x.type === 'pulse' ? `pulse:${x.on}` : x.type === 'tint' ? `tint:${x.tint}` : x.type));
 
 describe('alerts', () => {
-  it('escalates 1 → 2 at strictness min → 3 at 2.5×, normal 30 s chunks', () => {
+  it('escalates 1 → 2 at strictness min → 3 at 3×, normal 30 s chunks', () => {
     const r = run(['subject', ...Array(10).fill('distracted')]);
-    // elapsed after each distracted chunk: 30, 60, 90, 120 (L2), …, 300 (L3)
-    expect(r.levels).toEqual([0, 1, 1, 1, 2, 2, 2, 2, 2, 2, 3]);
+    // elapsed after each distracted chunk: 30, 60 (L2), 90, …, 180 (L3), …
+    expect(r.levels).toEqual([0, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3]);
     expect(types(r.effects[1])).toEqual(['tint:red']);
-    expect(types(r.effects[4])).toEqual(['notify', 'chime:soft']);
-    expect(types(r.effects[10])).toEqual(['notify', 'pulse:true']);
-    expect(r.effects[4][0]).toEqual({ type: 'notify', level: 2, title: "You've been on Instagram for 2 min", body: 'Back to Biology?' });
-    expect(r.effects[10][0]).toMatchObject({ level: 3, title: "You've been on Instagram for 5 min" });
+    expect(types(r.effects[2])).toEqual(['notify', 'chime:soft']);
+    expect(types(r.effects[6])).toEqual(['notify', 'pulse:true']);
+    expect(r.effects[2][0]).toEqual({ type: 'notify', level: 2, title: "You've been on Instagram for 1 min", body: 'Back to Biology?' });
+    expect(r.effects[6][0]).toMatchObject({ level: 3, title: "You've been on Instagram for 3 min" });
+    expect(r.effects.flat().filter((e) => e.type === 'notify')).toHaveLength(2);
     expect(r.st.distractedSinceMs).toBe(30_000);
   });
 
@@ -60,7 +61,9 @@ describe('alerts', () => {
     expect(r.effects[2][0]).toMatchObject({ type: 'notify', title: "You've been on Instagram for 20 s" });
   });
 
-  it('strictness 5 / 10', () => {
+  it('strictness 2 / 5 / 10', () => {
+    // 2 min: level 2 at 120 s, level 3 at 360 s.
+    expect(run(Array(12).fill('distracted'), { ...S, strictness: 2 }).levels).toEqual([1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 3]);
     expect(run(Array(10).fill('distracted'), { ...S, strictness: 5 }).levels.indexOf(2)).toBe(9); // 300 s
     expect(run(Array(19).fill('distracted'), { ...S, strictness: 10 }).levels.includes(2)).toBe(false); // 570 s < 600 s
     expect(run(Array(20).fill('distracted'), { ...S, strictness: 10 }).levels[19]).toBe(2); // 600 s
@@ -76,10 +79,10 @@ describe('alerts', () => {
 
   it('away and unknown neither advance nor reset the escalation', () => {
     const r = run(['distracted', 'away', 'unknown', 'distracted']);
-    expect(r.levels).toEqual([1, 1, 1, 1]);
+    // The away/unknown minute is not counted: distracted time so far = 60 s, which is level 2 only now.
+    expect(r.levels).toEqual([1, 1, 1, 2]);
     expect(r.effects[1]).toEqual([]);
     expect(r.effects[2]).toEqual([]);
-    // The away/unknown minute is not counted: distracted time so far = 60 s.
     expect(r.st.distractedSinceMs).toBe(60_000);
     const away0 = run(['away', 'unknown']);
     expect(away0.levels).toEqual([0, 0]);
