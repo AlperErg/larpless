@@ -8,6 +8,7 @@ import { appDb, initialAppState, useAppStore } from '../../src/store/appStore';
 import { useNavStore } from '../../src/store/navStore';
 import { initialSessionState, useSessionStore } from '../../src/store/sessionStore';
 import { useSocialStore } from '../../src/store/socialStore';
+import { streakWarning } from '../../src/ui/components/DeleteSession';
 import { HistoryPage } from '../../src/ui/pages/HistoryPage';
 import { SummaryPage } from '../../src/ui/pages/SummaryPage';
 
@@ -144,6 +145,37 @@ describe('deleting a session from History', () => {
     await press(r, `delete-session-only-${id}`);
     expect(unpublish).not.toHaveBeenCalled();
     expect(await savedIds()).not.toContain(id);
+  });
+});
+
+describe('streak warning', () => {
+  const DAY = 86_400_000;
+  const now = new Date(2026, 5, 10, 18).getTime();
+  // Long enough to count towards a streak whatever the threshold is: a copy of a fixture session, moved in time.
+  const on = (sid: string, daysAgo: number) => ({ ...target, id: sid, startedAt: now - daysAgo * DAY - 3_600_000, endedAt: now - daysAgo * DAY });
+  const three = [on('today', 0), on('yesterday', 1), on('before', 2)];
+
+  it('warns only when the delete would shorten the current streak', () => {
+    expect(streak(three, now)).toBe(3);
+    expect(streakWarning(three, 'yesterday', now)).toBe('Your streak drops from 3 days to 1 day.');
+    expect(streakWarning(three, 'before', now)).toBe('Your streak drops from 3 days to 2 days.');
+    expect(streakWarning([on('yesterday', 1)], 'yesterday', now)).toBe('This ends your 1 day streak.');
+    // Another session the same day keeps the day, and an old session isn't part of the streak.
+    expect(streakWarning([...three, on('today2', 0)], 'today', now)).toBeNull();
+    expect(streakWarning([...three, on('old', 30)], 'old', now)).toBeNull();
+  });
+
+  it('shows in the confirm step', async () => {
+    jest.useFakeTimers({ doNotFake: ['setTimeout', 'setImmediate', 'nextTick', 'queueMicrotask'], now });
+    try {
+      act(() => useAppStore.setState({ sessions: three }));
+      r = await render(<HistoryPage />);
+      await press(r, 'toggle-yesterday');
+      await press(r, 'delete-session-yesterday');
+      expect(textOf(r)).toContain('Your streak drops from 3 days to 1 day.');
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });
 
