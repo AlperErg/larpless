@@ -339,10 +339,10 @@ a:hover {
 
 .ipad {
   /* Fit the frame to the viewport: full screenshot, no tilt, no empty scroll runway. */
-  width: min(100%, calc((100dvh - 17rem) * 2000 / 1364));
+  width: min(100%, calc((100dvh - 17rem) * 1804 / 1291));
   max-width: 64rem;
   height: auto;
-  aspect-ratio: 2000 / 1364;
+  aspect-ratio: 1804 / 1291;
   margin: 0.65rem auto 0;
   padding: 0.5rem;
   border: 3px solid #6c6c6c;
@@ -450,25 +450,25 @@ a:hover {
   }
 
   .ipad {
-    width: min(100%, calc((100dvh - 11rem) * 2000 / 1364));
+    width: min(100%, calc((100dvh - 11rem) * 1804 / 1291));
     margin-top: 0.5rem;
   }
 }
 
 /* On phones the whole window shrinks past reading size, so the frame zooms in on
-   the main column: the title, Start session, Pomodoro and the streak (x 500–1480, y 40–870 of 2000×1364).
+   the main column: the title, Start session, Pomodoro and the streak (x 460–1380, y 30–765 of 1804×1291).
    Re-measure these if home.webp changes. */
 @media (max-width: 600px) {
   .ipad {
     width: 100%;
-    aspect-ratio: 980 / 830;
+    aspect-ratio: 920 / 735;
   }
 
   .ipad-screen img {
-    width: 204.08%;
+    width: 196.09%;
     max-width: none;
     height: auto;
-    margin: -4.08% 0 0 -51.02%;
+    margin: -3.26% 0 0 -50%;
     object-fit: fill;
   }
 }
@@ -2098,17 +2098,48 @@ a.soon:focus-visible {
   font-size: 13px;
 }
 
-/* Feedback section: the same button row as the download section. */
+/* Feedback: a quiet row under "Build it yourself", sharing its rules and type. */
 .feedback {
-  text-align: center;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 24px;
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 20px 4px;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
 }
 
-.feedback .section-head {
-  margin-bottom: 32px;
+.feedback-text {
+  flex: 1 1 18rem;
+  margin: 0;
+  max-width: none;
 }
 
-.feedback-meta {
-  margin-top: 20px;
+.feedback-links {
+  display: flex;
+  gap: 4px 12px;
+  margin-right: -8px;
+}
+
+.feedback-links .ghost {
+  white-space: nowrap;
+}
+
+.ghost .mail {
+  width: 1.05em;
+  height: 1.05em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linejoin: round;
+}
+
+@media (max-width: 560px) {
+  .feedback-links {
+    margin: 0 0 -8px -8px;
+  }
 }
 
 .closer-meta a {
