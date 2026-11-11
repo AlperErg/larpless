@@ -56,7 +56,7 @@ None of this reaches me. You can delete a session on the **History** page. To de
 - **On-device classifier:** downloaded from Hugging Face (`huggingface.co`), which receives your IP address and the names of the files requested. Hugging Face's privacy policy applies.
 - **Ollama:** **Download Ollama** opens `ollama.com` in your browser. **Download model** asks Ollama, which is a separate app on your computer, to fetch the AI model from Ollama's servers. Ollama's privacy policy applies.
 
-The app has no analytics, crash reporting, advertising or tracking, and it doesn't check for updates.
+The app has no analytics, crash reporting, advertising or tracking, and it doesn't check for updates itself. If you install the Windows version from the Microsoft Store, the Store keeps it up to date as it does for every Store app, and Microsoft's privacy statement applies to that.
 
 ## 2. Friends (only if you turn it on)
 
