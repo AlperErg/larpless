@@ -2098,6 +2098,19 @@ a.soon:focus-visible {
   font-size: 13px;
 }
 
+/* Feedback section: the same button row as the download section. */
+.feedback {
+  text-align: center;
+}
+
+.feedback .section-head {
+  margin-bottom: 32px;
+}
+
+.feedback-meta {
+  margin-top: 20px;
+}
+
 .closer-meta a {
   color: var(--muted);
   text-decoration: underline;
