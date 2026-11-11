@@ -77,7 +77,7 @@ export interface ScreenVerdict {
   source: 'vlm' | 'rule' | 'cache' | 'title' | 'embed';
 }
 
-export type Strictness = 2 | 5 | 10;               // minutes until the first notification
+export type Strictness = 1 | 2 | 5 | 10;              // minutes until the first notification
 export type PowerProfile = 'eco' | 'medium' | 'high';
 /**
  * Who reads the screen. 'vlm': the vision language model in Ollama, alone (the screen model is never used).
