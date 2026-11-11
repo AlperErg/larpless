@@ -9,14 +9,19 @@ import { Button, Callout, Heatmap, Icon, PomodoroPicker, Strong, Text, ToggleLis
 import { Page } from '../layout/Page';
 import { isLive, startSession } from '../lib/actions';
 import { streakDays } from '../lib/derive';
-import { formatDuration, greeting } from '../lib/format';
+import { formatDuration, homeGreeting } from '../lib/format';
 import { colors, space } from '../theme';
 import { ALT, MOD } from '../platform';
 import { useAllModules } from '../lib/useAllModules';
 
 const RECENT = 7;
 
+/** Times Home has been opened since launch; each visit shows the next greeting. */
+let homeVisits = 0;
+
 export function HomePage() {
+  // Fixed for as long as the page stays mounted, so the greeting doesn't change under the reader.
+  const [visit] = useState(() => homeVisits++);
   const sessions = useAppStore((s) => s.sessions);
   const modules = useAllModules();
   const pomodoroDefault = useAppStore((s) => s.settings.pomodoroDefault);
@@ -41,7 +46,7 @@ export function HomePage() {
   return (
     <Page
       testID="page-home"
-      header={{ icon: 'target', title: 'LarpLess', subtitle: <Text muted>{`${greeting(now)}. Ready when you are.`}</Text> }}>
+      header={{ icon: 'target', title: 'LarpLess', subtitle: <Text muted>{homeGreeting(now, streak, visit)}</Text> }}>
       {live ? (
         <Callout testID="home-live" icon="timer" tone="green">
           <View style={styles.liveRow}>
