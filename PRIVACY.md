@@ -1,6 +1,6 @@
 # LarpLess Privacy Policy
 
-**Last updated: 9 November 2026**
+**Last updated: 11 November 2026**
 
 LarpLess is a study tracker for Mac and Windows. It looks at your screen and webcam to tell when you're studying, and it's built so that what it sees stays on your computer. This policy explains what LarpLess handles, where it goes, and what you can do about it. LarpLess is open source, so you can check every claim here in the code.
 
@@ -16,7 +16,7 @@ LarpLess is a study tracker for Mac and Windows. It looks at your screen and web
 
 LarpLess and its Friends server are run by **Mustafa Alper Ergüne** ("I", "me"), an individual based in Turkey. For the data on the Friends server, I am the data controller (*veri sorumlusu* under Turkish Law No. 6698 on the Protection of Personal Data, "KVKK", and the controller under the EU and UK General Data Protection Regulation, "GDPR", where it applies).
 
-Contact: **privacy@ergune.dev**
+Contact: **privacy@ergune.dev** for privacy questions and requests, **support@larpless.app** for feedback and help with the app.
 
 LarpLess is built by several contributors. Contributing code gives nobody access to your data: I alone administer the Friends server. If you connect LarpLess to a server of your own (**Settings → Friends → Use your own server**), whoever runs that server is responsible for the data on it, and the Friends part of this policy doesn't apply to it.
 
@@ -143,3 +143,5 @@ I'll update this file whenever LarpLess changes what it handles, and change the 
 ## Contact
 
 Mustafa Alper Ergüne · **privacy@ergune.dev**
+
+Feedback and support: **support@larpless.app**
