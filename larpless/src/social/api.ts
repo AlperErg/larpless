@@ -300,6 +300,12 @@ export async function publishSession(client: SupabaseClient, myId: string, input
   if (error && error.code !== UNIQUE_VIOLATION) throw serverError(error);
 }
 
+/** Takes one of your sessions off the feed. A session that was never posted counts as success. */
+export async function deletePost(client: SupabaseClient, myId: string, localSessionId: string): Promise<void> {
+  const { error } = await client.from('posts').delete().eq('user_id', myId).eq('local_session_id', localSessionId);
+  if (error) throw new SocialError(error.message);
+}
+
 /** Keeps only well-formed entries, so one friend's bad post can't break the feed. */
 function cleanBreakdown(raw: unknown): BreakdownEntry[] {
   if (!Array.isArray(raw)) return [];

@@ -96,7 +96,7 @@ I don't share the data with anyone else, unless the law requires it.
 
 ### How long it's kept
 
-- **Account, friendships and posts:** until you delete your account, or I delete it under the [Terms of Use](TERMS.md). Removing a friend deletes that friendship, and they stop seeing your posts.
+- **Account, friendships and posts:** until you delete your account, or I delete it under the [Terms of Use](TERMS.md). Removing a friend deletes that friendship, and they stop seeing your posts. When you delete a session you posted, you can delete its post with it.
 - **Sign-in sessions:** until you sign out on that device, or delete your account.
 - **Limit records:** 1 day.
 - **Technical logs:** 1 day. Logs of sign-in events: 1 hour.
