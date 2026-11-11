@@ -90,7 +90,6 @@
           <a class="nav-link" href="#how">How it works</a>
           <a class="nav-link" href="#privacy">Privacy</a>
           <a class="nav-link" href="#friends">Friends</a>
-          <a class="nav-link" href="#feedback">Feedback</a>
           <a class="soon gh" href="https://github.com/AlperErg/larpless" rel="noopener" data-umami-event="GitHub: Nav"><svg class="gh-mark" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg><span>GitHub</span></a>
         </nav>
         <button type="button" class="menu-btn" id="menu-btn" aria-haspopup="dialog" aria-controls="menu" aria-expanded="false">
@@ -105,7 +104,6 @@
         <a href="#how"><span>How it works</span><svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5L10.5 8 6 12.5"/></svg></a>
         <a href="#privacy"><span>Privacy</span><svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5L10.5 8 6 12.5"/></svg></a>
         <a href="#friends"><span>Friends</span><svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5L10.5 8 6 12.5"/></svg></a>
-        <a href="#feedback"><span>Feedback</span><svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5L10.5 8 6 12.5"/></svg></a>
       </nav>
       <a class="soon soon-lg sheet-cta" href="#download" data-umami-event="Get LarpLess: Menu"><span>Get LarpLess</span></a>
       <form method="dialog">
@@ -131,8 +129,8 @@
               <div class="ipad-screen">
                 <img
                   src="./home.webp"
-                  width="2000"
-                  height="1364"
+                  width="1804"
+                  height="1291"
                   alt="LarpLess home screen: Start session, Pomodoro presets, a streak heatmap, and recent sessions"
                   fetchpriority="high"
                   draggable="false"
@@ -395,18 +393,6 @@
           </div>
         </section>
 
-        <section class="band feedback" id="feedback">
-          <div class="section-head">
-            <h2>Feedback.</h2>
-            <p>LarpLess is new, and what you tell us decides what gets fixed and built next. A wrong label, a bug or an idea: every message is read and helps improve the app.</p>
-          </div>
-          <div class="closer-actions">
-            <a class="soon soon-lg" href="mailto:support@larpless.app?subject=LarpLess%20feedback" data-umami-event="Feedback: Email"><span>Email us</span></a>
-            <a class="ghost" href="https://github.com/AlperErg/larpless/issues/new?template=feedback.yml" rel="noopener" data-umami-event="Feedback: GitHub issue"><svg class="gh-mark" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg><span>Open a GitHub issue</span></a>
-          </div>
-          <p class="closer-meta feedback-meta">Or write to <a href="mailto:support@larpless.app">support@larpless.app</a>. GitHub issues are public; email is private.</p>
-        </section>
-
         <section class="band closer" id="download">
           <div class="section-head">
             <h2>Get LarpLess.</h2>
@@ -467,6 +453,17 @@
             </div>
           </details>
 
+          <div class="feedback" id="feedback">
+            <p class="feedback-text">
+              <span class="build-title">Send feedback</span>
+              <span class="build-sub">If you run into a problem with LarpLess, feel free to send us an email or, better yet, open a GitHub issue so that fixing it is practically on our to-do list.</span>
+            </p>
+            <div class="feedback-links">
+              <a class="ghost" href="mailto:support@larpless.app?subject=LarpLess%20feedback" data-umami-event="Feedback: Email"><svg class="mail" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.75" y="3.25" width="12.5" height="9.5" rx="1.75"/><path d="M2.5 4.5L8 8.75l5.5-4.25"/></svg><span>Email</span></a>
+              <a class="ghost" href="https://github.com/AlperErg/larpless/issues/new?template=feedback.yml" rel="noopener" data-umami-event="Feedback: GitHub issue"><svg class="gh-mark" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg><span>GitHub issue</span></a>
+            </div>
+          </div>
+
           <p class="closer-meta">Free and open source under the <a href="https://github.com/AlperErg/larpless/blob/main/LICENSE" rel="noopener">AGPL-3.0</a> licence</p>
         </section>
       </div>
@@ -482,7 +479,6 @@
           <a href="#how">How it works</a>
           <a href="#privacy">Privacy</a>
           <a href="#friends">Friends</a>
-          <a href="#feedback">Feedback</a>
           <a href="./privacy/">Privacy Policy</a>
           <a href="./terms/">Terms of Use</a>
           <a href="https://github.com/AlperErg/larpless" rel="noopener">GitHub</a>

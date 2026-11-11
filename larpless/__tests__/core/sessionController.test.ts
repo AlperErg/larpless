@@ -573,11 +573,11 @@ describe('sessionController', () => {
     expect(h.state.current).toMatchObject({ kind: 'subject', moduleId: 'mod_biology' });
     expect(h.panelUpdates.at(-1)).toMatchObject({ status: 'studying', title: 'Biology', timer: { baseS: 30, runningSinceMs: null } });
 
-    // Chunks 12–15 are Instagram: 4 × 30 s → level 2 notification (strictness 2) through the real alerts.
+    // Chunks 12–15 are Instagram: 4 × 30 s → level 2 notification at 1 min (strictness 1), level 3 only at 3 min.
     await advance(30_000);
     expect(h.state.chunks).toHaveLength(16);
     expect(h.state.alert.level).toBe(2);
-    expect((h.native.notifications.post as jest.Mock).mock.calls.map((c) => c[0].title)).toContain("You've been on Instagram for 2 min");
+    expect((h.native.notifications.post as jest.Mock).mock.calls.map((c) => c[0].title)).toContain("You've been on Instagram for 1 min");
 
     // Pause holds the replay.
     h.ctrl.pause();

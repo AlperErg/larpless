@@ -3,7 +3,7 @@
  *
  * Level 1: first distracted chunk → panel red.
  * Level 2: distracted continuously ≥ strictness min (20 s in demoFast) → notification + soft chime.
- * Level 3: ≥ 2.5 × strictness (50 s in demoFast) → 2nd notification + pulse.
+ * Level 3: ≥ 3 × strictness (50 s in demoFast) → 2nd notification + pulse.
  * Recovery: first subject chunk → level 0, flash "back on track", 'back' chime.
  * `away` and `unknown` neither advance nor reset (their time is not counted towards the next level).
  * The controller never evaluates during breaks.
@@ -33,7 +33,7 @@ export type AlertEffect =
 export function thresholdsMs(settings: Pick<Settings, 'strictness' | 'demoFast'>): { level2: number; level3: number } {
   if (settings.demoFast) return { level2: 20_000, level3: 50_000 };
   const base = settings.strictness * 60_000;
-  return { level2: base, level3: base * 2.5 };
+  return { level2: base, level3: base * 3 };
 }
 
 /** "45 s" under a minute, else "3 min". */

@@ -113,7 +113,7 @@ describe('Settings page', () => {
 
   it('focus and sound choices apply at once, persist, and show as selected', async () => {
     const r = render();
-    expect(isSelected(r, 'settings-strictness-2')).toBe(true);
+    expect(isSelected(r, 'settings-strictness-1')).toBe(true);
     expect(isSelected(r, 'settings-power-medium')).toBe(true);
 
     await press(byTestID(r, 'settings-power-eco'));
@@ -138,7 +138,7 @@ describe('Settings page', () => {
     expect(isSelected(r, 'settings-power-eco')).toBe(true);
     expect(isSelected(r, 'settings-power-medium')).toBe(false);
     expect(isSelected(r, 'settings-strictness-5')).toBe(true);
-    expect(isSelected(r, 'settings-strictness-2')).toBe(false);
+    expect(isSelected(r, 'settings-strictness-1')).toBe(false);
     expect(isSelected(r, 'settings-pomodoro-25/5')).toBe(true);
     expect(isSelected(r, 'settings-sound-rain')).toBe(true);
     expect(isOn(r, 'settings-demoFast')).toBe(true);
