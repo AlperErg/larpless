@@ -50,6 +50,7 @@ export const CLASSIFIER_OPTIONS: { value: ClassifierMode; label: string }[] = [
 ];
 
 export const STRICTNESS_OPTIONS: { value: Strictness; label: string }[] = [
+  { value: 1, label: '1 min' },
   { value: 2, label: '2 min' },
   { value: 5, label: '5 min' },
   { value: 10, label: '10 min' },
