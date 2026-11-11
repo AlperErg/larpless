@@ -9,13 +9,13 @@
   IgnorableNamespaces="uap uap3 uap7 rescap">
 
   <Identity
-    Name="LarpLess"
-    Publisher="CN=ggige"
+    Name="GarciaIgelmo.LarpLess"
+    Publisher="CN=C46A4420-229A-4946-9836-AB6A1014CE96"
     Version="0.1.1.0" />
 
   <Properties>
     <DisplayName>LarpLess</DisplayName>
-    <PublisherDisplayName>ggige</PublisherDisplayName>
+    <PublisherDisplayName>Garcia Igelmo</PublisherDisplayName>
     <Logo>Images\StoreLogo.png</Logo>
   </Properties>
 
