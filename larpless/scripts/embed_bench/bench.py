@@ -70,7 +70,7 @@ p.add_argument("--ablation", action="store_true",
 p.add_argument("--rollup", action="store_true",
                help="core-subject simulation (#35): turn optional subjects off (the Computing ones, the Maths ones, then "
                     "all of them) and score every study screen against where it should land: its own subject if still "
-                    "on, else its area's general subject (Algorithms -> Computer Science). Compares dropping the "
+                    "on, else its area's general subject (Algorithms -> Programming). Compares dropping the "
                     "subjects that are off with keeping them as hidden candidates that are relabelled (the app)")
 p.add_argument("--composite", nargs="?", const="spotify,discord-public,youtube-home", metavar="NAMES",
                help="multi-window simulation (#28): paste these not-study screenshots (file-name substrings) beside / over "
@@ -250,7 +250,7 @@ def fused_predict(item: dict, prm: dict) -> tuple[str, float]:
     order = np.argsort(probs)[::-1]
     k = int(order[0])
     if prm.get("conf") == "margin":
-        # Top-1 against the runner-up only: similar subjects (Computer Science / Algorithms / OS) split the mass,
+        # Top-1 against the runner-up only: similar subjects (Programming / Algorithms / OS) split the mass,
         # which drags plain probabilities down even when the answer is right.
         conf = probs[k] / (probs[k] + probs[order[1]]) if len(order) > 1 else 1.0
         return MODULES[k]["name"], float(p_study * conf)

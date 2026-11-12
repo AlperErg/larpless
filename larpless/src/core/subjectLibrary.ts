@@ -30,7 +30,7 @@ export const CORE_SUBJECT_NAMES = [
   'Chemistry',
   'Physics',
   'Maths',
-  'Computer Science',
+  'Programming',
   'History',
   'Literature',
   'Economics',
@@ -63,9 +63,11 @@ export const SUBJECT_GROUPS: SubjectGroup[] = [
   },
   {
     title: 'Computing',
-    general: 'Computer Science',
+    general: 'Programming',
     presets: [
-      { name: 'Computer Science', icon: 'code', color: 'purple', keywords: ['python', 'javascript', 'typescript', 'java', 'C++', 'function', 'class', 'variable', 'debugging', 'compiler', 'git', 'VS Code', 'Xcode', 'exercise', 'coding', 'programming', 'CS'] },
+      // Code-specific words only (#52): "function", "class", "variable", "exercise" and "CS" also showed up on
+      // maths, science and humanities screens, and JavaScript is Web Development's.
+      { name: 'Programming', icon: 'code', color: 'purple', keywords: ['programming', 'source code', 'debugging', 'coding', 'python', 'java', 'C++', 'compiler', 'compile error', 'stack trace', 'unit test', 'IDE', 'Xcode'] },
       { name: 'Algorithms', icon: 'puzzle', color: 'blue', keywords: ['algorithm', 'data structure', 'big O', 'complexity', 'sorting', 'recursion', 'dynamic programming', 'graph', 'tree', 'hash table', 'LeetCode'] },
       { name: 'Data Science', icon: 'chartLine', color: 'orange', keywords: ['pandas', 'NumPy', 'dataframe', 'Jupyter', 'notebook', 'visualisation', 'SQL', 'dataset', 'Kaggle', 'feature'] },
       { name: 'Machine Learning', icon: 'bot', color: 'pink', keywords: ['neural network', 'training', 'model', 'loss function', 'gradient descent', 'PyTorch', 'TensorFlow', 'classification', 'transformer', 'overfitting'] },
@@ -129,8 +131,8 @@ export const SUBJECT_GROUPS: SubjectGroup[] = [
 
 /** Ids that predate a rename. Saved chunks and settings hold ids, so a renamed subject keeps the one it had. */
 const LEGACY_IDS: Record<string, string> = {
-  // "Computer Science" was "Coding" until #35.
-  'computer science': 'lib_coding',
+  // "Programming" was "Coding" until #35, then "Computer Science" until #52.
+  programming: 'lib_coding',
 };
 
 /** Stable id for a library subject, e.g. "Signals & Systems" → "lib_signals_systems". */
@@ -177,7 +179,7 @@ export function isCoreSubject(id: string): boolean {
   return CORE_IDS.has(id);
 }
 
-/** Library subject id → the id of its group's general subject (Algorithms → Computer Science). */
+/** Library subject id → the id of its group's general subject (Algorithms → Programming). */
 const GENERAL_OF: ReadonlyMap<string, string> = new Map(
   SUBJECT_GROUPS.flatMap((g) => {
     const general = g.general;

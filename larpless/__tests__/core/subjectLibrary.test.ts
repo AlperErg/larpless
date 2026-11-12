@@ -10,6 +10,7 @@ import {
   LIBRARY_MODULES,
   librarySubjectId,
   rollUpSubject,
+  SUBJECT_GROUPS,
 } from '../../src/core/subjectLibrary';
 import { fixtureModules } from '../../src/fixtures/data';
 
@@ -23,7 +24,7 @@ describe('core subjects (#35)', () => {
       'Chemistry',
       'Physics',
       'Maths',
-      'Computer Science',
+      'Programming',
       'History',
       'Literature',
       'Economics',
@@ -34,20 +35,47 @@ describe('core subjects (#35)', () => {
     expect(isCoreSubject('mod_thesis')).toBe(false);
   });
 
-  it('Computer Science keeps the id it had as "Coding", so saved sessions still resolve', () => {
-    expect(id('Computer Science')).toBe('lib_coding');
+  it('Programming keeps the id it had as "Coding" and "Computer Science", so saved sessions still resolve', () => {
+    expect(id('Programming')).toBe('lib_coding');
     expect(names(LIBRARY_MODULES)).not.toContain('Coding');
+    expect(names(LIBRARY_MODULES)).not.toContain('Computer Science');
     expect(new Set(LIBRARY_MODULES.map((m) => m.id)).size).toBe(LIBRARY_MODULES.length);
   });
 
   it('every general subject is a core subject, and only Maths and Computing subjects have one', () => {
     const withGeneral = LIBRARY_MODULES.filter((m) => generalSubjectId(m.id));
-    expect(new Set(withGeneral.map((m) => generalSubjectId(m.id)))).toEqual(new Set([id('Maths'), id('Computer Science')]));
-    expect(generalSubjectId(id('Algorithms'))).toBe(id('Computer Science'));
+    expect(new Set(withGeneral.map((m) => generalSubjectId(m.id)))).toEqual(new Set([id('Maths'), id('Programming')]));
+    expect(generalSubjectId(id('Algorithms'))).toBe(id('Programming'));
     expect(generalSubjectId(id('Calculus'))).toBe(id('Maths'));
     expect(generalSubjectId(id('Maths'))).toBeNull();
     expect(generalSubjectId(id('Law'))).toBeNull();
     expect(generalSubjectId('mod_thesis')).toBeNull();
+  });
+});
+
+describe('library keywords (#52)', () => {
+  const lc = (k: string) => k.trim().toLowerCase();
+  /** Keyword → the subjects listing it, case-insensitive. */
+  const owners = new Map<string, { subject: string; group: string }[]>();
+  for (const g of SUBJECT_GROUPS) {
+    for (const s of g.presets) {
+      for (const k of s.keywords) owners.set(lc(k), [...(owners.get(lc(k)) ?? []), { subject: s.name, group: g.title }]);
+    }
+  }
+  // Words that genuinely belong to subjects in different groups. A keyword hit votes for every subject that
+  // lists it, so a new entry here should be a real overlap, not a generic word.
+  const SHARED_ACROSS_GROUPS = ['logic', 'thermodynamics', 'equilibrium', 'cognition', 'circuit', 'er diagram', 'bond'];
+
+  it('no keyword is shared by subjects in different groups, except the known overlaps', () => {
+    const across = [...owners].filter(([, o]) => new Set(o.map((x) => x.group)).size > 1).map(([k]) => k);
+    expect(across.sort()).toEqual([...SHARED_ACROSS_GROUPS].sort());
+  });
+
+  it('Programming has only code-specific keywords, shared with no other subject', () => {
+    const programming = LIBRARY_MODULES.find((m) => m.name === 'Programming')!;
+    const kws = programming.keywords.map(lc);
+    expect(kws).toEqual(expect.not.arrayContaining(['function', 'class', 'variable', 'exercise', 'cs', 'javascript', 'git']));
+    expect(kws.filter((k) => owners.get(k)!.length > 1)).toEqual([]);
   });
 });
 
@@ -78,7 +106,7 @@ describe('subjects that are off roll up to their general subject', () => {
 
   it('the classifier still compares an off subject that has a general subject, and no other off subject', () => {
     const candidates = names(candidateSubjects(all, off));
-    expect(candidates).toEqual(expect.arrayContaining(['Algorithms', 'Calculus', 'Computer Science', 'Maths']));
+    expect(candidates).toEqual(expect.arrayContaining(['Algorithms', 'Calculus', 'Programming', 'Maths']));
     expect(candidates).not.toContain('Law');
     expect(candidates).not.toContain('Thesis');
     expect(candidateSubjects(all, [])).toEqual(all);
@@ -91,7 +119,7 @@ describe('subjects that are off roll up to their general subject', () => {
   });
 
   it('labels an off subject as its general subject, and leaves the rest alone', () => {
-    expect(rollUpSubject(id('Algorithms'), all, off)).toBe(id('Computer Science'));
+    expect(rollUpSubject(id('Algorithms'), all, off)).toBe(id('Programming'));
     expect(rollUpSubject(id('Calculus'), all, off)).toBe(id('Maths'));
     expect(rollUpSubject(id('Operating Systems'), all, off)).toBe(id('Operating Systems'));
     expect(rollUpSubject(id('Law'), all, off)).toBe(id('Law'));
@@ -107,7 +135,7 @@ describe('subjects that are off roll up to their general subject', () => {
     const wrapped = relabelVerdicts(inner, (m) => rollUpSubject(m, all, off));
 
     const first = await wrapped.classifyCurrent(candidateSubjects(all, off));
-    expect(first.verdict).toMatchObject({ studying: true, moduleId: id('Computer Science'), confidence: 0.8 });
+    expect(first.verdict).toMatchObject({ studying: true, moduleId: id('Programming'), confidence: 0.8 });
     expect(study.verdict?.moduleId).toBe(id('Algorithms'));
     expect(await wrapped.classifyCurrent([])).toBe(distracted);
     expect((await wrapped.classifyCurrent([])).verdict).toBeNull();
