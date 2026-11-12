@@ -197,9 +197,9 @@ export function guessStudy(
   const sim = /\bsimulat/i.test(blob);
   const guessed =
     mentioned ??
-    (sim ? named('Computer Architecture') ?? named('Digital Logic') ?? named('Computer Science') : undefined) ??
+    (sim ? named('Computer Architecture') ?? named('Digital Logic') ?? named('Programming') : undefined) ??
     (vm ? named('Operating Systems') ?? named('Cybersecurity') : undefined) ??
-    named('Computer Science') ??
+    named('Programming') ??
     modules[0];
   return {
     studying: true,

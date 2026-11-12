@@ -178,7 +178,7 @@ describe('db', () => {
   });
 
   it('turns core subjects back on in an older save (#35)', () => {
-    // lib_coding is Computer Science: it kept the id it had as "Coding".
+    // lib_coding is Programming: it kept the id it had as "Coding" and "Computer Science".
     expect(cleanSettings({ disabledSubjects: ['lib_biology', 'lib_coding', 'lib_maths', 'lib_algorithms'] }).disabledSubjects).toEqual([
       'lib_algorithms',
     ]);

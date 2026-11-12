@@ -54,9 +54,9 @@ const DEMO = [
   {
     username: 'guillermo_garcia',
     posts: [
-      { daysAgo: 0, hour: 13, caption: 'Essay outline ✍️ 2,000 words to go', pomodoros: 5, streak: 12, parts: [subj('History', 'brown', 110), subj('Computer Science', 'pink', 30), subj('Distracted', 'red', 6)] },
-      { daysAgo: 1, hour: 11, caption: null, pomodoros: 4, streak: 11, parts: [subj('Computer Science', 'pink', 90), subj('History', 'brown', 20), subj('Distracted', 'red', 9)] },
-      { daysAgo: 2, hour: 15, caption: 'Recursion practice', pomodoros: 3, streak: 10, parts: [subj('Computer Science', 'pink', 65), subj('Distracted', 'red', 5)] },
+      { daysAgo: 0, hour: 13, caption: 'Essay outline ✍️ 2,000 words to go', pomodoros: 5, streak: 12, parts: [subj('History', 'brown', 110), subj('Programming', 'pink', 30), subj('Distracted', 'red', 6)] },
+      { daysAgo: 1, hour: 11, caption: null, pomodoros: 4, streak: 11, parts: [subj('Programming', 'pink', 90), subj('History', 'brown', 20), subj('Distracted', 'red', 9)] },
+      { daysAgo: 2, hour: 15, caption: 'Recursion practice', pomodoros: 3, streak: 10, parts: [subj('Programming', 'pink', 65), subj('Distracted', 'red', 5)] },
     ],
   },
 ];
