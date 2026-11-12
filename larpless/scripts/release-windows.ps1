@@ -110,6 +110,15 @@ New-Item -ItemType Directory -Force -Path $out | Out-Null
 # Start from an empty Bundle folder (keeping .gitkeep), so a failed bundle step can't ship a stale bundle.
 Get-ChildItem $bundleDir -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne '.gitkeep' } |
   Remove-Item -Recurse -Force
+# Start from empty packaging output too. MSBuild keeps a second copy of the manifest for the Store upload
+# (bin\<platform>\Release\Upload\ForUploadBundle) and skips regenerating it as "up to date" after
+# Package.appxmanifest changes, so the .msixupload kept the previous identity. Only the packaging step
+# is redone; the compiled app is elsewhere.
+foreach ($p in $Platforms) {
+  foreach ($dir in @("windows\LarpLess.Package\bin\$p\Release", "windows\LarpLess.Package\obj\$p\Release")) {
+    if (Test-Path $dir) { Remove-Item -Recurse -Force $dir }
+  }
+}
 
 dotnet tool restore
 if ($LASTEXITCODE -ne 0) { Fail 'dotnet tool restore failed.' }
@@ -173,6 +182,45 @@ if ($Store) {
   if (-not $builtUpload) { Fail "the Store build produced no .msixupload under $out." }
   $finalUpload = Join-Path $out "LarpLess-$version$($builtUpload.Extension)"
   Copy-Item $builtUpload.FullName $finalUpload -Force
+}
+
+# The packages must carry the identity that Package.appxmanifest has now. Partner Center rejects an
+# upload whose Name, Publisher or PublisherDisplayName differ from the reserved app's.
+Add-Type -AssemblyName System.IO.Compression
+function Get-PackageManifests([IO.Stream]$stream, [string]$name) {
+  # Returns the AppxManifest.xml of every .msix in a .msix, .msixbundle or .msixupload (they nest).
+  $zip = [IO.Compression.ZipArchive]::new($stream, [IO.Compression.ZipArchiveMode]::Read)
+  try {
+    $own = $zip.Entries | Where-Object { $_.FullName -eq 'AppxManifest.xml' } | Select-Object -First 1
+    if ($own) {
+      $reader = [IO.StreamReader]::new($own.Open())
+      try { return , [pscustomobject]@{ Package = $name; Xml = [xml]$reader.ReadToEnd() } } finally { $reader.Dispose() }
+    }
+    $found = @()
+    foreach ($entry in $zip.Entries | Where-Object { $_.Name -match '\.(msix|appx|msixbundle|appxbundle)$' }) {
+      $copy = [IO.MemoryStream]::new()
+      $inner = $entry.Open()
+      try { $inner.CopyTo($copy) } finally { $inner.Dispose() }
+      $copy.Position = 0
+      $found += Get-PackageManifests $copy $entry.Name
+    }
+    return $found
+  } finally { $zip.Dispose() }
+}
+
+Step 'Checking the package identity'
+$wanted = "$($identity.Name) | $publisher | $($manifest.Package.Properties.PublisherDisplayName) | $($identity.Version)"
+foreach ($file in @($finalBundle, $finalUpload) | Where-Object { $_ }) {
+  $packed = @(Get-PackageManifests ([IO.File]::OpenRead($file)) (Split-Path -Leaf $file))
+  if ($packed.Count -eq 0) { Fail "$file contains no package manifest." }
+  foreach ($m in $packed) {
+    $id = $m.Xml.Package.Identity
+    $got = "$($id.Name) | $($id.Publisher) | $($m.Xml.Package.Properties.PublisherDisplayName) | $($id.Version)"
+    if ($got -ne $wanted) {
+      Fail "$($m.Package) inside $(Split-Path -Leaf $file) has the identity '$got', but Package.appxmanifest says '$wanted'."
+    }
+  }
+  Write-Host "$(Split-Path -Leaf $file): $($packed.Count) package(s), $wanted"
 }
 
 # --- Signing -------------------------------------------------------------------------------------
