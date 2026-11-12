@@ -3,6 +3,9 @@
 // times a second. Presence and phone both come from bundled YOLO11n (ONNX Runtime, nms=True, 640):
 // person score > 0.5 => personPresent, best cell phone score => phoneScore, > 0.4 => phoneVisible.
 // Until the model has loaded, and if it fails to load, nothing is emitted (a missing person would read as away).
+// A camera that is open but delivers no frames (a closed privacy shutter: many drivers stop streaming instead of
+// sending black frames) can't see anyone, so after kStallMs without a frame a watchdog emits personPresent=false
+// samples at the same rate until frames come back. Once the camera is released (Stop, or retries gave up) it is silent.
 // PRIVACY: frames and tensors stay in memory, are dropped right after analysis, and are never logged or written to disk.
 #pragma once
 
@@ -59,13 +62,16 @@ struct FLWebcam {
     while (m_busy.load()) std::this_thread::sleep_for(std::chrono::milliseconds(1));
     std::thread loader;
     std::thread retry;
+    std::thread watchdog;
     {
       std::lock_guard lock{m_threadMutex};
       loader = std::move(m_loader);
       retry = std::move(m_retry);
+      watchdog = std::move(m_watchdog);
     }
     if (loader.joinable()) loader.join();
     if (retry.joinable()) retry.join();
+    if (watchdog.joinable()) watchdog.join();
   }
 
   // Rejects E_INVALID_ARG (fps outside (0, 30]), E_PERMISSION (camera denied) or E_CAMERA (no / busy camera).
@@ -81,6 +87,7 @@ struct FLWebcam {
     m_intervalMs = 1000.0 / fps * 0.97;
     m_wantCamera = true;
     LoadModelIfNeeded();
+    StartWatchdogIfNeeded();
     // MediaCapture's async calls are awaited off the JS thread (.get() isn't allowed on an STA thread).
     std::thread([this, result = std::move(result)]() mutable noexcept {
       winrt::init_apartment(winrt::apartment_type::multi_threaded);
@@ -250,9 +257,12 @@ struct FLWebcam {
       throw winrt::hresult_error{E_FAIL}; // busy / unavailable -> E_CAMERA
     }
     m_failedToken = m_capture.Failed([this](auto &&, auto &&) { OnCaptureFailed(); });
+    m_readerStartMs = SteadyMs();
+    m_readerOpen = true;
   }
 
   void StopLocked() noexcept {
+    m_readerOpen = false;
     try {
       if (m_reader) {
         m_reader.FrameArrived(m_frameToken);
@@ -310,7 +320,7 @@ struct FLWebcam {
                winrt::Windows::Media::Capture::Frames::MediaFrameArrivedEventArgs const &) noexcept {
     using namespace winrt::Windows::Graphics::Imaging;
     if (m_stopping.load() || !m_modelReady.load()) return;
-    const double now{std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count()};
+    const double now{SteadyMs()};
     if (now - m_lastFrameMs < m_intervalMs || m_busy.exchange(true)) {
       return;
     }
@@ -350,6 +360,46 @@ struct FLWebcam {
     } catch (...) {
     }
     m_busy = false;
+  }
+
+  static double SteadyMs() noexcept {
+    return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count();
+  }
+
+  // One thread for the module's lifetime, started by the first Start(). Every 250 ms: if the camera is open, the
+  // model is loaded and no frame has been analysed for kStallMs (counting from when the reader opened), emit a
+  // no-person sample at the requested rate. A frame arriving again resets m_lastFrameMs and ends it.
+  void StartWatchdogIfNeeded() noexcept {
+    std::lock_guard lock{m_threadMutex};
+    if (m_stopping.load() || m_watchdog.joinable()) return;
+    m_watchdog = std::thread([this]() noexcept {
+      double lastBlindMs{0};
+      bool logged{false};
+      while (!m_stopping.load()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(250));
+        if (!m_wantCamera.load() || !m_readerOpen.load() || !m_modelReady.load()) {
+          logged = false;
+          continue;
+        }
+        const double now{SteadyMs()};
+        const double interval{m_intervalMs.load()};
+        const double lastSeen{(std::max)(m_lastFrameMs.load(), m_readerStartMs.load())};
+        const double stall{(std::max)(kStallMs, interval * 3)};
+        if (now - lastSeen < stall) {
+          logged = false;
+          continue;
+        }
+        if (now - lastBlindMs < interval) continue;
+        lastBlindMs = now;
+        if (!logged) {
+          logged = true;
+          OutputDebugStringA("[FLWebcam] camera is sending no frames (privacy shutter?), reporting no person\n");
+        }
+        if (m_listeners > 0 && !m_stopping.load()) {
+          Sample(JSValueObject{{"t", EpochMs()}, {"personPresent", false}, {"phoneVisible", false}, {"phoneScore", 0.0}});
+        }
+      }
+    });
   }
 
   // No-op once a load has started. Runs off the UI thread; samples stay silent until it succeeds.
@@ -519,12 +569,17 @@ struct FLWebcam {
   static constexpr float kPad{114.f / 255.f};
   static constexpr float kPersonThreshold{0.5f};
   static constexpr float kPhoneThreshold{0.4f};
+  // No frame for this long (or 3 intervals, if longer) while the camera is open => report no person.
+  static constexpr double kStallMs{3000.0};
 
   std::mutex m_mutex;
   std::mutex m_modelMutex;
   std::mutex m_threadMutex;
   std::thread m_loader;
   std::thread m_retry;
+  std::thread m_watchdog;
+  std::atomic<bool> m_readerOpen{false};
+  std::atomic<double> m_readerStartMs{0};
   std::atomic<bool> m_retryRunning{false};
   winrt::Windows::Media::Capture::MediaCapture m_capture{nullptr};
   winrt::Windows::Media::Capture::Frames::MediaFrameReader m_reader{nullptr};
