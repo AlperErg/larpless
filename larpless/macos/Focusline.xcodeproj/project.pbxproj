@@ -14,6 +14,7 @@
 		514201582437B4B40078DB4F /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 514201572437B4B40078DB4F /* main.m */; };
 		51B044E29238E441F4C222AE /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 26C7FFF261455D097CE43899 /* PrivacyInfo.xcprivacy */; };
 		F0C05E1000000000000000A3 /* Fonts in Resources */ = {isa = PBXBuildFile; fileRef = F0C05E1000000000000000A2 /* Fonts */; };
+		F0C1C0A100000000000000B1 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = F0C1C0A100000000000000B2 /* AppIcon.icon */; };
 		F2DDEED1FCA8A2D6F3EF22E7 /* libPods-Focusline-macOS.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 67ABC85C90F3AAD19C649BE7 /* libPods-Focusline-macOS.a */; };
 /* End PBXBuildFile section */
 
@@ -33,6 +34,7 @@
 		BD991F06B6564684D7E0A8B8 /* Pods-Focusline-macOS.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Focusline-macOS.release.xcconfig"; path = "Target Support Files/Pods-Focusline-macOS/Pods-Focusline-macOS.release.xcconfig"; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F0C05E1000000000000000A2 /* Fonts */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Fonts; sourceTree = "<group>"; };
+		F0C1C0A100000000000000B2 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -78,6 +80,7 @@
 			children = (
 				5142014B2437B4B30078DB4F /* AppDelegate.h */,
 				5142014C2437B4B30078DB4F /* AppDelegate.mm */,
+				F0C1C0A100000000000000B2 /* AppIcon.icon */,
 				514201512437B4B40078DB4F /* Assets.xcassets */,
 				514201532437B4B40078DB4F /* Main.storyboard */,
 				514201562437B4B40078DB4F /* Info.plist */,
@@ -225,6 +228,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F0C1C0A100000000000000B1 /* AppIcon.icon in Resources */,
 				514201522437B4B40078DB4F /* Assets.xcassets in Resources */,
 				514201552437B4B40078DB4F /* Main.storyboard in Resources */,
 				F0C05E1000000000000000A3 /* Fonts in Resources */,

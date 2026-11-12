@@ -1,0 +1,108 @@
+{
+  "fill" : "automatic",
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "blend-mode" : "normal",
+          "fill" : "automatic",
+          "image-name" : "1-ring.svg",
+          "name" : "1-ring",
+          "position" : {
+            "scale" : 1.3,
+            "translation-in-points" : [
+              -0.010299359963823917,
+              -56.11455000000012
+            ]
+          }
+        },
+        {
+          "image-name" : "2-crown.svg",
+          "name" : "2-crown",
+          "position" : {
+            "scale" : 1.35,
+            "translation-in-points" : [
+              0,
+              -16
+            ]
+          }
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.3
+      }
+    },
+    {
+      "layers" : [
+        {
+          "fill-specializations" : [
+            {
+              "value" : "system-dark"
+            },
+            {
+              "appearance" : "dark",
+              "value" : "system-light"
+            }
+          ],
+          "image-name" : "3-hands.svg",
+          "name" : "3-hands",
+          "opacity-specializations" : [
+            {
+              "value" : 0.9
+            },
+            {
+              "appearance" : "dark",
+              "value" : 0.9
+            }
+          ],
+          "position" : {
+            "scale" : 1.1,
+            "translation-in-points" : [
+              1.2499999999998863,
+              -58
+            ]
+          }
+        },
+        {
+          "fill-specializations" : [
+            {
+              "value" : "system-dark"
+            },
+            {
+              "appearance" : "dark",
+              "value" : "system-light"
+            }
+          ],
+          "image-name" : "4-hub.svg",
+          "name" : "4-hub",
+          "position" : {
+            "scale" : 1.1,
+            "translation-in-points" : [
+              0,
+              -46
+            ]
+          }
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.3
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "circles" : [
+      "watchOS"
+    ],
+    "squares" : "shared"
+  }
+}

@@ -1,38 +1,32 @@
-<p align="center"><img src="brand/larpless-logo.png" alt="LarpLess logo" width="180"></p>
-
 # LarpLess
 
-<p align="center"><img src="docs/images/home-screen.webp" alt="LarpLess home screen: Start session, Pomodoro presets, streak heatmap and recent sessions" width="800"></p>
+**Strava for studying.**
 
-**Strava for studying, as an app for your computer.** LarpLess watches your screen and webcam *on-device*, works out which subject you are studying or if you are distracted every 10 to 30 seconds, nudges you when you drift to Instagram on your screen or if you pick up your phone, and gives you a study session breakdown when you finish *(like Strava)*. If you want, you can then share the session stats with friends.
+LarpLess watches your screen and webcam *on-device*, works out which subject you are studying or if you are distracted every 10 to 30 seconds, nudges you when you drift to Instagram on your screen or if you pick up your phone, and gives you a study session breakdown when you finish *(like Strava)*. You can then share the session stats with friends if you want to for a bit of friendly competition *(again, like Strava)*.
 
-It was started in one hackathon day with **react-native-macos**. It also runs on **Windows 10/11** through react-native-windows, with C++ versions of the same native modules (see [Getting Started on Windows](#getting-started-on-windows)).
-
-> **Privacy first.** Frames are analysed in memory and dropped right away. Nothing is written to disk, and the only network call involving a frame goes to Ollama on `127.0.0.1`. Only labels such as "Biology, 10 s" are stored. The in-app privacy badge shows `Screenshots analysed: N · checks without a screenshot: M · stored: 0`, and on Pomodoro breaks the app stops capturing.
+<p align="center"><img src="docs/images/home-screen.webp" alt="LarpLess home screen showing a Start session button, Pomodoro presets, a session heatmap and a list of recent sessions" width="800"></p>
 
 **Demo Video**: [YouTube link](https://youtu.be/DoBBqkPa75E?si=IA6Z82f-tfn9QprD)
 
----
+It was started on a hackathon as an app for macOS built on react-native-macos. It now also runs on Windows 10/11 through react-native-windows, with C++ versions of the same native modules (see [Getting Started on Windows](#getting-started-on-windows)).
 
 ## Features
 
 | | |
 | --- | --- |
-| **Subjects out of the box** | A built-in library of subjects with keywords sets the labels automatically. Adding your own courses is optional. |
 | **Screen classification** | The frontmost app, the window title and (when needed) a screenshot go to a local vision model (`qwen3-vl:2b` via Ollama). It judges the *content*: a YouTube lecture counts as study, YouTube Shorts doesn't. |
-| **Rules + cache fast path** | Known distractions (Instagram, TikTok, Reddit, Netflix, Discord, …) are flagged from the app or window title alone, known study tools (Vivado, ModelSim, Quartus, GTKWave, Logisim, RARS) are labelled with their subject the same way, and an unchanged window reuses the last verdict. Most checks need no screenshot. |
-| **Power profiles** | Eco, Medium or High sets how often the screen is checked and how big the screenshot is. A session that falls behind steps down on its own, so slower computers still get answers. |
 | **Webcam presence & phone detection** | **YOLO11n** detects whether you are there and spots a phone, at 1 fps. CoreML on Mac, ONNX Runtime on Windows. |
-| **Floating timer** | A panel that floats over every app (and every Space on Mac): a SwiftUI `NSPanel` on Mac, an always-on-top Direct2D window on Windows. It shows green when you're studying, red when you're distracted, grey when you're away and blue on breaks. Hover it for Pomodoro, sound and session controls. |
-| **Now playing** | A strip under the timer shows the current song with its album art, the time left, and previous / play / next. The title is shown, never saved. |
-| **Pomodoro** | Optional: 25 minutes of focus and a 5 minute break (with a 15 minute break after every fourth round), or 50/10. |
-| **Escalating alerts** | Panel turns red → notification + soft chime → second notification + pulse. A "Back on track" flash when you return. Strictness: 1 / 2 / 5 / 10 min (the second notification comes at three times that). |
-| **Ambient sound** | White, pink and brown noise generated on the fly (`AVAudioEngine` on Mac, XAudio2 on Windows), ducked during breaks. |
-| **Session Summary** | Duration, focus %, subject breakdown bar, streaks and a heatmap. |
+| **Subjects out of the box** | A built-in library of subjects with keywords sets the labels automatically. Adding your own courses is optional. |
+| **Rules + cache fast path** | Known distractions (Instagram, TikTok, Reddit, Netflix, Discord, …) are flagged from the app or window title alone, known study tools are labelled with their subject the same way, and an unchanged window reuses the last verdict. Most checks need no screenshot. |
+| **Session Summary** | Each session's Duration, focus %, subject breakdown bar are given at the end of a session. Users can have study streaks and a study heatmap. |
 | **Friends feed** | Off by default. Turned on, Supabase accounts, friend requests and a feed of shared session stats. Posts include stats only. |
+| **Floating timer** | A panel that floats over every app (and every Space on Mac): a SwiftUI NSPanel on Mac, an always-on-top Direct2D window on Windows. It shows green when you're studying, red when you're distracted, grey when you're away and blue on breaks. Hover it for Pomodoro, sound and session controls. |
+| **Now playing** | A strip under the timer shows the current song with its album art, the time left, and previous / play / next. The title is shown, never saved. |
+| **Escalating alerts** | Panel turns red → notification + soft chime → second notification + pulse. A "Back on track" flash when you return. Strictness: 1 / 2 / 5 / 10 min (the second notification comes at three times that). |
+| **Pomodoro** | Optional: 25 minutes of focus and a 5 minute break (with a 15 minute break after every fourth round), or 50/10. |
+| **Power profiles** | Eco, Medium or High sets how often the screen is checked and how big the screenshot is. A session that falls behind steps down on its own, so slower computers still get answers. |
+| **Ambient sound** | White, pink and brown noise generated on the fly (AVAudioEngine on Mac, XAudio2 on Windows), ducked during breaks. |
 | **Demo mode** | Replays recorded chunks through the real store and panel, so the demo works offline with no Ollama and no camera. |
-
-The UI is styled after Notion: Inter + Instrument Serif, the Notion tag palette, callouts, toggle lists, and a ⌘K (Ctrl+K on Windows) command palette.
 
 ## How it works
 
