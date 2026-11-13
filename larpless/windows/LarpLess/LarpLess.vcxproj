@@ -154,8 +154,12 @@
     <None Include="Assets\Models\FLScreenModelPrompts.json">
       <DeploymentContent>true</DeploymentContent>
     </None>
-    <!-- Offline Metro bundle (scripts/bundle-windows.ps1). Wildcard keeps assets Metro may emit. -->
-    <None Include="Bundle\**\*">
+    <!--
+      Offline Metro bundle (scripts/bundle-windows.ps1). Wildcard keeps assets Metro may emit.
+      Release builds (UseBundle=true, scripts/release-windows.ps1) bundle into the same folder and add
+      these files themselves (RNW's InjectBundleContent), so listing them here too would package them twice.
+    -->
+    <None Include="Bundle\**\*" Condition="'$(UseBundle)' != 'true'">
       <DeploymentContent>true</DeploymentContent>
     </None>
   </ItemGroup>

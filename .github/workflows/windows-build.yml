@@ -1,0 +1,80 @@
+name: Windows build
+
+# Compiles the C++ side and packs the Release MSIX through scripts/release-windows.ps1 (x64 only,
+# unsigned), so the release script is exercised too. Jest can't cover this, and Windows runners cost
+# 2x Linux minutes, so like the macOS build it only runs on pull requests into main.
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    # windows-2025 has shipped Visual Studio 2026 (toolset v145) since June 2026.
+    runs-on: windows-2025
+    timeout-minutes: 75
+    defaults:
+      run:
+        working-directory: larpless
+        shell: pwsh
+    steps:
+      # node_modules paths from react-native-windows exceed MAX_PATH without it.
+      - name: Long paths
+        working-directory: .
+        run: git config --system core.longpaths true
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: larpless/package-lock.json
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      # The image's Visual Studio may lack the pieces windows/CLAUDE.md lists (Windows 11 SDK 10.0.22621,
+      # WinUI/UWP C++ tools, MSIX packaging). Add whatever is missing; this is a no-op when all are there.
+      - name: Visual Studio components
+        working-directory: .
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = & $vswhere -latest -products * -property installationPath
+          $sdk = "${env:ProgramFiles(x86)}\Windows Kits\10\Include\10.0.22621.0"
+          $bridge = Get-ChildItem "$vs\MSBuild\Microsoft\DesktopBridge\Microsoft.DesktopBridge.props" -ErrorAction SilentlyContinue
+          $uwp = & $vswhere -latest -products * -requires Microsoft.VisualStudio.ComponentGroup.UWP.VC -property installationPath
+          if ((Test-Path $sdk) -and $bridge -and $uwp) { Write-Host "All components present in $vs"; exit 0 }
+          Write-Host "Adding components to $vs"
+          $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vs_installer.exe"
+          $p = Start-Process -FilePath $installer -Wait -PassThru -ArgumentList @(
+            'modify', '--installPath', "`"$vs`"",
+            '--add', 'Microsoft.VisualStudio.Component.Windows11SDK.22621',
+            '--add', 'Microsoft.VisualStudio.ComponentGroup.UWP.VC',
+            '--add', 'Microsoft.VisualStudio.ComponentGroup.MSIX.Packaging',
+            '--quiet', '--norestart', '--nocache')
+          if ($p.ExitCode -notin 0, 3010) { throw "vs_installer exited with $($p.ExitCode)" }
+
+      - run: npm ci
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('larpless/windows/**/packages.lock.json', 'larpless/package-lock.json') }}
+
+      - name: Release build (x64, unsigned)
+        run: powershell -ExecutionPolicy Bypass -File scripts\release-windows.ps1 -Platforms x64 -NoSign
+
+      - name: Upload build logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build-logs
+          path: |
+            larpless/windows/build/release/msbuild.log
+            larpless/windows/build/release/msbuild-errors.log
+          if-no-files-found: ignore

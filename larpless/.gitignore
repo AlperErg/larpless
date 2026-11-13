@@ -80,5 +80,6 @@ bench/
 macos/build/
 macos/signing.local
 windows/packages/
+windows/build/
 windows/LarpLess/Bundle/*
 !windows/LarpLess/Bundle/.gitkeep
