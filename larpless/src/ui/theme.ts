@@ -73,14 +73,14 @@ const lightPalette: Palette = {
 
 const lightTags: Record<TagColor, TagTone> = {
   gray: { bg: '#E7ECF2', text: '#4C5D72' },
-  brown: { bg: '#F4EEEE', text: '#9F6B53' },
-  orange: { bg: '#FBECDD', text: '#D9730D' },
-  yellow: { bg: '#FBF3DB', text: '#CB912F' },
-  green: { bg: '#EDF3EC', text: '#448361' },
-  blue: { bg: '#E7F3F8', text: '#337EA9' },
-  purple: { bg: '#F6F3F9', text: '#9065B0' },
-  pink: { bg: '#FAF1F5', text: '#C14C8A' },
-  red: { bg: '#FDEBEC', text: '#D44C47' },
+  brown: { bg: '#F4EEEE', text: '#8B5D49' },
+  orange: { bg: '#FBECDD', text: '#9F540A' },
+  yellow: { bg: '#FBF3DB', text: '#896220' },
+  green: { bg: '#EDF3EC', text: '#3C7456' },
+  blue: { bg: '#E7F3F8', text: '#2D6F95' },
+  purple: { bg: '#F6F3F9', text: '#8455A6' },
+  pink: { bg: '#FAF1F5', text: '#B13D7B' },
+  red: { bg: '#FDEBEC', text: '#C2332D' },
 };
 
 /** Heatmap intensities: 0 min, <15, <30, <60, ≥60 (greens). */
