@@ -20,6 +20,7 @@ powershell -ExecutionPolicy Bypass -File scripts\run-windows.ps1           # bun
 powershell -ExecutionPolicy Bypass -File scripts\run-windows.ps1 -Metro    # load JS from Metro :8081 while developing
 powershell -ExecutionPolicy Bypass -File scripts\launch-windows.ps1        # Metro + launch (only for -Metro installs)
 Get-Process LarpLess -EA SilentlyContinue | Stop-Process; npx @react-native-community/cli run-windows --no-packager --logging *> .logs\build-windows.log   # rebuild only
+powershell -ExecutionPolicy Bypass -File scripts\release-windows.ps1 -CertificateThumbprint <sha1>   # Release x64 + ARM64 .msixbundle, signed (-Store adds the .msixupload, -NoSign only builds)
 ```
 
 Default installs embed `windows/LarpLess/Bundle/index.windows.bundle` (`EmbedJsBundle=true` → `BUNDLE` in `LarpLess.cpp`). Re-run `run-windows.ps1` after JS changes.
@@ -35,6 +36,14 @@ Default installs embed `windows/LarpLess/Bundle/index.windows.bundle` (`EmbedJsB
 - Crashes: `Get-WinEvent -FilterHashtable @{LogName='Application'; Id=1000; StartTime=(Get-Date).AddHours(-1)} | ? Message -match LarpLess`.
 - `scripts/js-eval.mjs` works as on the Mac (`__FL`). Exit code **9** with `Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)` is a harmless libuv teardown assert (output is still valid); exit code **2** + "no debuggable app" means the app is not running (or crashed).
 - Full JS reload: `node scripts/js-eval.mjs 8081 "__FL.NativeModules.DevSettings.reload()"`. Editing source files makes Metro hot-reload too; calls sent during a reload are lost.
+
+## Release packages (`scripts/release-windows.ps1`)
+
+- Output in `windows\build\release\` (gitignored): `LarpLess-<version>.msixbundle` and, with `-Store`, `LarpLess-<version>.msixupload` (Partner Center signs that one), plus `msbuild.log` / `msbuild-errors.log`. The manifest version must be `<package.json version>.0`.
+- Release builds bundle the JS themselves: RNW's `Bundle.props` sets `UseBundle=true`, runs the bundler into `LarpLess\Bundle\` and compiles it to Hermes bytecode with the `hermes.exe` from the same NuGet package as the engine. So the script doesn't call `bundle-windows.ps1` (a `--dev true` bundle for Debug installs), and the static `Bundle\**\*` item in `LarpLess.vcxproj` is skipped when `UseBundle` is true, or the files would be packaged twice. RNW's bundle step has `ContinueOnError`, so the script empties `Bundle\` first and fails unless the result starts with the Hermes bytecode magic.
+- Signing: `-CertificateThumbprint` (cert store) or Azure Artifact Signing (`-SigningMetadata metadata.json -SigningDlib Azure.CodeSigning.Dlib.dll`), also read from `LARPLESS_SIGN_THUMBPRINT` / `LARPLESS_SIGN_METADATA` / `LARPLESS_SIGN_DLIB`. The certificate subject must equal `Publisher` in `Package.appxmanifest`. That is now the Microsoft Store identity from Partner Center (`Name` `GarciaIgelmo.LarpLess`, `Publisher` `CN=C46A4420-229A-4946-9836-AB6A1014CE96`, display name `Garcia Igelmo`; package family `GarciaIgelmo.LarpLess_14gnd5vrm993g`), which only the Store can sign for, so releases go out as the `-Store -NoSign` `.msixupload`. A signed sideload `.msixbundle` would need its own Publisher, and with it a different package family. Before 0.1.1 the identity was the dev `LarpLess` / `CN=ggige` (`LarpLess_96wyba02c09cm`): Windows treats that as another app, so a dev install made before the change doesn't upgrade in place and its `LocalState` (the downloaded screen model) isn't carried over.
+- The manifest targets `Windows.Desktop` only, `MinVersion` 10.0.19041 (Windows 10 2004), the first build with `WDA_EXCLUDEFROMCAPTURE`.
+- CI: `.github/workflows/windows-build.yml` runs `release-windows.ps1 -Platforms x64 -NoSign` on `windows-2025` (VS 2026) for PRs into `main`, adding missing VS components (SDK 22621, UWP C++, MSIX packaging) first.
 
 ## Native modules (`windows/LarpLess/Native/`)
 
