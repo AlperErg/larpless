@@ -2169,37 +2169,6 @@ a.soon[href="#download"]:hover .arrow {
   height: 1.05em;
 }
 
-/* Watch → Custom → Releases */
-.watch-how {
-  margin: 18px auto 0;
-  color: var(--faint);
-  font-size: 14px;
-}
-
-.watch-steps {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-}
-
-@media (max-width: 420px) {
-  .watch-label {
-    flex-basis: 100%;
-  }
-}
-
-.watch-steps .ui {
-  padding: 3px 9px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--code);
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 500;
-}
-
 .chev {
   width: 12px;
   height: 12px;

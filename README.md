@@ -8,6 +8,8 @@ LarpLess watches your screen and webcam *on-device*, works out which subject you
 
 **Demo Video**: [YouTube link](https://youtu.be/DoBBqkPa75E?si=IA6Z82f-tfn9QprD)
 
+**Download**: [macOS (.dmg)](https://github.com/AlperErg/larpless/releases/latest) · [Windows (Microsoft Store)](https://apps.microsoft.com/detail/9NRVVPHTMR9X)
+
 It was started on a hackathon as an app for macOS built on react-native-macos. It now also runs on Windows 10/11 through react-native-windows, with C++ versions of the same native modules (see [Getting Started on Windows](#getting-started-on-windows)).
 
 ## Features
@@ -213,6 +215,8 @@ Onboarding first asks which model should read your screen, and the steps that fo
 Demo mode works in both modes without any model. Settings → Onboarding → **Run again** shows onboarding again.
 
 ## Getting Started on Windows
+
+To use LarpLess on Windows, install it from the [Microsoft Store](https://apps.microsoft.com/detail/9NRVVPHTMR9X). The Store installs what the app needs and keeps it up to date; the app itself never checks for updates. The rest of this section is for building it from source.
 
 The Windows build uses the same TypeScript and the same JS ↔ native contract; only the native modules (`larpless/windows/LarpLess/Native/`) are C++ instead of Swift.
 
