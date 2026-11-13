@@ -39,7 +39,7 @@ GROUP_OF = {s["name"]: s.get("group", "-") for s in SUBJECTS}
 GROUPS = list(dict.fromkeys(GROUP_OF.values()))
 COURSES = "Custom courses"
 # Subjects renamed in the library: sidecars written before the rename still count ("accept": ["Coding"]).
-RENAMED = {"Coding": "Computer Science"}
+RENAMED = {"Coding": "Programming", "Computer Science": "Programming"}
 
 
 # --------------------------------------------------------------------------------------------------
