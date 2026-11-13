@@ -57,4 +57,14 @@ describe('appearance schemes', () => {
     expect(colors.accent).toBe('#1E4ED8');
     expect(heat[0]).toBe('#E4E9F0');
   });
+
+  it('light keeps tag text readable on its own tint and on the page surfaces', () => {
+    applyScheme('light');
+    expect(tag.green).toEqual({ bg: '#EDF3EC', text: '#3C7456' });
+    for (const name of TAG_COLORS) {
+      for (const bg of [tag[name].bg, colors.bg, colors.raised, colors.wash]) {
+        expect(contrast(tag[name].text, bg)).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
 });

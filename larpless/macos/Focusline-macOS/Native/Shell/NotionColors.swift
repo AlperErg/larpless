@@ -46,28 +46,28 @@ enum FLNotionColors {
     FLScheme.dark ? FLNotionTag(bgHex: "#222220", textHex: "#C8C3B8") : FLNotionTag(bgHex: "#E7ECF2", textHex: "#4C5D72")
   }
   static var brown: FLNotionTag {
-    FLScheme.dark ? FLNotionTag(bgHex: "#3F2F28", textHex: "#DEB3A0") : FLNotionTag(bgHex: "#F4EEEE", textHex: "#9F6B53")
+    FLScheme.dark ? FLNotionTag(bgHex: "#3F2F28", textHex: "#DEB3A0") : FLNotionTag(bgHex: "#F4EEEE", textHex: "#8B5D49")
   }
   static var orange: FLNotionTag {
-    FLScheme.dark ? FLNotionTag(bgHex: "#432D1F", textHex: "#EBAF85") : FLNotionTag(bgHex: "#FBECDD", textHex: "#D9730D")
+    FLScheme.dark ? FLNotionTag(bgHex: "#432D1F", textHex: "#EBAF85") : FLNotionTag(bgHex: "#FBECDD", textHex: "#9F540A")
   }
   static var yellow: FLNotionTag {
-    FLScheme.dark ? FLNotionTag(bgHex: "#3F301B", textHex: "#DFB67B") : FLNotionTag(bgHex: "#FBF3DB", textHex: "#CB912F")
+    FLScheme.dark ? FLNotionTag(bgHex: "#3F301B", textHex: "#DFB67B") : FLNotionTag(bgHex: "#FBF3DB", textHex: "#896220")
   }
   static var green: FLNotionTag {
-    FLScheme.dark ? FLNotionTag(bgHex: "#1A2420", textHex: "#6FBF8E") : FLNotionTag(bgHex: "#EDF3EC", textHex: "#448361")
+    FLScheme.dark ? FLNotionTag(bgHex: "#1A2420", textHex: "#6FBF8E") : FLNotionTag(bgHex: "#EDF3EC", textHex: "#3C7456")
   }
   static var blue: FLNotionTag {
-    FLScheme.dark ? FLNotionTag(bgHex: "#1A242C", textHex: "#7EB0D4") : FLNotionTag(bgHex: "#E7F3F8", textHex: "#337EA9")
+    FLScheme.dark ? FLNotionTag(bgHex: "#1A242C", textHex: "#7EB0D4") : FLNotionTag(bgHex: "#E7F3F8", textHex: "#2D6F95")
   }
   static var purple: FLNotionTag {
-    FLScheme.dark ? FLNotionTag(bgHex: "#392D42", textHex: "#CFAEEA") : FLNotionTag(bgHex: "#F6F3F9", textHex: "#9065B0")
+    FLScheme.dark ? FLNotionTag(bgHex: "#392D42", textHex: "#CFAEEA") : FLNotionTag(bgHex: "#F6F3F9", textHex: "#8455A6")
   }
   static var pink: FLNotionTag {
-    FLScheme.dark ? FLNotionTag(bgHex: "#432A36", textHex: "#EBA6C5") : FLNotionTag(bgHex: "#FAF1F5", textHex: "#C14C8A")
+    FLScheme.dark ? FLNotionTag(bgHex: "#432A36", textHex: "#EBA6C5") : FLNotionTag(bgHex: "#FAF1F5", textHex: "#B13D7B")
   }
   static var red: FLNotionTag {
-    FLScheme.dark ? FLNotionTag(bgHex: "#2A1C1B", textHex: "#E07A74") : FLNotionTag(bgHex: "#FDEBEC", textHex: "#D44C47")
+    FLScheme.dark ? FLNotionTag(bgHex: "#2A1C1B", textHex: "#E07A74") : FLNotionTag(bgHex: "#FDEBEC", textHex: "#C2332D")
   }
 
   /// TagColor / PanelTint name → pair. Unknown names fall back to gray.

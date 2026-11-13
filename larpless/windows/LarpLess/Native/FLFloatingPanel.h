@@ -81,12 +81,12 @@ inline Tint TintFor(std::string const &name) {
     if (name == "pink") return {Hex(0x432A36), Hex(0xEBA6C5)};
     return {Hex(0x222220), Hex(0xC8C3B8)}; // gray / unknown
   }
-  if (name == "green") return {Hex(0xEDF3EC), Hex(0x448361)};
-  if (name == "red") return {Hex(0xFDEBEC), Hex(0xD44C47)};
-  if (name == "blue") return {Hex(0xE7F3F8), Hex(0x337EA9)};
-  if (name == "brown") return {Hex(0xF4EEEE), Hex(0x9F6B53)};
-  if (name == "orange") return {Hex(0xFBECDD), Hex(0xD9730D)};
-  if (name == "pink") return {Hex(0xFAF1F5), Hex(0xC14C8A)};
+  if (name == "green") return {Hex(0xEDF3EC), Hex(0x3C7456)};
+  if (name == "red") return {Hex(0xFDEBEC), Hex(0xC2332D)};
+  if (name == "blue") return {Hex(0xE7F3F8), Hex(0x2D6F95)};
+  if (name == "brown") return {Hex(0xF4EEEE), Hex(0x8B5D49)};
+  if (name == "orange") return {Hex(0xFBECDD), Hex(0x9F540A)};
+  if (name == "pink") return {Hex(0xFAF1F5), Hex(0xB13D7B)};
   return {Hex(0xF1F1EF), Hex(0x787774)}; // gray / unknown
 }
 struct Palette {
