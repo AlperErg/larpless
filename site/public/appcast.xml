@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>LarpLess</title>
+    <link>https://larpless.app/appcast.xml</link>
+    <description>LarpLess for macOS updates. Written by larpless/scripts/appcast.mjs; don't edit by hand.</description>
+    <language>en</language>
+    <item>
+      <title>LarpLess 0.2.0</title>
+      <pubDate>Sat, 14 Nov 2026 15:53:42 GMT</pubDate>
+      <sparkle:version>0.2.0</sparkle:version>
+      <sparkle:shortVersionString>0.2.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <sparkle:fullReleaseNotesLink>https://github.com/AlperErg/larpless/releases/tag/v0.2.0</sparkle:fullReleaseNotesLink>
+      <enclosure url="https://github.com/AlperErg/larpless/releases/download/v0.2.0/LarpLess-0.2.0.dmg" length="48678813" type="application/octet-stream" sparkle:edSignature="kg7Wga0T4RBvLMBRoR2muYO61Quq1Fe5HR6hxYnwT5cqa/PF5tj9FzLh58AvqNDnIxM5GLQNaycqjZJ1FA2QCA=="/>
+    </item>
+  </channel>
+</rss>
