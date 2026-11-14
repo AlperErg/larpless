@@ -23,6 +23,8 @@ describe('app version', () => {
     expect(versions.length).toBeGreaterThan(0);
     expect(new Set(versions)).toEqual(new Set([pkg.version]));
     expect(read('macos/Focusline-macOS/Info.plist')).toMatch(/<key>CFBundleShortVersionString<\/key>\s*<string>\$\(MARKETING_VERSION\)<\/string>/);
+    // Sparkle compares CFBundleVersion with the appcast's sparkle:version, so it must grow with each release.
+    expect(read('macos/Focusline-macOS/Info.plist')).toMatch(/<key>CFBundleVersion<\/key>\s*<string>\$\(MARKETING_VERSION\)<\/string>/);
   });
 
   it('the Windows package uses it, with the fourth part 0', () => {

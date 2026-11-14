@@ -15,6 +15,9 @@ target 'Focusline-macOS' do
   # FLScreenModel: SigLIP 2 + MiniLM through ONNX Runtime (the same pinned ONNX files as Windows).
   pod 'onnxruntime-objc', '1.30.0'
 
+  # FLUpdater: in-app updates from the appcast on larpless.app (signed releases only).
+  pod 'Sparkle', '2.9.6'
+
   # Flags change depending on the env values.
   flags = get_default_flags()
 

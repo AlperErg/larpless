@@ -22,6 +22,7 @@ enum FLShellMenu {
   ]
 
   static let acknowledgementsTag = 0x464C_4143   // "FLAC"
+  static let updatesTag = 0x464C_5550   // "FLUP"
   static let helpTag = 0x464C_4850   // "FLHP"
   static let helpItems: [(title: String, command: String)] = [
     ("Send Feedback…", "feedback"),
@@ -38,6 +39,7 @@ enum FLShellMenu {
       return
     }
     installAcknowledgements(in: main)
+    installCheckForUpdates(in: main)
     installHelp(in: main)
     if main.items.contains(where: { $0.tag == tag }) { return }
     let menu = NSMenu(title: "Session")
@@ -83,6 +85,27 @@ enum FLShellMenu {
       help.insertItem(mi, at: index)
     }
     flShellLog("[FLAppShell] Help menu items installed")
+  }
+
+  /// "Check for Updates…" (handled by Sparkle) and the "Check for Updates Automatically" toggle, under
+  /// About LarpLess and Acknowledgements.
+  /// Left out when the updater is off (Debug builds, or no SUPublicEDKey).
+  private static func installCheckForUpdates(in main: NSMenu) {
+    FLUpdater.shared.start()
+    guard FLUpdater.shared.isEnabled,
+          let appMenu = main.items.first?.submenu,
+          !appMenu.items.contains(where: { $0.tag == updatesTag }) else { return }
+    let item = NSMenuItem(title: "Check for Updates…", action: FLUpdater.menuAction, keyEquivalent: "")
+    item.target = FLUpdater.shared.menuTarget
+    item.tag = updatesTag
+    let toggle = NSMenuItem(title: "Check for Updates Automatically", action: FLUpdater.toggleAction, keyEquivalent: "")
+    toggle.target = FLUpdater.shared
+    toggle.tag = updatesTag
+    let anchor = appMenu.items.firstIndex { $0.tag == acknowledgementsTag }
+      ?? appMenu.items.firstIndex { $0.action == #selector(NSApplication.orderFrontStandardAboutPanel(_:)) }
+    let index = anchor.map { $0 + 1 } ?? 0
+    appMenu.insertItem(item, at: index)
+    appMenu.insertItem(toggle, at: index + 1)
   }
 
   /// The open-source notices page lives in JS, so the item sends a menu command like the Session items.
@@ -155,6 +178,7 @@ final class FLAppShell: RCTEventEmitter {
     guard Self.activity == nil else { return }
     Self.activity = ProcessInfo.processInfo.beginActivity(
       options: [.userInitiated, .idleSystemSleepDisabled], reason: "Focus session")
+    DispatchQueue.main.async { MainActor.assumeIsolated { FLUpdater.shared.setSessionActive(true) } }
     flShellLog("[FLAppShell] session activity began (App Nap off)")
   }
 
@@ -163,6 +187,7 @@ final class FLAppShell: RCTEventEmitter {
     guard let token = Self.activity else { return }
     ProcessInfo.processInfo.endActivity(token)
     Self.activity = nil
+    DispatchQueue.main.async { MainActor.assumeIsolated { FLUpdater.shared.setSessionActive(false) } }
     flShellLog("[FLAppShell] session activity ended")
   }
 
