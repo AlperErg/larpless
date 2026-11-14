@@ -10,7 +10,8 @@
 }
 
 .doc {
-  max-width: 44rem;
+  /* About 75 characters a line at 16px Inter. */
+  max-width: 38rem;
   margin: 0 auto;
   color: var(--muted);
   font-size: 16px;
@@ -47,6 +48,7 @@
 .doc h2,
 .doc h3 {
   scroll-margin-top: calc(var(--header) + 20px);
+  text-wrap: balance;
 }
 
 .doc p,
@@ -62,6 +64,7 @@
 
 .doc li {
   margin: 4px 0;
+  text-wrap: pretty;
 }
 
 .doc strong {
@@ -101,6 +104,8 @@
   width: 100%;
   min-width: 34rem;
   border-collapse: collapse;
+  /* .doc's "anywhere" lets the table squeeze a column below its longest word and split words; break-word only breaks a word that can't fit at all. */
+  overflow-wrap: break-word;
   font-size: 14.5px;
   line-height: 1.5;
 }

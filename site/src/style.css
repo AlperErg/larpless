@@ -1,3 +1,9 @@
+/* Fonts are bundled from npm (Fontsource) and served from this domain, so pages make no Google Fonts requests. */
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+@import "@fontsource/instrument-serif/400.css";
+
 :root {
   --bg: #10110f;
   --ink: #f4f1ea;
@@ -106,6 +112,7 @@ h3 {
 p {
   margin-top: 14px;
   max-width: 42rem;
+  text-wrap: pretty;
 }
 
 a,
@@ -240,6 +247,9 @@ a:hover {
 }
 
 .nav-link {
+  /* Centre the label: below 1400px and on touch screens the link grows to a 44px target. */
+  display: inline-flex;
+  align-items: center;
   color: var(--muted);
   text-decoration: none;
   font-size: 14px;
@@ -334,7 +344,6 @@ a:hover {
 .scroll-copy {
   max-width: 64rem;
   margin: 0 auto;
-  will-change: transform;
 }
 
 .ipad {
@@ -932,7 +941,7 @@ section {
 }
 
 #score .subject:nth-child(3) {
-  background: color-mix(in oklab, var(--green) 78%, black);
+  background: color-mix(in oklab, var(--green) 84%, black);
 }
 
 #score .subject + .subject {
@@ -1711,6 +1720,17 @@ figure.reveal.in img {
   }
 
   #score .legend li[data-seg] {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  /* The 44px rows carry their own spacing, so the footer links drop the row gap. */
+  .colophon nav {
+    row-gap: 0;
+  }
+
+  .colophon a {
     display: inline-flex;
     align-items: center;
     min-height: 44px;
