@@ -166,6 +166,7 @@
 				381D8A6E24576A4E00465D17 /* Bundle React Native code and images */,
 				F3C87BA0191DEE06843F0547 /* [CP] Embed Pods Frameworks */,
 				EA2522284877C43D39837ACC /* [CP] Copy Pods Resources */,
+				B8F2C3D4E5F6071829304A5C /* Sign Sparkle helpers */,
 			);
 			buildRules = (
 			);
@@ -343,6 +344,21 @@
 			shellPath = /bin/sh;
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Focusline-macOS/Pods-Focusline-macOS-frameworks.sh\"\n";
 			showEnvVarsInLog = 0;
+		};
+		B8F2C3D4E5F6071829304A5C /* Sign Sparkle helpers */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Sign Sparkle helpers";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${SRCROOT}/scripts/sign-sparkle.sh\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 

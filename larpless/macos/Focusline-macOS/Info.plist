@@ -19,7 +19,7 @@
 	<key>CFBundleShortVersionString</key>
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
-	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<string>$(MARKETING_VERSION)</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
 	<key>NSAppTransportSecurity</key>
@@ -47,5 +47,17 @@
 	<false/>
 	<key>RCTNewArchEnabled</key>
 	<true/>
+	<!-- Sparkle's "Automatically download and install updates" boxes start unticked. -->
+	<key>SUAutomaticallyUpdate</key>
+	<false/>
+	<key>SUEnableDownloaderService</key>
+	<false/>
+	<key>SUEnableInstallerLauncherService</key>
+	<false/>
+	<key>SUFeedURL</key>
+	<string>https://larpless.app/appcast.xml</string>
+	<!-- Public half of the Sparkle EdDSA key; the private half is in the maintainer's keychain (generate_keys). Empty turns the updater off. -->
+	<key>SUPublicEDKey</key>
+	<string>PT+5CTKHRM7YDJnzukBgcAScvr2Y1ExtZc6HwPJL3gg=</string>
 </dict>
 </plist>

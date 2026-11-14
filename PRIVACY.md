@@ -1,6 +1,6 @@
 # LarpLess Privacy Policy
 
-**Last updated: 11 November 2026**
+**Last updated: 14 November 2026**
 
 LarpLess is a study tracker for Mac and Windows. It looks at your screen and webcam to tell when you're studying, and it's built so that what it sees stays on your computer. This policy explains what LarpLess handles, where it goes, and what you can do about it. LarpLess is open source, so you can check every claim here in the code.
 
@@ -8,9 +8,9 @@ LarpLess is a study tracker for Mac and Windows. It looks at your screen and web
 
 - Screenshots and webcam images are analysed in your computer's memory and then thrown away. They are never saved, and never sent over the internet.
 - Your study history is saved only on your computer.
-- **Friends is off by default.** Until you turn it on, LarpLess sends nothing to me or to anyone else, apart from downloads you start yourself (see [Downloads you start](#downloads-you-start)).
+- **Friends is off by default.** Until you turn it on, LarpLess sends nothing to me or to anyone else, apart from downloads you start yourself and, on a Mac, update checks you start or allow (see [Downloads you start](#downloads-you-start) and [Updates](#updates)).
 - If you turn Friends on, my server stores your username, your friend requests and friendships, and the stats of sessions you choose to post.
-- The app has no ads, analytics or tracking. The website counts visits with cookieless analytics (see [The website](#3-the-website)). I don't sell your data or use it to train AI models.
+- The app has no ads, analytics or tracking. The website counts visits with cookieless analytics (see [The website](#3-the-website-and-update-checks)). I don't sell your data or use it to train AI models.
 
 ## Who is responsible
 
@@ -56,7 +56,15 @@ None of this reaches me. You can delete a session on the **History** page. To de
 - **On-device classifier:** downloaded from Hugging Face (`huggingface.co`), which receives your IP address and the names of the files requested. Hugging Face's privacy policy applies.
 - **Ollama:** **Download Ollama** opens `ollama.com` in your browser. **Download model** asks Ollama, which is a separate app on your computer, to fetch the AI model from Ollama's servers. Ollama's privacy policy applies.
 
-The app has no analytics, crash reporting, advertising or tracking, and it doesn't check for updates itself. If you install the Windows version from the Microsoft Store, the Store keeps it up to date as it does for every Store app, and Microsoft's privacy statement applies to that.
+The app has no analytics, crash reporting, advertising or tracking.
+
+### Updates
+
+- **Mac:** LarpLess checks for updates when you choose **LarpLess → Check for Updates…**. The second time you open it, it asks whether to check automatically; if you choose **Check Automatically**, it checks about once a day, but never during a study session. You can turn this on or off at any time with **LarpLess → Check for Updates Automatically**.
+  - A check downloads a list of releases from the LarpLess website (`larpless.app`), and a new version downloads from GitHub (`github.com`). Both receive your IP address, a User-Agent naming the LarpLess version and the version of Sparkle (the open-source update component LarpLess uses), and standard request headers such as your preferred language. Nothing about your sessions, settings or computer is sent.
+  - Updates only install when you choose to. The prompt and the update window also offer **Automatically download and install updates**, which is off unless you tick it. If you tick it, new versions download in the background and install when you quit LarpLess.
+  - See [The website and update checks](#3-the-website-and-update-checks) for who handles these requests and why.
+- **Windows:** if you install LarpLess from the Microsoft Store, the Store keeps it up to date as it does for every Store app, and Microsoft's privacy statement applies to that.
 
 ## 2. Friends (only if you turn it on)
 
@@ -111,9 +119,16 @@ All connections to the server use HTTPS. The database's access rules let only yo
 
 You must be **16 or older** to create a Friends account. If I learn that someone under 16 has an account, I'll delete it. Parents and guardians can contact me at privacy@ergune.dev. LarpLess itself works without an account.
 
-## 3. The website
+## 3. The website and update checks
 
-The LarpLess website is hosted by Netlify, which processes your IP address and request details to deliver the page and protect it from abuse. The page loads its fonts from Google Fonts, so Google also receives your IP address and browser details. The website sets no cookies and has no forms. It counts visits with Umami, a cookieless analytics service: when you load a page or click certain links, the page URL, referrer, browser, operating system, screen size, language and approximate country are sent to Umami through the website's own domain. Umami doesn't store your IP address or follow you across sites, and the website can't identify you from it. Netlify's, Google's and Umami's privacy policies apply.
+The LarpLess website is hosted by Netlify, which processes your IP address and request details to deliver the page and protect it from abuse. The same goes for the update list the Mac app downloads from the website (see [Updates](#updates)). The page loads its fonts from Google Fonts, so Google also receives your IP address and browser details. The website sets no cookies and has no forms. It counts visits with Umami, a cookieless analytics service: when you load a page or click certain links, the page URL, referrer, browser, operating system, screen size, language and approximate country are sent to Umami through the website's own domain. Umami doesn't store your IP address or follow you across sites, and the website can't identify you from it. Update checks don't load the page, so they don't reach Google Fonts or Umami. Netlify's, Google's and Umami's privacy policies apply.
+
+| Purpose | Data | Legal basis |
+| --- | --- | --- |
+| Serving the website and the update list, and protecting them from abuse | IP address, request details (page or file, time, User-Agent) | My legitimate interest in a working, secure website and in getting fixes, including security fixes, to people who use LarpLess (KVKK Art. 5(2)(f); GDPR Art. 6(1)(f)) |
+| Counting visits to the website | The Umami data above | My legitimate interest in knowing how the website is used (KVKK Art. 5(2)(f); GDPR Art. 6(1)(f)) |
+
+Netlify handles these requests for me as a data processor under its Data Processing Agreement, which includes the European Commission's Standard Contractual Clauses. Netlify is based in the United States, so the data is transferred outside Turkey and the EU. I don't have access to Netlify's request logs, and I don't combine them with anything else; Netlify keeps them as described in its privacy statement. GitHub, which serves the app downloads, is a separate company responsible for its own handling of the request, under its own privacy statement; it is also based in the United States. You can object to the update checks at any time by turning automatic checks off (see [Updates](#updates)).
 
 ## 4. Your rights
 
@@ -129,7 +144,7 @@ Under KVKK, and under the GDPR if you're in the EU, EEA or UK, you can ask me:
 
 You can do several of these yourself: turn Friends off, remove friends, delete sessions on your computer, or delete your account in **Settings → Account → Delete account**.
 
-For anything else, email **privacy@ergune.dev** with your username. I may ask you to show that the account is yours before acting. I'll answer within 30 days, free of charge.
+For anything else, email **privacy@ergune.dev**, with your username if your request is about a Friends account. I may ask you to show that the account is yours before acting. I'll answer within 30 days, free of charge.
 
 If you're not happy with my answer, you can complain to a data protection authority:
 

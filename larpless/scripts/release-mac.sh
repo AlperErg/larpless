@@ -6,6 +6,13 @@
 #   scripts/release-mac.sh --no-notarize   build and sign only (to check the build; Gatekeeper will refuse it)
 #
 # Output: macos/build/release/LarpLess-<version>.dmg (gitignored). The version comes from package.json.
+# A notarized build also signs the DMG for Sparkle and adds it to ../site/public/appcast.xml, the feed the
+# installed apps check (https://larpless.app/appcast.xml); the script prints how to publish both.
+#
+# The Sparkle EdDSA private key lives in your login keychain, created once with
+#   macos/Pods/Sparkle/bin/generate_keys
+# whose printed public key goes into SUPublicEDKey in macos/Focusline-macOS/Info.plist. Set
+# SPARKLE_KEY_FILE to sign with a key file instead. Lose the private key and installed copies can't update.
 #
 # Notarization needs a notarytool profile in your keychain, created once (it asks for an app-specific
 # password, made at account.apple.com → Sign-In and Security → App-Specific Passwords):
@@ -38,6 +45,15 @@ if [ "$NOTARIZE" = 1 ] && ! xcrun notarytool history --keychain-profile "$PROFIL
   fail "no notarytool profile '$PROFILE'. Create it once with:
   xcrun notarytool store-credentials $PROFILE --apple-id <your Apple ID> --team-id $TEAM
 or run with --no-notarize to only build and sign."
+fi
+
+SPARKLE_BIN=macos/Pods/Sparkle/bin
+[ -x "$SPARKLE_BIN/sign_update" ] || fail "Sparkle's tools are missing from $SPARKLE_BIN (run pod install)."
+PUBLIC_KEY=$(/usr/libexec/PlistBuddy -c "Print :SUPublicEDKey" macos/Focusline-macOS/Info.plist 2>/dev/null || true)
+if [ -z "$PUBLIC_KEY" ]; then
+  [ "$NOTARIZE" = 1 ] && fail "SUPublicEDKey in macos/Focusline-macOS/Info.plist is empty, so this build couldn't update itself.
+Create the key once with $SPARKLE_BIN/generate_keys and paste the public key it prints there."
+  echo "note: SUPublicEDKey is empty, so this build has no updater."
 fi
 
 if grep -q "HOSTED_SUPABASE: { url: ''" src/config.ts; then
@@ -95,6 +111,20 @@ xcrun stapler staple "$DMG" >/dev/null
 xcrun stapler validate "$DMG" >/dev/null
 spctl --assess --type open --context context:primary-signature "$DMG" || fail "Gatekeeper still rejects the image."
 
+step "Signing for Sparkle and updating the appcast"
+if [ -n "${SPARKLE_KEY_FILE:-}" ]; then
+  SIGNATURE=$("$SPARKLE_BIN/sign_update" -p --ed-key-file "$SPARKLE_KEY_FILE" "$DMG")
+else
+  SIGNATURE=$("$SPARKLE_BIN/sign_update" -p "$DMG")
+fi
+node scripts/appcast.mjs --app "$APP" --dmg "$DMG" --signature "$SIGNATURE"
+
 step "Done"
 echo "$DMG"
 shasum -a 256 "$DMG"
+cat <<EOF
+
+To publish, in this order (installed apps start downloading as soon as the appcast is live):
+  1. gh release create v$VERSION "$DMG" --title "LarpLess $VERSION"   (or upload it to an existing release)
+  2. commit site/public/appcast.xml and merge it to main; Netlify then serves it at larpless.app/appcast.xml
+EOF
