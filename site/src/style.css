@@ -2,7 +2,30 @@
 @import "@fontsource/inter/400.css";
 @import "@fontsource/inter/500.css";
 @import "@fontsource/inter/600.css";
-@import "@fontsource/instrument-serif/400.css";
+
+/*
+ * Instrument Serif is declared here rather than through Fontsource's 400.css so it can use
+ * font-display: block. With swap, the hero wordmark painted in the fallback serif and visibly
+ * changed shape once the webfont arrived. The latin file is also preloaded in each page's <head>,
+ * so the block period is short.
+ */
+@font-face {
+  font-family: "Instrument Serif";
+  font-style: normal;
+  font-display: block;
+  font-weight: 400;
+  src: url("@fontsource/instrument-serif/files/instrument-serif-latin-ext-400-normal.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: "Instrument Serif";
+  font-style: normal;
+  font-display: block;
+  font-weight: 400;
+  src: url("@fontsource/instrument-serif/files/instrument-serif-latin-400-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
 
 :root {
   --bg: #10110f;
@@ -1815,19 +1838,21 @@ a.soon {
   gap: 9px;
   text-decoration: none;
   cursor: pointer;
+  /* Links honour overflow + radius, so that clips the sheen and the glow can paint outside. */
+  clip-path: none;
   transition:
     transform 260ms var(--ease),
     box-shadow 260ms var(--ease);
 }
 
+/* Glow on hover without lifting; a press sinks the button 1px and tightens the glow. */
 a.soon:hover {
   color: var(--paper-ink);
-  transform: translateY(-2px);
   box-shadow: 0 14px 32px -14px rgba(244, 241, 234, 0.5);
 }
 
 a.soon:active {
-  transform: translateY(0);
+  transform: translateY(1px);
   box-shadow: 0 4px 12px -8px rgba(244, 241, 234, 0.5);
   transition-duration: 80ms;
 }
@@ -1883,6 +1908,11 @@ a.soon:focus-visible {
 
 .ghost:hover .arrow {
   transform: translateX(3px);
+}
+
+/* Outside links nudge toward the corner their icon points at. */
+.ghost:hover .ext {
+  transform: translate(1.5px, -1.5px);
 }
 
 /* Download section */
@@ -2100,16 +2130,73 @@ a.soon:focus-visible {
   color: var(--bg);
 }
 
-.closer-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 12px 20px;
+/* Get LarpLess: both platforms side by side until main.ts knows the visitor's OS, then the
+   matching one leads alone and the other drops into the quiet row as "Also on …". */
+.get {
+  display: grid;
+  justify-items: center;
+  gap: 18px;
 }
 
-.closer .closer-actions .soon {
+/* Equal columns keep the two buttons a matched pair, side by side or stacked. */
+.get-picks {
+  display: grid;
+  grid-template-columns: max-content;
+  gap: 20px;
+}
+
+@media (min-width: 640px) {
+  .get-picks {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.get[data-os] .get-picks {
+  grid-template-columns: max-content;
+}
+
+.get-pick {
+  display: grid;
+  justify-items: stretch;
+  gap: 10px;
+}
+
+.closer .get .soon {
   margin-top: 0;
+}
+
+.get-note {
+  color: var(--faint);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.get-more {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0 12px;
+}
+
+.get-alt {
+  display: none;
+}
+
+.get[data-os="mac"] .get-pick[data-for="win"],
+.get[data-os="win"] .get-pick[data-for="mac"] {
+  display: none;
+}
+
+.get[data-os="mac"] .get-alt[data-for="win"],
+.get[data-os="win"] .get-alt[data-for="mac"] {
+  display: inline-flex;
+}
+
+/* One platform: the button grows into the section's single, unmistakable action. */
+.get[data-os] .soon-lg {
+  min-height: 56px;
+  padding: 0 28px;
+  font-size: 17px;
 }
 
 .closer-meta {
@@ -2473,7 +2560,7 @@ html:has(.sheet[open]) {
     transition: none;
   }
 
-  a.soon:hover,
+  a.soon:active,
   .ghost:hover .arrow {
     transform: none;
   }

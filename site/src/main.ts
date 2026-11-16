@@ -364,6 +364,33 @@ function bindScoreBar() {
 const GUIDES = { mac: '#getting-started-on-mac', win: '#getting-started-on-windows' } as const;
 type Os = keyof typeof GUIDES;
 
+/**
+ * The visitor's desktop platform from what the browser already reports: no request, no cookie,
+ * no storage. Chromium exposes userAgentData.platform; Safari and Firefox carry it in the UA.
+ * Phones, tablets, Linux and anything unclear return null so both downloads stay offered.
+ */
+function detectOs(): Os | null {
+  const nav = navigator as Navigator & { userAgentData?: { platform?: string; mobile?: boolean } };
+  if (nav.userAgentData?.mobile) return null;
+  const platform = nav.userAgentData?.platform || nav.userAgent;
+  if (/android|iphone|ipad|ipod|cros|linux/i.test(platform) && !/windows/i.test(platform)) return null;
+  if (/windows/i.test(platform)) return 'win';
+  // iPadOS Safari asks for desktop sites with a Mac user agent; only a real Mac has no touch points.
+  if (/mac/i.test(platform)) return navigator.maxTouchPoints > 1 ? null : 'mac';
+  return null;
+}
+
+function bindDownload() {
+  const get = document.querySelector<HTMLElement>('#get');
+  const os = detectOs();
+  if (!get || !os) return;
+  get.dataset.os = os;
+  // Lets analytics split clicks by whether the button matched the detected platform.
+  get.querySelectorAll<HTMLElement>('[data-umami-event]').forEach((el) => {
+    el.dataset.umamiEventDetected = os;
+  });
+}
+
 function bindTerminal() {
   const term = document.querySelector<HTMLElement>('#term');
   if (!term) return;
@@ -396,12 +423,7 @@ function bindTerminal() {
     if (guide) guide.href = guide.href.replace(/#.*$/, GUIDES[next]);
   };
 
-  // Pick the visitor's platform from what the browser already reports: no request, no storage.
-  // Chromium exposes userAgentData.platform; Safari and Firefox still carry it in the UA string.
-  const platform =
-    (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform ||
-    navigator.userAgent;
-  if (/windows/i.test(platform)) select('win');
+  if (detectOs() === 'win') select('win');
 
   tabs.forEach((tab, index) => {
     tab.addEventListener('click', () => select(tab.dataset.os as Os));
@@ -493,5 +515,6 @@ revealOnScroll();
 ipadScroll();
 bindScoreBar();
 bindTerminal();
+bindDownload();
 tuckHeader();
 bindMenu();

@@ -70,6 +70,7 @@
         ]
       }
     </script>
+    <link rel="preload" href="./node_modules/@fontsource/instrument-serif/files/instrument-serif-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="stylesheet" href="./src/style.css" />
     <!-- Umami: cookieless analytics, no consent banner needed.
          Proxied through Netlify (/_v/*, see netlify.toml) so ad blockers don't drop it. -->
@@ -394,10 +395,24 @@
             <p>LarpLess is out for macOS and Windows.</p>
           </div>
 
-          <div class="closer-actions">
-            <a class="soon soon-lg" href="https://github.com/AlperErg/larpless/releases/download/v0.2.0/LarpLess-0.2.0.dmg" rel="noopener" data-umami-event="Download: macOS 0.2.0"><span>Download for macOS</span></a>
-            <a class="soon soon-lg" href="https://apps.microsoft.com/detail/9NRVVPHTMR9X" rel="noopener" data-umami-event="Download: Microsoft Store"><span>Get it from Microsoft Store</span></a>
-            <a class="ghost" href="https://github.com/AlperErg/larpless/releases/tag/v0.2.0" rel="noopener" data-umami-event="GitHub: Release notes"><span>Release notes</span></a>
+          <!-- Both platforms by default; main.ts sets data-os from the browser's own platform report
+               (no cookies, no storage) so one button leads and the other becomes a quiet link. -->
+          <div class="get" id="get">
+            <div class="get-picks">
+              <div class="get-pick" data-for="mac">
+                <a class="soon soon-lg" href="https://github.com/AlperErg/larpless/releases/download/v0.2.0/LarpLess-0.2.0.dmg" rel="noopener" data-umami-event="Download: macOS 0.2.0"><svg class="arrow" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5v8M4.5 7.5L8 11l3.5-3.5M3 13.5h10"/></svg><span>Download for macOS</span></a>
+                <span class="get-note">Version 0.2.0 · macOS 14 or later</span>
+              </div>
+              <div class="get-pick" data-for="win">
+                <a class="soon soon-lg" href="https://apps.microsoft.com/detail/9NRVVPHTMR9X" rel="noopener" data-umami-event="Download: Microsoft Store"><svg class="arrow" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5v8M4.5 7.5L8 11l3.5-3.5M3 13.5h10"/></svg><span>Download for Windows</span></a>
+                <span class="get-note">Version 0.2.0 · Microsoft Store</span>
+              </div>
+            </div>
+            <div class="get-more">
+              <a class="ghost get-alt" data-for="mac" href="https://github.com/AlperErg/larpless/releases/download/v0.2.0/LarpLess-0.2.0.dmg" rel="noopener" data-umami-event="Download: macOS 0.2.0 (other OS)"><span>Also on macOS</span><svg class="arrow ext" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.5 3.5h-2a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1v-2M9 3h4v4M13 3L7.5 8.5"/></svg></a>
+              <a class="ghost get-alt" data-for="win" href="https://apps.microsoft.com/detail/9NRVVPHTMR9X" rel="noopener" data-umami-event="Download: Microsoft Store (other OS)"><span>Also on Windows</span><svg class="arrow ext" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.5 3.5h-2a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1v-2M9 3h4v4M13 3L7.5 8.5"/></svg></a>
+              <a class="ghost" href="https://github.com/AlperErg/larpless/releases/tag/v0.2.0" rel="noopener" data-umami-event="GitHub: Release notes"><span>Release notes</span><svg class="arrow ext" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.5 3.5h-2a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1v-2M9 3h4v4M13 3L7.5 8.5"/></svg></a>
+            </div>
           </div>
 
           <details class="build" id="build">

@@ -6,11 +6,11 @@ LarpLess watches your screen and webcam *on-device*, works out which subject you
 
 <p align="center"><img src="docs/images/home-screen.webp" alt="LarpLess home screen showing a Start session button, Pomodoro presets, a session heatmap and a list of recent sessions" width="800"></p>
 
-**Demo Video**: [YouTube link](https://youtu.be/DoBBqkPa75E?si=IA6Z82f-tfn9QprD)
-
 **Download**: [macOS (.dmg)](https://github.com/AlperErg/larpless/releases/latest) · [Windows (Microsoft Store)](https://apps.microsoft.com/detail/9NRVVPHTMR9X)
 
-It was started on a hackathon as an app for macOS built on react-native-macos. It now also runs on Windows 10/11 through react-native-windows, with C++ versions of the same native modules (see [Getting Started on Windows](#getting-started-on-windows)).
+**Demo Video**: [YouTube](https://youtu.be/DoBBqkPa75E?si=IA6Z82f-tfn9QprD) (1 minute)
+
+It was started on a hackathon as an app for macOS built on react-native-macos. It now also runs on Windows 10/11 through react-native-windows, with C++ versions of the same native modules (see [Getting Started on Windows](#building-larpless-on-windows)).
 
 ## Features
 
@@ -126,20 +126,26 @@ Starting a session opens Ollama in the background if it isn't running, then warm
 
 - **App:** react-native 0.81.6 on react-native-macos 0.81.9 and react-native-windows 0.81.36, TypeScript, Hermes. Both run Fabric + bridgeless; on Mac the legacy-style native modules work through the interop layer.
 - **State / storage:** zustand 5, AsyncStorage 2.2.0 (pinned), date-fns 4.
-- **Native, Mac (Swift 5, macOS 14.5+):** ScreenCaptureKit, AVFoundation, Vision, CoreML, UserNotifications, AppKit, SwiftUI, and the Keychain for the Supabase sign-in.
+- **Native, Mac (Swift 5, macOS 14.0+):** ScreenCaptureKit, AVFoundation, Vision, CoreML, UserNotifications, AppKit, SwiftUI, and the Keychain for the Supabase sign-in.
 - **Now playing:** on Mac, a vendored [mediaremote-adapter](https://github.com/ungive/mediaremote-adapter) (BSD-3-Clause) run through `/usr/bin/perl`, because since macOS 15.4 a Developer ID app can't read MediaRemote itself. On Windows, the system media transport controls.
 - **Models:** Ollama `qwen3-vl:2b` and YOLO11n (`nms=True`, bundled; presence and phone). CoreML on Mac, ONNX Runtime on Windows. On both, SigLIP 2 base/16 (vision tower) and all-MiniLM-L6-v2 in ONNX Runtime for the on-device screen model.
 - **Social:** `@supabase/supabase-js` + `react-native-url-polyfill`.
 - **Website:** Vite + TypeScript in `site/`.
 - **Native, Windows (C++ app, WinAppSDK 1.8):** C++/WinRT modules with Direct2D + DirectWrite, XAudio2, MediaCapture, ONNX Runtime, WIC, toast notifications, and DPAPI for the Supabase sign-in.
 
-## Getting started on Mac
+## Getting Started
+
+You can find the app for macOS under releases in the GitHub repository, and for Windows you can find the app on Microsoft Store. Links to both were given at the [start](#larpless) of this README. To build it yourself for either platform, you can follow the instructions below.
+
+## Building LarpLess on Mac
 
 ### Hardware Requirements
 
 #### Minimum Requirements
 
 - A Mac running **macOS 14.5** Sonoma or newer.
+
+Xcode 16.1 is requires macOS 14.5 instead of macOS 14.0, which is the normal minimum requirement for LarpLess.
 
 #### Recommended Requirements
 
@@ -214,9 +220,7 @@ Onboarding first asks which model should read your screen, and the steps that fo
 
 Demo mode works in both modes without any model. Settings → Onboarding → **Run again** shows onboarding again.
 
-## Getting Started on Windows
-
-To use LarpLess on Windows, install it from the [Microsoft Store](https://apps.microsoft.com/detail/9NRVVPHTMR9X). The Store installs what the app needs and keeps it up to date; the app itself never checks for updates. The rest of this section is for building it from source.
+## Building LarpLess on Windows
 
 The Windows build uses the same TypeScript and the same JS ↔ native contract; only the native modules (`larpless/windows/LarpLess/Native/`) are C++ instead of Swift.
 
