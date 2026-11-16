@@ -11,7 +11,7 @@ import { useSocialStore } from '../../src/store/socialStore';
 import { mockNowPlaying } from '../../src/native/mock/nowPlaying';
 import { isSupabaseConfigured, setSupabaseCredentials } from '../../src/social/supabase';
 import { SettingsPage } from '../../src/ui/pages/SettingsPage';
-import { APP_VERSION, PRIVACY_URL, TERMS_URL } from '../../src/ui/lib/links';
+import { APP_VERSION, GUIDE_URL, PRIVACY_URL, TERMS_URL } from '../../src/ui/lib/links';
 
 function render(): ReactTestRenderer {
   let r: ReactTestRenderer;
@@ -302,15 +302,17 @@ describe('Settings page', () => {
     act(() => r.unmount());
   });
 
-  it('About shows the version and opens feedback, the privacy policy and the terms', async () => {
+  it('About shows the version and opens the guide, feedback, the privacy policy and the terms', async () => {
     const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
     try {
       const r = render();
       expect(textOf(byID(r, 'settings-version'))).toBe(APP_VERSION);
+      await press(byTestID(r, 'settings-guide'));
       await press(byTestID(r, 'settings-feedback'));
       await press(byTestID(r, 'settings-privacy'));
       await press(byTestID(r, 'settings-terms'));
       expect(openURL.mock.calls.map((c) => c[0] as string)).toEqual([
+        GUIDE_URL,
         expect.stringContaining(`/issues/new?template=feedback.yml&version=${APP_VERSION}`),
         PRIVACY_URL,
         TERMS_URL,

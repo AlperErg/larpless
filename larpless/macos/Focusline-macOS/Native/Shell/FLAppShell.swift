@@ -25,6 +25,7 @@ enum FLShellMenu {
   static let updatesTag = 0x464C_5550   // "FLUP"
   static let helpTag = 0x464C_4850   // "FLHP"
   static let helpItems: [(title: String, command: String)] = [
+    ("LarpLess Guide", "guide"),
     ("Send Feedback…", "feedback"),
     ("Privacy Policy", "privacyPolicy"),
     ("Terms of Use", "termsOfUse"),
@@ -60,8 +61,8 @@ enum FLShellMenu {
     flShellLog("[FLAppShell] Session menu installed at index \(index)")
   }
 
-  /// Help → Send Feedback…, Privacy Policy and Terms of Use. They replace the template's "LarpLess Help",
-  /// which opens an empty Help Book. The links live in JS (`ui/lib/links.ts`), so each item sends a command.
+  /// Help → LarpLess Guide, Send Feedback…, Privacy Policy and Terms of Use. They replace the template's "LarpLess Help",
+  /// which opens an empty Help Book (the guide is a web page instead). The links live in JS (`ui/lib/links.ts`), so each item sends a command.
   private static func installHelp(in main: NSMenu) {
     let help: NSMenu
     if let existing = NSApp.helpMenu ?? main.items.first(where: { $0.submenu?.title == "Help" })?.submenu {

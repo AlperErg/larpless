@@ -88,6 +88,10 @@ function seo(): Plugin {
     </image:image>
   </url>
   <url>
+    <loc>${origin}/guide/</loc>
+    <lastmod>${lastmod}</lastmod>
+  </url>
+  <url>
     <loc>${origin}/privacy/</loc>
     <lastmod>${lastmod}</lastmod>
   </url>
@@ -102,8 +106,8 @@ function seo(): Plugin {
   };
 }
 
-/** The documents the legal pages render, from the repository root, and where each lives on the site. */
-const LEGAL_PAGES: Record<string, string> = { 'PRIVACY.md': '../privacy/', 'TERMS.md': '../terms/' };
+/** The documents the guide and legal pages render, from the repository root, and where each lives on the site. */
+const LEGAL_PAGES: Record<string, string> = { 'GUIDE.md': '../guide/', 'PRIVACY.md': '../privacy/', 'TERMS.md': '../terms/' };
 const LEGAL_MARKER = /<!--\s*legal:([A-Z]+\.md)\s*-->/;
 
 /** GitHub's heading anchors, so links like #downloads-you-start work the same on both. */
@@ -126,6 +130,27 @@ function legalHref(href: string): string {
   return `${REPO_URL}${path}${hash ? `#${hash}` : ''}`;
 }
 
+/**
+ * HTML that only the site shows, in place of a `<!-- figure:name -->` comment in a document (GitHub
+ * hides the comment). Mock-ups drawn from example data, never a screenshot of someone's screen.
+ */
+const FIGURES: Record<string, string> = {
+  modules: `<figure class="mock" aria-label="Mock-up of the Subjects page with three of your own courses">
+  <div class="mock-window">
+    <div class="mock-title">Your own courses (optional)</div>
+    <div class="mock-table" role="table">
+      <div class="mock-row mock-head" role="row"><span role="columnheader">Name</span><span role="columnheader">Colour</span><span role="columnheader">Keywords</span></div>
+      <div class="mock-row" role="row"><span role="cell">Cell Biology</span><span role="cell"><i class="mock-tag green">green</i></span><span role="cell">BIO101, mitosis, Krebs cycle, organelle</span></div>
+      <div class="mock-row" role="row"><span role="cell">Algorithms</span><span role="cell"><i class="mock-tag blue">blue</i></span><span role="cell">CS210, Dijkstra, dynamic programming, Big-O</span></div>
+      <div class="mock-row" role="row"><span role="cell">Data Structures</span><span role="cell"><i class="mock-tag purple">purple</i></span><span role="cell">CS220, linked list, hash table, heap</span></div>
+      <div class="mock-row mock-new" role="row"><span role="cell">＋ New</span></div>
+    </div>
+  </div>
+  <figcaption>A mock-up of <strong>Subjects → Your own courses</strong> with example courses. Each course has keywords the others don't.</figcaption>
+</figure>`,
+};
+const FIGURE_MARKER = /<!--\s*figure:([a-z-]+)\s*-->/g;
+
 function renderLegal(file: string): string {
   const marked = new Marked({
     gfm: true,
@@ -135,13 +160,18 @@ function renderLegal(file: string): string {
   });
   const html = marked.parse(readFileSync(resolve(REPO_DIR, file), 'utf8'), { async: false });
   return html
+    .replace(FIGURE_MARKER, (_m, name: string) => {
+      const figure = FIGURES[name];
+      if (!figure) throw new Error(`legal: unknown figure ${name} in ${file}`);
+      return figure;
+    })
     .replace(/<h([1-6])>([\s\S]*?)<\/h\1>/g, (_m, depth: string, inner: string) => `<h${depth} id="${slug(inner)}">${inner}</h${depth}>`)
     .replace(/<table>/g, '<div class="table-wrap"><table>')
     .replace(/<\/table>/g, '</table></div>');
 }
 
 /**
- * /privacy/ and /terms/ are PRIVACY.md and TERMS.md at the repository root, rendered at build time
+ * /guide/, /privacy/ and /terms/ are GUIDE.md, PRIVACY.md and TERMS.md at the repository root, rendered at build time
  * (and on every request in dev), so the site never holds a second, drifting copy of them.
  */
 function legal(): Plugin {
@@ -174,6 +204,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: resolve(SITE_DIR, 'index.html'),
+        guide: resolve(SITE_DIR, 'guide/index.html'),
         privacy: resolve(SITE_DIR, 'privacy/index.html'),
         terms: resolve(SITE_DIR, 'terms/index.html'),
       },

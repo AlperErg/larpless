@@ -1,10 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Linking } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import type { StudyModule } from '../../src/contracts/domain';
 import { initialAppState, useAppStore } from '../../src/store/appStore';
 import { CORE_SUBJECT_NAMES, isCoreSubject, LIBRARY_MODULES, librarySubjectId } from '../../src/core/subjectLibrary';
 import { nextTagColor, toggleSubject } from '../../src/ui/lib/modules';
+import { GUIDE_KEYWORDS_URL } from '../../src/ui/lib/links';
 import { ModulesPage } from '../../src/ui/pages/ModulesPage';
 
 const DEBOUNCE_MS = 600;
@@ -233,6 +235,22 @@ describe('Modules page', () => {
     expect(saveState(r)).toBe('');
     warn.mockRestore();
     act(() => r.unmount());
+  });
+});
+
+describe('Keyword advice', () => {
+  it('says keywords should be specific and links to the guide section', async () => {
+    const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+    try {
+      const r = render();
+      const tip = r.root.findAll((n) => n.props.testID === 'modules-keyword-tip')[0];
+      expect(textOf(tip)).toMatch(/only this course uses/);
+      await press(r, 'modules-keyword-guide');
+      expect(openURL).toHaveBeenCalledWith(GUIDE_KEYWORDS_URL);
+      act(() => r.unmount());
+    } finally {
+      openURL.mockRestore();
+    }
   });
 });
 

@@ -1256,6 +1256,16 @@ figure img {
   font-size: 15px;
 }
 
+/* A ghost link inside a step: the pill's padding is pulled back so its text lines up with the step's. */
+.steps .step-link {
+  margin: 4px 0 0 -8px;
+}
+
+/* "Read the full guide", between the steps and the floating-panel demo. */
+.guide-cta {
+  margin: -24px 0 32px -8px;
+}
+
 code {
   font-family: var(--mono);
   font-size: 0.86em;

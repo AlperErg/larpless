@@ -4,6 +4,7 @@ import { detectableSubjects } from '../../core/subjectLibrary';
 import { useAppStore } from '../../store/appStore';
 import { Button, EditableTable, SubjectLibrary, Text } from '../components';
 import { Page } from '../layout/Page';
+import { GUIDE_KEYWORDS_URL, openLink } from '../lib/links';
 import { courseNameProblem, draftsFromModules, modulesFromDrafts, toggleSubject } from '../lib/modules';
 import { useAllModules } from '../lib/useAllModules';
 import type { ModuleDraft } from '../lib/modules';
@@ -96,6 +97,13 @@ export function ModulesPage() {
       <Text variant="h2" style={styles.h}>
         Your own courses (optional)
       </Text>
+      <View style={styles.tip}>
+        <Text variant="small" testID="modules-keyword-tip" style={styles.tipText}>
+          Pick keywords only this course uses, like its code, lecturer or topics (BIO101, mitosis). Generic words such
+          as lecture or notes fit every subject and make courses harder to tell apart.
+        </Text>
+        <Button testID="modules-keyword-guide" title="Keyword tips" icon="book" variant="ghost" onPress={() => openLink(GUIDE_KEYWORDS_URL)} />
+      </View>
       <EditableTable testID="modules-table" rows={drafts} onChange={onChange} onCommit={() => flush(latest.current)} />
       <View style={styles.footer}>
         {problem ? (
@@ -113,8 +121,8 @@ export function ModulesPage() {
       </Text>
       <Text muted style={styles.lead}>
         Click a subject to turn it off. LarpLess only labels your time with subjects that are on. The outlined
-        core subjects are always on. Time on a Maths or Computing subject that's off counts as Maths or Computer
-        Science.
+        core subjects are always on. Time on a Maths or Computing subject that's off counts as Maths or
+        Programming.
       </Text>
       <View style={styles.detectBar}>
         <Text variant="small" testID="modules-detect-count">
@@ -133,6 +141,8 @@ const styles = StyleSheet.create({
   lead: { marginBottom: space.lg },
   footer: { marginTop: space.sm, minHeight: 18 },
   h: { marginBottom: space.sm },
+  tip: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginBottom: space.sm },
+  tipText: { flex: 1 },
   libraryTitle: { marginTop: space.xl },
   detectBar: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginBottom: space.sm, minHeight: 28 },
 });

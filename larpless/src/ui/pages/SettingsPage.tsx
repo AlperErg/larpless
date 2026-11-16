@@ -18,7 +18,7 @@ import { TextField } from '../components/TextField';
 import { Page } from '../layout/Page';
 import { isLive } from '../lib/actions';
 import { errorText } from '../lib/social';
-import { APP_VERSION, openFeedback, openLink, PRIVACY_URL, TERMS_URL } from '../lib/links';
+import { APP_VERSION, GUIDE_URL, openFeedback, openLink, PRIVACY_URL, TERMS_URL } from '../lib/links';
 import { APPEARANCE_OPTIONS, CLASSIFIER_OPTIONS, POWER_OPTIONS, SOUNDS, SOUND_ICON, SOUND_LABEL, STRICTNESS_OPTIONS } from '../lib/labels';
 import { ollamaLine } from '../layout/Sidebar';
 import { DEVICE, IS_WINDOWS } from '../platform';
@@ -335,6 +335,9 @@ export function SettingsPage() {
         <Text testID="settings-version" muted>
           {APP_VERSION}
         </Text>
+      </Row>
+      <Row label="Guide" hint="How sessions, subjects, focus and Friends work, and how to pick keywords for your own courses.">
+        <Button testID="settings-guide" title="Open guide" icon="book" variant="secondary" onPress={() => openLink(GUIDE_URL)} />
       </Row>
       <Row label="Send feedback" hint="Report a problem, a wrong label or an idea on GitHub. The issue is public.">
         <Button testID="settings-feedback" title="Open GitHub" icon="megaphone" variant="secondary" onPress={openFeedback} />

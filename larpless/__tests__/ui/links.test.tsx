@@ -2,7 +2,9 @@ import { Linking } from 'react-native';
 import { DEFAULT_SETTINGS } from '../../src/config';
 import { useAppStore } from '../../src/store/appStore';
 import { buildCommands } from '../../src/ui/layout/CommandPalette';
-import { APP_VERSION, feedbackUrl, openFeedback, PRIVACY_URL, TERMS_URL } from '../../src/ui/lib/links';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
+import { APP_VERSION, feedbackUrl, GUIDE_KEYWORDS_URL, GUIDE_URL, openFeedback, PRIVACY_URL, TERMS_URL } from '../../src/ui/lib/links';
 
 let openURL: jest.SpyInstance;
 
@@ -43,10 +45,22 @@ describe('feedback link', () => {
 });
 
 describe('palette Help commands', () => {
-  it('sends feedback and opens the privacy policy and terms', () => {
+  it('opens the guide, sends feedback and opens the privacy policy and terms', () => {
     const help = buildCommands({ status: 'idle', demoFast: false, hasSummary: false, devTools: false }).filter((c) => c.group === 'Help');
-    expect(help.map((c) => c.title)).toEqual(['Send feedback', 'Privacy Policy', 'Terms of Use']);
+    expect(help.map((c) => c.title)).toEqual(['Open guide', 'Send feedback', 'Privacy Policy', 'Terms of Use']);
     help.forEach((c) => c.run());
-    expect(openURL.mock.calls.map((c) => c[0] as string)).toEqual([expect.stringContaining('/issues/new?template=feedback.yml'), PRIVACY_URL, TERMS_URL]);
+    expect(openURL.mock.calls.map((c) => c[0] as string)).toEqual([GUIDE_URL, expect.stringContaining('/issues/new?template=feedback.yml'), PRIVACY_URL, TERMS_URL]);
+  });
+});
+
+describe('guide links', () => {
+  it('the keyword tips anchor is a heading in GUIDE.md (the site renders it at /guide/)', () => {
+    const guide = readFileSync(resolve(__dirname, '../../../GUIDE.md'), 'utf8');
+    // The same slug as site/vite.config.ts and GitHub: lowercase, punctuation dropped, spaces to dashes.
+    const slugs = [...guide.matchAll(/^#{1,6} (.+)$/gm)].map((m) =>
+      m[1].toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, '').trim().replace(/\s/g, '-'),
+    );
+    expect(GUIDE_KEYWORDS_URL.startsWith(`${GUIDE_URL}#`)).toBe(true);
+    expect(slugs).toContain(GUIDE_KEYWORDS_URL.slice(GUIDE_URL.length + 1));
   });
 });
