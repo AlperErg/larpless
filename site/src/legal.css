@@ -138,3 +138,85 @@
     margin-top: 40px;
   }
 }
+
+/* The guide's mock-ups (FIGURES in vite.config.ts): drawn from example data, never a real screen. */
+.doc .mock {
+  margin: 8px 0 24px;
+}
+
+.doc .mock-window {
+  padding: 16px;
+  background: var(--code);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow-x: auto;
+}
+
+.doc .mock-title {
+  margin-bottom: 10px;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.doc .mock-table {
+  min-width: 30rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1.4;
+  overflow-wrap: normal;
+}
+
+.doc .mock-row {
+  display: grid;
+  grid-template-columns: 9.5rem 6rem 1fr;
+  border-bottom: 1px solid var(--line);
+}
+
+.doc .mock-row:last-child {
+  border-bottom: 0;
+}
+
+.doc .mock-row > span {
+  padding: 8px 10px;
+  color: var(--ink);
+}
+
+.doc .mock-row > span + span {
+  border-left: 1px solid var(--line);
+}
+
+.doc .mock-head > span {
+  color: var(--faint);
+  font-size: 13px;
+}
+
+.doc .mock-new > span {
+  color: var(--faint);
+}
+
+.doc .mock-tag {
+  padding: 1px 7px;
+  border-radius: 4px;
+  font-style: normal;
+  font-size: 13px;
+  color: var(--paper-ink);
+}
+
+.doc .mock-tag.green {
+  background: var(--green);
+}
+
+.doc .mock-tag.blue {
+  background: var(--blue-tag);
+}
+
+.doc .mock-tag.purple {
+  background: #b9a3dc;
+}
+
+.doc figcaption {
+  margin-top: 8px;
+  color: var(--faint);
+  font-size: 14px;
+}

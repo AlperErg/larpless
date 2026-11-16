@@ -12,6 +12,10 @@ export const APP_VERSION: string = pkg.version;
 /** Rendered from PRIVACY.md and TERMS.md by the website build (site/vite.config.ts). */
 export const PRIVACY_URL = 'https://larpless.app/privacy/';
 export const TERMS_URL = 'https://larpless.app/terms/';
+/** Rendered from GUIDE.md the same way: how to use every part of the app. */
+export const GUIDE_URL = 'https://larpless.app/guide/';
+/** The guide's section on your own courses and choosing keywords. */
+export const GUIDE_KEYWORDS_URL = `${GUIDE_URL}#add-your-own-courses`;
 /** A new GitHub issue from .github/ISSUE_TEMPLATE/feedback.yml. */
 export const FEEDBACK_URL = 'https://github.com/AlperErg/larpless/issues/new';
 
