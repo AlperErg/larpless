@@ -1,3 +1,4 @@
+import { StyleSheet } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import type { SessionSummary } from '../../src/contracts/domain';
@@ -6,6 +7,7 @@ import { BarChart } from '../../src/ui/components/stats/BarChart';
 import { StatsRing, chartData } from '../../src/ui/components/stats/StatsRing';
 import { signedDuration, signedPoints } from '../../src/ui/components/stats/shared';
 import { cubicBezier } from '../../src/ui/lib/useTween';
+import { colors, tag } from '../../src/ui/theme';
 import App from '../../src/App';
 import { fixtureSessions } from '../../src/fixtures/data';
 import { initialAppState, useAppStore } from '../../src/store/appStore';
@@ -80,7 +82,10 @@ describe('StatsRing', () => {
     expect(textIn(r, 'stats-ring-best')).toContain('Wednesday 18, 1h');
     expect(all(r, 'stats-ring-subjects-list')).toHaveLength(0);
 
+    // The Subjects button: colour dots, title, count, and its own Open badge.
+    expect(textIn(r, 'stats-ring-subjects-toggle')).toBe('Subjects2 studied this weekOpen');
     fire(r, 'stats-ring-subjects-toggle');
+    expect(textIn(r, 'stats-ring-subjects-toggle-hint')).toBe('Close');
     const list = textIn(r, 'stats-ring-subjects-list');
     expect(list).toContain('Biology');
     expect(list).toContain('Maths');
@@ -92,11 +97,51 @@ describe('StatsRing', () => {
     expect(all(r, 'stats-ring-period')).toHaveLength(0);
   });
 
-  it('the pill ends in an arrow that points down while closed and up while open', () => {
-    const arrow = () => all(r, 'stats-ring-hint')[0].findAll((n) => typeof n.props.name === 'string')[0].props.name;
+  it('the pill ends in "Open" with a down arrow, and "Close" with an up arrow once open', () => {
+    const arrow = () => all(r, 'stats-ring-open-hint')[0].findAll((n) => typeof n.props.name === 'string')[0].props.name;
+    expect(textIn(r, 'stats-ring-open-hint')).toBe('Open');
     expect(arrow()).toBe('chevronDown');
     fire(r, 'stats-ring-open');
+    expect(textIn(r, 'stats-ring-open-hint')).toBe('Close');
     expect(arrow()).toBe('chevronUp');
+  });
+
+  it('hovering the pill traces a blue border round both sides and fills the Open badge; leaving undoes it', () => {
+    const badgeBg = () => StyleSheet.flatten(hosts(r, 'stats-ring-open-hint')[0].props.style).backgroundColor;
+    const strokes = () => hosts(r, 'stats-ring-open-trace').flatMap((n) => n.findAll((c) => typeof c.type === 'string' && typeof c.props.d === 'string'));
+    const rest = badgeBg();
+    act(() => all(r, 'stats-ring-open').filter((n) => typeof n.props.onLayout === 'function')[0].props.onLayout({ nativeEvent: { layout: { width: 300, height: 46 } } }));
+    expect(strokes()).toHaveLength(0);
+
+    fire(r, 'stats-ring-open', 'onHoverIn');
+    expect(badgeBg()).toBe(colors.accent);
+    const paths = strokes();
+    expect(paths).toHaveLength(2);
+    // Both halves start at the top centre and are fully drawn: dash = half the capsule's perimeter.
+    const half = 300 / 2 - 46 / 2 + Math.PI * (46 / 2 - 1) + (300 / 2 - 46 / 2);
+    for (const p of paths) {
+      expect(p.props.d.startsWith('M 150 1 ')).toBe(true);
+      expect(parseFloat(p.props.strokeDasharray)).toBeCloseTo(half, 3);
+      expect(p.props.stroke).toBe(colors.accent);
+    }
+
+    fire(r, 'stats-ring-open', 'onHoverOut');
+    expect(strokes()).toHaveLength(0);
+    expect(badgeBg()).toBe(rest);
+  });
+
+  it('the Subjects button gets the same hover border trace, in yellow', () => {
+    fire(r, 'stats-ring-open');
+    act(() => all(r, 'stats-ring-subjects-toggle').filter((n) => typeof n.props.onLayout === 'function')[0].props.onLayout({ nativeEvent: { layout: { width: 260, height: 46 } } }));
+    const strokes = () => hosts(r, 'stats-ring-subjects-toggle-trace').flatMap((n) => n.findAll((c) => typeof c.type === 'string' && typeof c.props.d === 'string'));
+    expect(strokes()).toHaveLength(0);
+    fire(r, 'stats-ring-subjects-toggle', 'onHoverIn');
+    expect(strokes()).toHaveLength(2);
+    // Yellow, not the blue of "Your stats".
+    expect(strokes().every((p) => p.props.stroke === tag.yellow.text)).toBe(true);
+    expect(StyleSheet.flatten(hosts(r, 'stats-ring-subjects-toggle-hint')[0].props.style).backgroundColor).toBe(tag.yellow.text);
+    fire(r, 'stats-ring-subjects-toggle', 'onHoverOut');
+    expect(strokes()).toHaveLength(0);
   });
 
   it('switches period', () => {

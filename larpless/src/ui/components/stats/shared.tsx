@@ -12,8 +12,8 @@ import type { PeriodStats, StatsPeriod } from '../../../core/focus';
 import { formatDuration, formatLegendDuration } from '../../lib/format';
 import { cubicBezier, useTween } from '../../lib/useTween';
 import { colors, fonts, space, tag, themed } from '../../theme';
-import { Icon } from '../Icon';
 import { MacPressable } from '../mac';
+import { GlowPill } from './GlowPill';
 import { Text } from '../Text';
 
 export interface StatsViewProps {
@@ -128,42 +128,6 @@ export function Stagger({ index, children, style, from = 'below' }: { index: num
   return <View style={[{ opacity: t, transform }, style]}>{children}</View>;
 }
 
-/**
- * Text link with a chevron that points up when open. Two icons rather than a rotation: react-native-windows rotates
- * around the view's top-left corner, so a 180° turn throws the icon up and to the left.
- */
-export function DisclosureLink({ label, open, onPress, testID }: { label: string; open: boolean; onPress: () => void; testID: string }) {
-  return (
-    <MacPressable testID={testID} onPress={onPress} accessibilityRole="button" accessibilityState={{ expanded: open }} style={styles.link}>
-      <View style={styles.linkRow}>
-        <Text variant="small" weight="medium" color={colors.accent}>
-          {label}
-        </Text>
-        <View style={styles.linkChevron}>
-          <Icon name={open ? 'chevronUp' : 'chevronDown'} size={14} color={colors.accent} />
-        </View>
-      </View>
-    </MacPressable>
-  );
-}
-
-/** Subject tags that cascade in. */
-export function SubjectChips({ entries, testID }: { entries: BreakdownEntry[]; testID: string }) {
-  return (
-    <View testID={testID} style={styles.chips}>
-      {entries.map((e, i) => (
-        <Stagger key={e.key} index={i}>
-          <View style={[styles.chip, { backgroundColor: (tag[e.color] ?? tag.gray).bg }]}>
-            <Text variant="small" color={(tag[e.color] ?? tag.gray).text}>
-              {`${e.label} · ${formatLegendDuration(e.seconds)}`}
-            </Text>
-          </View>
-        </Stagger>
-      ))}
-    </View>
-  );
-}
-
 /** Ranked subject rows with a bar scaled to the biggest subject. */
 export function SubjectRows({ entries, testID }: { entries: BreakdownEntry[]; testID: string }) {
   const top = entries[0]?.seconds || 1;
@@ -194,28 +158,41 @@ function SubjectBar({ share, index, color }: { share: number; index: number; col
   );
 }
 
-/** "Show 13 subjects" + a list that opens with a cascade. Distracted time is left to the numbers above. */
-export function SubjectsDisclosure({
-  stats,
-  style: kind,
-  label,
-  testID,
-}: {
-  stats: PeriodStats;
-  style: 'chips' | 'rows';
-  label?: (n: number) => string;
-  testID: string;
-}) {
+/** Up to four overlapping dots in the top subjects' colours: the Subjects button's leading mark. */
+function SubjectDots({ entries }: { entries: BreakdownEntry[] }) {
+  const top = entries.slice(0, 4);
+  return (
+    <View style={[styles.dots, { width: 12 + (top.length - 1) * 14 + 12 }]}>
+      {top.map((e, i) => (
+        <View key={e.key} style={[styles.dot, { left: 4 + i * 14, zIndex: top.length - i, backgroundColor: (tag[e.color] ?? tag.gray).text }]} />
+      ))}
+    </View>
+  );
+}
+
+/**
+ * The Subjects button (same GlowPill as "Your stats") and the ranked list it opens with a cascade. Distracted time is
+ * left to the numbers above.
+ */
+export function SubjectsDisclosure({ stats, periodName, testID }: { stats: PeriodStats; periodName: string; testID: string }) {
   const [open, setOpen] = useState(false);
   const entries = subjectsOf(stats);
   if (entries.length === 0) return null;
-  const closed = label ? label(entries.length) : `Show ${entries.length} subject${entries.length === 1 ? '' : 's'}`;
   return (
     <View style={styles.subjects}>
-      <DisclosureLink testID={`${testID}-toggle`} label={open ? 'Hide subjects' : closed} open={open} onPress={() => setOpen((o) => !o)} />
+      <GlowPill
+        testID={`${testID}-toggle`}
+        open={open}
+        onPress={() => setOpen((o) => !o)}
+        leading={<SubjectDots entries={entries} />}
+        title="Subjects"
+        detail={`${entries.length} studied ${periodName}`}
+        hints={{ open: 'Shows your subjects', close: 'Hides your subjects' }}
+        tone="yellow"
+      />
       <Reveal open={open}>
         <View style={styles.subjectsBody}>
-          {kind === 'chips' ? <SubjectChips testID={`${testID}-list`} entries={entries} /> : <SubjectRows testID={`${testID}-list`} entries={entries} />}
+          <SubjectRows testID={`${testID}-list`} entries={entries} />
         </View>
       </Reveal>
     </View>
@@ -232,13 +209,10 @@ const styles = themed(() => StyleSheet.create({
   optionOn: { backgroundColor: colors.raised },
   clip: { overflow: 'hidden' },
   measured: { position: 'absolute', top: 0, left: 0, right: 0 },
-  link: { alignSelf: 'flex-start', paddingVertical: 2 },
-  linkRow: { flexDirection: 'row', alignItems: 'center' },
-  linkChevron: { width: 14, height: 14, marginLeft: 4 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap' },
-  chip: { borderRadius: 6, paddingHorizontal: space.sm + 2, paddingVertical: 3, marginRight: space.xs + 2, marginBottom: space.xs + 2 },
-  subjects: { marginTop: space.md },
-  subjectsBody: { paddingTop: space.sm },
+  subjects: { marginTop: space.lg },
+  dots: { height: 34, justifyContent: 'center' },
+  dot: { position: 'absolute', top: 11, width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: colors.raised },
+  subjectsBody: { paddingTop: space.md },
   subjectRow: { flexDirection: 'row', alignItems: 'center', marginBottom: space.xs + 3 },
   subjectName: { width: 170 },
   subjectTrack: { flex: 1, height: 8, borderRadius: 4, backgroundColor: colors.hover, overflow: 'hidden', marginHorizontal: space.sm },
