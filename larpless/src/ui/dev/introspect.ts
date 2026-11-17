@@ -199,6 +199,27 @@ export function uiPress(testID: string, alt = false): boolean {
   return true;
 }
 
+/** Call onHoverIn (or onHoverOut with `on` false) of the first visible element with this testID: shows hover states. */
+export function uiHover(testID: string, on = true): boolean {
+  const prop = on ? 'onHoverIn' : 'onHoverOut';
+  let hit: ((e: unknown) => void) | null = null;
+  for (const r of roots()) {
+    walk(r, (f) => {
+      if (hit) return false;
+      if (isHidden(f)) return false;
+      const p = f.memoizedProps as Record<string, unknown> | null;
+      if (p && typeof p === 'object' && p.testID === testID && typeof p[prop] === 'function') {
+        hit = p[prop] as (e: unknown) => void;
+        return false;
+      }
+      return true;
+    });
+  }
+  if (!hit) return false;
+  (hit as (e: unknown) => void)({ nativeEvent: {} });
+  return true;
+}
+
 /** Call the onChangeText of the n-th visible element with this testID. */
 export function uiType(testID: string, text: string, index = 0): boolean {
   const hits: Fiber[] = [];
@@ -245,6 +266,7 @@ export function installUiIntrospection(): void {
     overflow: uiOverflow,
     style: uiStyle,
     press: uiPress,
+    hover: uiHover,
     type: uiType,
     /** Pin the root to w×h (dev layout checks); call with no args to reset. */
     viewport: (w?: number, h?: number) => {
