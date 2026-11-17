@@ -92,6 +92,13 @@ describe('StatsRing', () => {
     expect(all(r, 'stats-ring-period')).toHaveLength(0);
   });
 
+  it('the pill ends in an arrow that points down while closed and up while open', () => {
+    const arrow = () => all(r, 'stats-ring-hint')[0].findAll((n) => typeof n.props.name === 'string')[0].props.name;
+    expect(arrow()).toBe('chevronDown');
+    fire(r, 'stats-ring-open');
+    expect(arrow()).toBe('chevronUp');
+  });
+
   it('switches period', () => {
     fire(r, 'stats-ring-open');
     fire(r, 'stats-ring-period-day');

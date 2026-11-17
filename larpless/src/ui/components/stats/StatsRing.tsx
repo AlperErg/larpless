@@ -1,11 +1,12 @@
 /** Style B: a pill with a small focus dial opens into a big ring that fills, key numbers and ranked subjects. */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, Text as RNText, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { format } from 'date-fns';
 import { formatDuration } from '../../lib/format';
 import { useTween } from '../../lib/useTween';
 import { colors, fonts, space, tag, themed } from '../../theme';
+import { Icon } from '../Icon';
 import { MacPressable } from '../mac';
 import { Text } from '../Text';
 import type { PeriodBucket, StatsPeriod } from '../../../core/focus';
@@ -81,6 +82,7 @@ export function StatsRing({ sessions, now, testID = 'stats-ring', style }: Stats
         <Text variant="small" muted>
           {stats.sessions ? `${pctLabel} ${names.this}` : `nothing ${names.this} yet`}
         </Text>
+        <OpenHint open={open} testID={`${testID}-hint`} />
       </MacPressable>
 
       <Reveal open={open} ms={340}>
@@ -120,6 +122,33 @@ export function StatsRing({ sessions, now, testID = 'stats-ring', style }: Stats
   );
 }
 
+/** Dips at 0.7 s and 1.3 s after the pill appears, then stays still: a one-time "press me". */
+const NUDGE_AT_MS = [700, 1000, 1300, 1600];
+
+/**
+ * The pill's open/close affordance: a chevron in a soft round badge, down while closed and up while open (two icons,
+ * not a rotation; see DisclosureLink). While closed it dips twice once, so the pill reads as something to press.
+ */
+function OpenHint({ open, testID }: { open: boolean; testID: string }) {
+  const [down, setDown] = useState(false);
+  useEffect(() => {
+    if (open) return undefined;
+    const timers = NUDGE_AT_MS.map((ms, i) => setTimeout(() => setDown(i % 2 === 0), ms));
+    return () => {
+      timers.forEach(clearTimeout);
+      setDown(false);
+    };
+  }, [open]);
+  const dip = useTween(down ? 3 : 0, 220);
+  return (
+    <View testID={testID} style={styles.hint}>
+      <View style={{ transform: [{ translateY: dip }] }}>
+        <Icon name={open ? 'chevronUp' : 'chevronDown'} size={16} color={colors.accent} strokeWidth={2.25} />
+      </View>
+    </View>
+  );
+}
+
 function Row({ label, value, delta, deltaN = 0, testID }: { label: string; value: string; delta?: string; deltaN?: number; testID: string }) {
   return (
     <View testID={testID} style={styles.row}>
@@ -142,10 +171,11 @@ const styles = themed(() => StyleSheet.create({
     borderColor: colors.border,
     borderRadius: 999,
     paddingLeft: 5,
-    paddingRight: space.lg,
+    paddingRight: 6,
     paddingVertical: 5,
   },
   pillTitle: { marginLeft: space.sm + 2, marginRight: space.sm },
+  hint: { width: 26, height: 26, borderRadius: 13, marginLeft: space.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accentSoft },
   body: { paddingTop: space.lg },
   top: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center' },
   big: { width: 132, height: 132, marginRight: space.xxl, marginBottom: space.md },
