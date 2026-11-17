@@ -3,7 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { addDays, format } from 'date-fns';
 import { useAppStore } from '../../store/appStore';
 import { useNavStore } from '../../store/navStore';
-import { Callout, Heatmap, PeriodStats, Strong, Tag, Text, ToggleList, sessionToggleItem } from '../components';
+import { Callout, Heatmap, Strong, Tag, Text, ToggleList, sessionToggleItem } from '../components';
 import { Page } from '../layout/Page';
 import { groupByWeek, totalsBySubject } from '../lib/derive';
 import { formatDuration, formatHours } from '../lib/format';
@@ -31,8 +31,6 @@ export function HistoryPage() {
             <Strong color={colors.text}>{formatDuration(totalS)}</Strong>
             {` across ${sessions.length} session${sessions.length === 1 ? '' : 's'}`}
           </Text>
-
-          <PeriodStats testID="history-period" sessions={sessions} style={styles.section} />
 
           <View style={styles.section}>
             <Text variant="h3" style={styles.h3}>
