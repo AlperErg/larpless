@@ -28,3 +28,4 @@ export { MacView, MacPressable, MacTextInput, isAltPress, handledKeys } from './
 export type { MacKeyEvent, HandledKey, WindowsHandledKey } from './mac';
 export { DeleteSession } from './DeleteSession';
 export { SessionRowHeader, SessionRowBody, sessionToggleItem } from './SessionRow';
+export { PeriodStats } from './PeriodStats';
