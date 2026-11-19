@@ -8,4 +8,4 @@ Setup, running, testing and how it works are in the [root README](../README.md):
 - [Getting started on Windows](../README.md#getting-started-on-windows)
 - [Development](../README.md#development)
 
-Notes for working on the code are in [`CLAUDE.md`](../CLAUDE.md) and, for Windows, [`windows/CLAUDE.md`](windows/CLAUDE.md).
+Notes for working on the code are in [`AGENTS.md`](../AGENTS.md) and, for Windows, [`windows/AGENTS.md`](windows/AGENTS.md).

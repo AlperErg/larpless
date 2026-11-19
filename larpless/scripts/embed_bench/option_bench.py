@@ -18,7 +18,7 @@ Run from larpless/ (Windows, after the venv setup in requirements.txt):
 With --rerank-from, it also reports the pipeline the app would run: Option 1 when it's sure (the app's
 thresholds), Option 2 on Option 1's shortlist otherwise.
 
-PRIVACY (CLAUDE.md "Privacy invariants"): images are resized and JPEG-encoded in memory only; the window
+PRIVACY (AGENTS.md "Privacy invariants"): images are resized and JPEG-encoded in memory only; the window
 title goes into the prompt in memory only. Output shows file names, labels, scores and timings, never the
 title or anything read from the screen. Nothing is written but model weights (HF_HOME =
 scripts/embed_bench/.models); the network is used only to download them.

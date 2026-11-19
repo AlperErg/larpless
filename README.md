@@ -85,7 +85,7 @@ The classifier stops at the cheapest step that gives an answer:
 | Ollama | opened at session start, model warmed up | never opened, warmed up or asked |
 | Model not downloaded | not needed | every chunk is `unknown` (Settings only offers this mode once it's downloaded) |
 
-The on-device classifier is for computers where Ollama is too slow or uses too much memory (8 GB RAM devices, PCs/Macs without a fast GPU). On the 54-screenshot bench (Windows OCR; 30 study, 24 distractions) the shipped settings label 50 of 54 screens right (93%), and it tells study from distraction 54/54. Both apps run the same pinned ONNX files through ONNX Runtime, so the image scores match; the Mac's text side uses Apple Vision OCR and hasn't been re-benched yet.
+The on-device classifier is for computers where Ollama is too slow or uses too much memory (8 GB RAM devices, PCs/Macs without a fast GPU). On the 54-screenshot bench (Windows OCR; 30 study, 24 distractions) the shipped settings label 49 of 54 screens right (91%; 87–89% when the settings are re-fitted without the screen being scored), and it tells study from distraction 54/54. On a frozen holdout of 11 screenshots from subjects the bench never covered (anatomy, history, law, languages, music theory, psychology, mechanical engineering, plus look-alike distractions such as an off-topic ChatGPT chat and a Wikipedia article on a footballer), never used for tuning, it gets 10 of 11 right and study vs distraction 11/11. Both apps run the same pinned ONNX files through ONNX Runtime, so the image scores match; the Mac's text side uses Apple Vision OCR and hasn't been re-benched yet.
 
 ### Live: what the panel shows
 
@@ -247,7 +247,7 @@ This stops a running LarpLess and removes the installed package, bundles the JS 
 
 Onboarding starts with an extra step, **Your PC**, which asks how powerful the computer is and picks the [screen check mode](#screen-check-modes). Pick the **On-device classifier** and a single download step for it (about 460 MB) replaces the Ollama and AI-model steps; pick the **Vision LLM** and they stay, with **Download Ollama** downloading `OllamaSetup.exe` to run. The rest of the first launch is the same as on the Mac. [Supabase setup](#supabase-setup-for-the-friends-tab) is the same as on the Mac.
 
-The script uninstalls the old app package first, and that deletes the app's local data, including the downloaded on-device classifier. To keep it, rebuild without uninstalling (see `larpless/windows/CLAUDE.md`); on a `-Metro` install, JS-only changes need no rebuild at all, while the default install embeds the JS bundle and ignores Metro.
+The script uninstalls the old app package first, and that deletes the app's local data, including the downloaded on-device classifier. To keep it, rebuild without uninstalling (see `larpless/windows/AGENTS.md`); on a `-Metro` install, JS-only changes need no rebuild at all, while the default install embeds the JS bundle and ignores Metro.
 
 ### Differences from the Mac app
 
