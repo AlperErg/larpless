@@ -38,7 +38,7 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      # The image's Visual Studio may lack the pieces windows/CLAUDE.md lists (Windows 11 SDK 10.0.22621,
+      # The image's Visual Studio may lack the pieces windows/AGENTS.md lists (Windows 11 SDK 10.0.22621,
       # WinUI/UWP C++ tools, MSIX packaging). Add whatever is missing; this is a no-op when all are there.
       - name: Visual Studio components
         working-directory: .

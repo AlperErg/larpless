@@ -17,7 +17,7 @@ Run from larpless/ (Windows, after the venv setup in requirements.txt):
 Reads bench/<subject-slug>__<desc>.png|jpg; the file and sidecar format is in benchdata.py. Labels are the
 library subjects from src/core/subjectLibrary.ts plus "Not study".
 
-PRIVACY (CLAUDE.md "Privacy invariants"): images are resized, JPEG-encoded and OCR'd in memory only.
+PRIVACY (AGENTS.md "Privacy invariants"): images are resized, JPEG-encoded and OCR'd in memory only.
 Nothing is written to disk except model weights (HF_HOME = scripts/embed_bench/.models). Output shows
 file names, labels, confidences, timings and OCR *character counts*: never OCR text, window titles or
 embedding vectors. Nothing is sent anywhere; the network is used only to download model weights.
@@ -325,6 +325,24 @@ def leave_one_out(items: list[dict]) -> tuple[list[tuple[str, float]], list[tupl
     plain = [fused_predict(it, prm) for it, prm in zip(items, folds)]
     margin = [fused_predict(it, {**prm, "conf": "margin"}) for it, prm in zip(items, folds)]
     return plain, margin, folds
+
+
+def source_group(item: dict) -> str:
+    """What makes screenshots near-duplicates: a study screen's subject (same course, same PDFs/slides/IDE), a
+    distraction's sidecar kind (all the feeds, all the video sites). Items without a kind are their own group."""
+    if item["expected"] != NOT_STUDY:
+        return "study:" + item["expected"]
+    return "not:" + (item.get("kind") or item["file"])
+
+
+def leave_group_out(items: list[dict]) -> list[tuple[str, float]]:
+    """Like leave_one_out, but each fold holds out a whole source_group, so parameters can't lean on a sibling
+    screenshot of the same course or site. A big drop from leave-one-out means the fit is learning sources."""
+    groups = sorted({source_group(it) for it in items})
+    if len(groups) < 3:
+        return [fused_predict(it, GRID[0]) for it in items]
+    prm_of = {g: fit([it for it in items if source_group(it) != g]) for g in groups}
+    return [fused_predict(it, prm_of[source_group(it)]) for it in items]
 
 
 # --------------------------------------------------------------------------------------------------
@@ -820,6 +838,11 @@ def main() -> None:
     report("text", [(it["txt_pred"], 1.0) for it in items], items)
     report("keyword", [(it["kw_pred"], 1.0) for it in items], items)
     report("fused", fused, items)
+    grouped = leave_group_out(items)
+    report("grouped", grouped, items)
+    gap = sum(hit(p, it) for (p, _), it in zip(fused, items)) - sum(hit(p, it) for (p, _), it in zip(grouped, items))
+    print(f"  grouped = fused with whole sources held out ({len({source_group(it) for it in items})} groups: a subject's "
+          f"screens, a distraction kind); leave-one-out minus grouped = {gap} image(s)")
     print("  fused, probability confidence:")
     coverage_curve(fused, items)
     print("  fused, top-1 vs runner-up confidence:")
