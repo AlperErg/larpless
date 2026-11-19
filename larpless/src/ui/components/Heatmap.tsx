@@ -19,6 +19,8 @@ export interface HeatmapProps {
 const CELL = 10;
 const GAP = 2;
 const DAY_LABELS = ['Mon', '', 'Wed', '', 'Fri', '', ''];
+/** Columns a month label needs ("Sep" is ~18 px at 10 pt; a column is CELL + GAP = 12 px). */
+const MONTH_LABEL_COLS = 3;
 
 export function heatLevel(minutes: number): 0 | 1 | 2 | 3 | 4 {
   if (minutes <= 0) return 0;
@@ -49,6 +51,17 @@ export function Heatmap({ sessions, weeks = 12, now, testID, style }: HeatmapPro
     const prev = i > 0 ? columns[i - 1][0].day : null;
     return prev == null || new Date(prev).getMonth() !== new Date(first).getMonth() ? format(first, 'MMM') : '';
   });
+  // A label is wider than a column: drop one whose next label starts too close (the first
+  // column's month is usually a partial one, e.g. "Aug" right before "Sep").
+  for (let i = 0; i < monthLabels.length; i++) {
+    if (!monthLabels[i]) continue;
+    for (let j = i + 1; j < Math.min(i + MONTH_LABEL_COLS, monthLabels.length); j++) {
+      if (monthLabels[j]) {
+        monthLabels[i] = '';
+        break;
+      }
+    }
+  }
 
   return (
     <View testID={testID} style={style}>
