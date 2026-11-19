@@ -130,7 +130,7 @@ Starting a session opens Ollama in the background if it isn't running, then warm
 - **Now playing:** on Mac, a vendored [mediaremote-adapter](https://github.com/ungive/mediaremote-adapter) (BSD-3-Clause) run through `/usr/bin/perl`, because since macOS 15.4 a Developer ID app can't read MediaRemote itself. On Windows, the system media transport controls.
 - **Models:** Ollama `qwen3-vl:2b` and YOLO11n (`nms=True`, bundled; presence and phone). CoreML on Mac, ONNX Runtime on Windows. On both, SigLIP 2 base/16 (vision tower) and all-MiniLM-L6-v2 in ONNX Runtime for the on-device screen model.
 - **Social:** `@supabase/supabase-js` + `react-native-url-polyfill`.
-- **Website:** Vite + TypeScript in `site/`.
+- **Website:** Vite + TypeScript in [AlperErg/larpless-site](https://github.com/AlperErg/larpless-site).
 - **Native, Windows (C++ app, WinAppSDK 1.8):** C++/WinRT modules with Direct2D + DirectWrite, XAudio2, MediaCapture, ONNX Runtime, WIC, toast notifications, and DPAPI for the Supabase sign-in.
 
 ## Getting Started
@@ -339,13 +339,7 @@ It reads the packages Metro actually bundles for macOS and Windows, the notices 
 
 **Adding native code on Windows.** Each module is one header in `windows/LarpLess/Native/` (`REACT_MODULE` / `REACT_METHOD` / `REACT_EVENT`). Include it in `LarpLess.cpp` and add a `ClInclude` to `LarpLess.vcxproj`. Files to ship with the app go in `windows/LarpLess/Assets/` as `<None … DeploymentContent="true">` items. To rebuild without the script (Metro already running), use `npx @react-native-community/cli run-windows --no-packager --logging`. Two quirks of the bridgeless runtime: `ReactContext::JSDispatcher()` is empty, so emit events directly (that's thread-safe), and blocking `.get()` on WinRT async calls must run off the UI (STA) thread.
 
-**Website.** The coming-soon page lives in `site/` at the repo root:
-
-```bash
-cd site && npm install && npm run dev
-```
-
-`npm run build` type-checks and writes the static site.
+**Website.** larpless.app lives in its own repository, [AlperErg/larpless-site](https://github.com/AlperErg/larpless-site). Its guide, privacy and terms pages render `GUIDE.md`, `PRIVACY.md` and `TERMS.md` from this repository's `main` at build time, and a change to them here triggers a new deploy (`.github/workflows/site-docs.yml`). Releasing the Mac app writes the update feed into a `larpless-site` checkout next to this repository (see `scripts/release-mac.sh`).
 
 ### Demo mode
 

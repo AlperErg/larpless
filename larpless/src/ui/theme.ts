@@ -2,7 +2,7 @@
  * LarpLess design tokens. CONTRACTS.md §9.
  *
  * Light: cool desk-paper canvas, white raised surfaces, one cobalt accent.
- * Dark: the landing site (site/src/style.css). Warm paper ink on #10110F,
+ * Dark: the landing site (src/style.css in AlperErg/larpless-site). Warm paper ink on #10110F,
  * cream as the accent, borders instead of shadows. Same hue, lightness steps only.
  * This is the ONLY file in src/ui that may contain hex colour values.
  *

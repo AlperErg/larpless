@@ -6,8 +6,9 @@
 #   scripts/release-mac.sh --no-notarize   build and sign only (to check the build; Gatekeeper will refuse it)
 #
 # Output: macos/build/release/LarpLess-<version>.dmg (gitignored). The version comes from package.json.
-# A notarized build also signs the DMG for Sparkle and adds it to ../site/public/appcast.xml, the feed the
-# installed apps check (https://larpless.app/appcast.xml); the script prints how to publish both.
+# A notarized build also signs the DMG for Sparkle and adds it to public/appcast.xml in the website repository
+# (AlperErg/larpless-site, checked out next to this one, or at LARPLESS_SITE), the feed the installed apps check
+# (https://larpless.app/appcast.xml); the script prints how to publish both.
 #
 # The Sparkle EdDSA private key lives in your login keychain, created once with
 #   macos/Pods/Sparkle/bin/generate_keys
@@ -54,6 +55,15 @@ if [ -z "$PUBLIC_KEY" ]; then
   [ "$NOTARIZE" = 1 ] && fail "SUPublicEDKey in macos/Focusline-macOS/Info.plist is empty, so this build couldn't update itself.
 Create the key once with $SPARKLE_BIN/generate_keys and paste the public key it prints there."
   echo "note: SUPublicEDKey is empty, so this build has no updater."
+fi
+
+# The update feed lives in the website repository, checked out next to this one (an absolute LARPLESS_SITE overrides).
+SITE_REPO="${LARPLESS_SITE:-../../larpless-site}"
+FEED="$SITE_REPO/public/appcast.xml"
+if [ "$NOTARIZE" = 1 ] && [ ! -f "$FEED" ]; then
+  fail "no update feed at $FEED. The website repository holds it; clone it once with:
+  gh repo clone AlperErg/larpless-site $SITE_REPO
+or set LARPLESS_SITE to its absolute path."
 fi
 
 if grep -q "HOSTED_SUPABASE: { url: ''" src/config.ts; then
@@ -117,7 +127,7 @@ if [ -n "${SPARKLE_KEY_FILE:-}" ]; then
 else
   SIGNATURE=$("$SPARKLE_BIN/sign_update" -p "$DMG")
 fi
-node scripts/appcast.mjs --app "$APP" --dmg "$DMG" --signature "$SIGNATURE"
+node scripts/appcast.mjs --app "$APP" --dmg "$DMG" --signature "$SIGNATURE" --feed "$FEED"
 
 step "Done"
 echo "$DMG"
@@ -126,5 +136,5 @@ cat <<EOF
 
 To publish, in this order (installed apps start downloading as soon as the appcast is live):
   1. gh release create v$VERSION "$DMG" --title "LarpLess $VERSION"   (or upload it to an existing release)
-  2. commit site/public/appcast.xml and merge it to main; Netlify then serves it at larpless.app/appcast.xml
+  2. in $SITE_REPO, commit public/appcast.xml and push it to main; Netlify then serves it at larpless.app/appcast.xml
 EOF
