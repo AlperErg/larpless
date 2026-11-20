@@ -131,7 +131,7 @@ describe('profiles', () => {
     expect(await usernamesVisibleTo('carol')).toEqual(['alice', 'carol']);
     expect(await usernamesVisibleTo('alice')).toEqual(['alice', 'carol']);
     expect(await usernamesVisibleTo('bob')).toEqual(['bob']);
-    expect((await as('anon', 'select * from public.profiles')).rows).toEqual([]);
+    await expect(as('anon', 'select * from public.profiles')).rejects.toMatchObject({ code: '42501' });
   });
 
   it('find_profile() finds one person by their exact username, case and spaces aside, and nothing else', async () => {
@@ -217,7 +217,7 @@ describe('friendships', () => {
     expect(await count('alice')).toBe(1);
     expect(await count('bob')).toBe(1);
     expect(await count('carol')).toBe(0);
-    expect(await count('anon')).toBe(0);
+    await expect(count('anon')).rejects.toMatchObject({ code: '42501' });
   });
 
   it('only the addressee can accept, and only while it is pending', async () => {
@@ -229,6 +229,12 @@ describe('friendships', () => {
     expect(await changed(as('bob', "update public.friendships set status = 'pending' where id = $1", [id]))).toBe(0);
     const rows = (await db.query<{ status: string }>('select status from public.friendships')).rows;
     expect(rows).toEqual([{ status: 'accepted' }]);
+  });
+
+  it('the server sets created_at, whatever the request says', async () => {
+    await insertAs('alice', 'friendships', { requester_id: ids.alice, addressee_id: ids.bob, created_at: '2099-01-01T00:00:00Z' });
+    const rows = (await db.query<{ recent: boolean }>("select created_at > now() - interval '1 minute' and created_at <= now() as recent from public.friendships")).rows;
+    expect(rows).toEqual([{ recent: true }]);
   });
 
   it('the two ids are fixed once sent', async () => {
@@ -279,7 +285,7 @@ describe('posts', () => {
     expect(await visiblePostAuthors('alice')).toEqual([ids.alice]);
     expect(await visiblePostAuthors('bob')).toEqual([ids.alice]);
     expect(await visiblePostAuthors('carol')).toEqual([]);
-    expect(await visiblePostAuthors('anon')).toEqual([]);
+    await expect(visiblePostAuthors('anon')).rejects.toMatchObject({ code: '42501' });
   });
 
   it('a pending request does not unlock posts in either direction', async () => {
@@ -357,6 +363,52 @@ describe('posts', () => {
     for (const patch of bad) {
       await expect(insertAs('alice', 'posts', { ...postRow('alice'), ...patch })).rejects.toMatchObject({ code: '23514' });
     }
+  });
+
+  it('caps every field a client can make large, so one account cannot fill the database', async () => {
+    const entry = { label: 'Maths', color: 'blue', seconds: 30, pct: 50 };
+    const bad: Record<string, unknown>[] = [
+      { local_session_id: 's'.repeat(65) },
+      { total_s: 604801 },
+      { pomodoros: 1001 },
+      { streak: 100001 },
+      { breakdown: [{ ...entry, label: 'x'.repeat(101) }] },
+      { breakdown: [{ ...entry, junk: 'y'.repeat(20_000) }] }, // extra keys count towards the size cap
+      { breakdown: [{ ...entry, seconds: -1 }] },
+      { breakdown: [{ ...entry, seconds: 604801 }] },
+      { breakdown: [{ ...entry, seconds: 1e300 }] },
+      { breakdown: [{ ...entry, pct: 100.5 }] },
+      { breakdown: [{ ...entry, pct: -1 }] },
+    ];
+    for (const patch of bad) {
+      await expect(insertAs('alice', 'posts', { ...postRow('alice'), ...patch })).rejects.toMatchObject({ code: '23514' });
+    }
+    // The limits themselves are fine; labels count characters, not bytes.
+    await insertAs('alice', 'posts', {
+      ...postRow('alice'),
+      local_session_id: 's'.repeat(64),
+      total_s: 604800,
+      pomodoros: 1000,
+      streak: 100000,
+      breakdown: Array.from({ length: 20 }, () => ({ ...entry, label: '📐'.repeat(100), seconds: 604800, pct: 100 })),
+    });
+  });
+
+  it('accepts the app’s payload for a subject name longer than the server allows', async () => {
+    const payload = postPayload(ids.alice, {
+      summary: fixtureSummary,
+      focusPct: 50,
+      streak: 1,
+      breakdown: [{ key: 'm', label: '📐'.repeat(150), color: 'blue', seconds: 60, pct: 100.0000001 }],
+      caption: '',
+    });
+    await insertAs('alice', 'posts', payload);
+  });
+
+  it('the server sets created_at, so nobody can pin a post to the top of the feed', async () => {
+    await insertAs('alice', 'posts', { ...postRow('alice'), created_at: '2099-01-01T00:00:00Z' });
+    const rows = (await db.query<{ recent: boolean }>("select created_at > now() - interval '1 minute' and created_at <= now() as recent from public.posts")).rows;
+    expect(rows).toEqual([{ recent: true }]);
   });
 
   it('privacy: the table holds stats only (adding a column here should be a deliberate decision)', async () => {
@@ -443,9 +495,9 @@ describe('rate limits (#7)', () => {
 });
 
 describe('sign-up cap (#14, until there is a CAPTCHA)', () => {
-  it('refuses new accounts once 100 were created in the last hour', async () => {
+  it('refuses new accounts once 500 were created in the last hour', async () => {
     const recent = await db.query<{ n: number }>("select count(*)::int as n from public.profiles where created_at > now() - interval '1 hour'");
-    const fill = 100 - recent.rows[0].n;
+    const fill = 500 - recent.rows[0].n;
     await db.query(
       "insert into auth.users (raw_user_meta_data) select jsonb_build_object('username', 'bulk_' || g) from generate_series(1, $1) g",
       [fill],
@@ -510,5 +562,25 @@ describe('hardening', () => {
       ).rows.map((r) => r.name);
     expect(await callable('anon')).toEqual([]);
     expect(await callable('authenticated')).toEqual(['delete_account', 'find_profile']);
+  });
+
+  it('signed-out callers have no privileges on any table, so RLS is not the only wall', async () => {
+    const res = await db.query<{ name: string }>(
+      `select c.relname as name from pg_class c
+       where c.relnamespace = 'public'::regnamespace and c.relkind in ('r', 'p', 'v', 'm') and ${OWN}
+         and has_table_privilege('anon', c.oid, 'select, insert, update, delete, truncate, references, trigger')
+       order by 1`,
+    );
+    expect(res.rows).toEqual([]);
+  });
+
+  it('policies call auth.uid() once per query, not once per row (Supabase advisor 0003)', async () => {
+    const res = await db.query<{ name: string; expr: string }>(
+      `select tablename || ': ' || policyname as name, coalesce(qual, '') || ' ' || coalesce(with_check, '') as expr
+       from pg_policies where schemaname = 'public'`,
+    );
+    expect(res.rows.length).toBeGreaterThan(0);
+    const perRow = res.rows.filter((r) => r.expr.split('auth.uid()').length !== r.expr.split('SELECT auth.uid()').length);
+    expect(perRow.map((r) => r.name)).toEqual([]);
   });
 });
