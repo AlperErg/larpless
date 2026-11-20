@@ -8,7 +8,7 @@ LarpLess watches your screen and webcam *on-device*, works out which subject you
 
 **Download**: [macOS (.dmg)](https://github.com/AlperErg/larpless/releases/latest) · [Windows (Microsoft Store)](https://apps.microsoft.com/detail/9NRVVPHTMR9X)
 
-**Demo Video**: [YouTube](https://youtu.be/DoBBqkPa75E?si=IA6Z82f-tfn9QprD) (1 minute)
+**Demo Video**: [YouTube](https://youtu.be/mFhh-KMbzss) (1 minute)
 
 It was started on a hackathon as an app for macOS built on react-native-macos. It now also runs on Windows 10/11 through react-native-windows, with C++ versions of the same native modules (see [Getting Started on Windows](#building-larpless-on-windows)).
 
