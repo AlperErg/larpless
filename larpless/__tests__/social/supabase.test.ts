@@ -1,4 +1,15 @@
-import { keychainAuthStorage, normalizeSupabaseProjectUrl, setSupabaseCredentials } from '../../src/social/supabase';
+import {
+  getSupabase,
+  isSupabaseConfigured,
+  keychainAuthStorage,
+  normalizeSupabaseProjectUrl,
+  setSupabaseCredentials,
+} from '../../src/social/supabase';
+
+const mockStopAutoRefresh = jest.fn(async () => {});
+jest.mock('@supabase/supabase-js', () => ({
+  createClient: jest.fn(() => ({ auth: { stopAutoRefresh: mockStopAutoRefresh } })),
+}));
 
 function memory(initial: Record<string, string> = {}) {
   const items = new Map(Object.entries(initial));
@@ -82,5 +93,21 @@ describe('setSupabaseCredentials', () => {
   it('treats REST-suffixed URL as the project root', () => {
     expect(setSupabaseCredentials('https://abc.supabase.co/rest/v1/', 'anon')).toBe(true);
     expect(setSupabaseCredentials('https://abc.supabase.co/rest/v1/', 'anon')).toBe(false);
+  });
+
+  it('stops the dropped client’s token refresh, so turning Friends off sends nothing more', () => {
+    mockStopAutoRefresh.mockClear();
+    setSupabaseCredentials('https://abc.supabase.co', 'sb_publishable_one');
+    getSupabase();
+    expect(mockStopAutoRefresh).not.toHaveBeenCalled();
+
+    // Another project: the old client's timer stops too.
+    setSupabaseCredentials('https://xyz.supabase.co', 'sb_publishable_two');
+    expect(mockStopAutoRefresh).toHaveBeenCalledTimes(1);
+
+    getSupabase();
+    setSupabaseCredentials('', '');
+    expect(mockStopAutoRefresh).toHaveBeenCalledTimes(2);
+    expect(isSupabaseConfigured()).toBe(false);
   });
 });

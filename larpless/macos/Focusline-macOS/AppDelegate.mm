@@ -2,12 +2,44 @@
 
 #import <React/RCTBundleURLProvider.h>
 #import <React/RCTDevLoadingViewSetEnabled.h>
+#import <React/RCTHTTPRequestHandler.h>
 #import <ReactAppDependencyProvider/RCTAppDependencyProvider.h>
+
+/// PRIVACY: nothing the app sends or receives over HTTP is kept on disk. React Native's fetch/XHR (Ollama, Supabase)
+/// would otherwise run on the default NSURLSession, whose NSURLCache stores responses together with their requests in
+/// ~/Library/Caches/<bundle id>/Cache.db: a cached POST /api/chat held a whole base64 screenshot. RN's session is
+/// ephemeral instead (no disk cache, cookies or credentials), and the shared cache, which every other default-config
+/// session (Sparkle's appcast check) picks up, holds nothing. Runs before React Native starts, so its first request
+/// already uses this. __tests__/native/privacy.test.ts checks it.
+static void FLInstallPrivateNetworking(void)
+{
+  NSFileManager *fm = NSFileManager.defaultManager;
+  // Earlier builds used the disk cache: delete what they left (it can hold a screenshot sent to Ollama). Only
+  // CFNetwork's files; Core ML's compiled-model cache in the same folder stays.
+  NSURL *caches = [fm URLsForDirectory:NSCachesDirectory inDomains:NSUserDomainMask].firstObject;
+  NSString *bundleId = NSBundle.mainBundle.bundleIdentifier;
+  if (caches != nil && bundleId.length > 0) {
+    NSURL *dir = [caches URLByAppendingPathComponent:bundleId isDirectory:YES];
+    for (NSString *name in @[ @"Cache.db", @"Cache.db-wal", @"Cache.db-shm", @"fsCachedData" ]) {
+      [fm removeItemAtURL:[dir URLByAppendingPathComponent:name] error:nil];
+    }
+  }
+
+  NSURLCache.sharedURLCache = [[NSURLCache alloc] initWithMemoryCapacity:0 diskCapacity:0 directoryURL:nil];
+  RCTSetCustomNSURLSessionConfigurationProvider(^NSURLSessionConfiguration * {
+    NSURLSessionConfiguration *configuration = NSURLSessionConfiguration.ephemeralSessionConfiguration;
+    configuration.URLCache = nil;
+    configuration.requestCachePolicy = NSURLRequestReloadIgnoringLocalCacheData;
+    return configuration;
+  });
+}
 
 @implementation AppDelegate
 
 - (void)applicationDidFinishLaunching:(NSNotification *)notification
 {
+  FLInstallPrivateNetworking();
+
   self.moduleName = @"LarpLess";
   // You can add your custom initial props in the dictionary below.
   // They will be passed down to the ViewController used by React Native.

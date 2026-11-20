@@ -57,6 +57,11 @@ struct CompReactPackageProvider
 
 // The entry point of the Win32 application
 _Use_decl_annotations_ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE, PSTR /* commandLine */, int showCmd) {
+  // PRIVACY: ONNX Runtime (webcam and screen model) has usage telemetry on by default. This switch has to be set
+  // before the first Ort::Env exists; both Ort::Env sites also call DisableTelemetryEvents() in case a build
+  // doesn't read it. __tests__/native/privacy.test.ts checks both.
+  SetEnvironmentVariableW(L"ORT_DISABLE_TELEMETRY", L"1");
+
   // Initialize WinRT
   winrt::init_apartment(winrt::apartment_type::single_threaded);
 

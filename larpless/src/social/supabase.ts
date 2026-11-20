@@ -85,6 +85,9 @@ export function setSupabaseCredentials(url: string, key: string): boolean {
   runtimeUrl = nextUrl;
   runtimeKey = nextKey;
   if (fingerprint() === before) return false;
+  // In React Native the auth client's token-refresh timer runs for as long as the client exists, so a dropped
+  // client would keep calling Supabase after Friends is turned off. Stop it before letting go.
+  client?.auth.stopAutoRefresh().catch(() => {});
   client = null;
   clientId = '';
   return true;
