@@ -1,6 +1,6 @@
 # LarpLess Privacy Policy
 
-**Last updated: 14 November 2026**
+**Last updated: 20 November 2026**
 
 LarpLess is a study tracker for Mac and Windows. It looks at your screen and webcam to tell when you're studying, and it's built so that what it sees stays on your computer. This policy explains what LarpLess handles, where it goes, and what you can do about it. LarpLess is open source, so you can check every claim here in the code.
 
@@ -56,7 +56,7 @@ None of this reaches me. You can delete a session on the **History** page. To de
 - **On-device classifier:** downloaded from Hugging Face (`huggingface.co`), which receives your IP address and the names of the files requested. Hugging Face's privacy policy applies.
 - **Ollama:** **Download Ollama** opens `ollama.com` in your browser. **Download model** asks Ollama, which is a separate app on your computer, to fetch the AI model from Ollama's servers. Ollama's privacy policy applies.
 
-The app has no analytics, crash reporting, advertising or tracking.
+The app has no analytics, crash reporting, advertising or tracking. That includes the components built into it: ONNX Runtime, which runs the on-device classifier (and, on Windows, the webcam check), sends usage statistics to Microsoft by default, and LarpLess turns that off.
 
 ### Updates
 

@@ -517,6 +517,7 @@ struct FLScreenModelCore : std::enable_shared_from_this<FLScreenModelCore> {
     options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
     if (!m_env) {
       m_env = std::make_unique<Ort::Env>(ORT_LOGGING_LEVEL_ERROR, "FLScreenModel");
+      m_env->DisableTelemetryEvents(); // PRIVACY: see ORT_DISABLE_TELEMETRY in LarpLess.cpp
     }
     m_vision = std::make_unique<Ort::Session>(*m_env, (dir / kVision).c_str(), options);
     m_text = std::make_unique<Ort::Session>(*m_env, (dir / kText).c_str(), options);

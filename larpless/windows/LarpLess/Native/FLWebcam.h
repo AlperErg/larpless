@@ -422,6 +422,7 @@ struct FLWebcam {
         options.SetInterOpNumThreads(1);
         options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
         auto env{std::make_unique<Ort::Env>(ORT_LOGGING_LEVEL_ERROR, "FLWebcam")};
+        env->DisableTelemetryEvents(); // PRIVACY: see ORT_DISABLE_TELEMETRY in LarpLess.cpp
         auto session{std::make_unique<Ort::Session>(*env, path.c_str(), options)};
         Ort::AllocatorWithDefaultOptions allocator;
         const std::string input{session->GetInputNameAllocated(0, allocator).get()};
