@@ -1,0 +1,30 @@
+# Rebuilds larpless.app when the documents it renders change. The website (AlperErg/larpless-site)
+# fetches GUIDE.md, PRIVACY.md and TERMS.md from this repository's main branch at build time, so a
+# change here only shows on the site after a new Netlify build.
+#
+# NETLIFY_BUILD_HOOK is a repository secret holding a build hook URL from Netlify
+# (Project configuration → Build & deploy → Build hooks, branch main).
+name: Site docs
+
+on:
+  push:
+    branches: [main]
+    paths: [GUIDE.md, PRIVACY.md, TERMS.md]
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger a Netlify build of larpless.app
+        env:
+          HOOK: ${{ secrets.NETLIFY_BUILD_HOOK }}
+        run: |
+          if [ -z "$HOOK" ]; then
+            echo "::error::NETLIFY_BUILD_HOOK isn't set, so larpless.app still shows the old documents."
+            exit 1
+          fi
+          curl -fsS -X POST -d '{}' "$HOOK"

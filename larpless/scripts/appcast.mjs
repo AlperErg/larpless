@@ -1,17 +1,20 @@
 #!/usr/bin/env node
 // Adds (or replaces) one release in the Sparkle appcast that the Mac app checks for updates
 // (SUFeedURL in macos/Focusline-macOS/Info.plist → https://larpless.app/appcast.xml, served from
-// site/public/appcast.xml). Called by scripts/release-mac.sh after the DMG is notarized and signed.
+// public/appcast.xml in the website repository, AlperErg/larpless-site). Called by scripts/release-mac.sh
+// after the DMG is notarized and signed.
 //
 //   node scripts/appcast.mjs --app <LarpLess.app> --dmg <LarpLess-x.y.z.dmg> --signature <base64 EdDSA>
 //                            [--url <download URL>] [--feed <appcast.xml>]
+//
+// Without --feed it writes to the website checkout at LARPLESS_SITE, else larpless-site next to this repository.
 //
 // Before writing, it checks the signature against the app's own SUPublicEDKey, so a release signed with
 // the wrong private key (which every installed copy would reject) never reaches the feed.
 import { createPublicKey, verify } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const REPO = 'https://github.com/AlperErg/larpless';
@@ -74,7 +77,12 @@ const EMPTY = `<?xml version="1.0" encoding="utf-8"?>
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const a = args();
-  const feed = a.feed ?? join(here, '../../site/public/appcast.xml');
+  const siteRepo = process.env.LARPLESS_SITE ? resolve(process.env.LARPLESS_SITE) : join(here, '../../../larpless-site');
+  const feed = a.feed ?? join(siteRepo, 'public/appcast.xml');
+  // Starting a fresh feed in a missing checkout would drop every earlier release from it (--feed may start one).
+  if (!a.feed && !existsSync(feed)) {
+    fail(`no feed at ${feed}. Clone AlperErg/larpless-site next to this repository, set LARPLESS_SITE, or pass --feed.`);
+  }
   const version = plist(a.app, 'CFBundleVersion');
   const shortVersion = plist(a.app, 'CFBundleShortVersionString');
   const minSystem = plist(a.app, 'LSMinimumSystemVersion');

@@ -9,7 +9,7 @@ import { IS_WINDOWS } from '../platform';
 /** package.json's version, which a test keeps equal to the Mac and Windows app versions. */
 export const APP_VERSION: string = pkg.version;
 
-/** Rendered from PRIVACY.md and TERMS.md by the website build (site/vite.config.ts). */
+/** Rendered from PRIVACY.md and TERMS.md by the website build (vite.config.ts in AlperErg/larpless-site). */
 export const PRIVACY_URL = 'https://larpless.app/privacy/';
 export const TERMS_URL = 'https://larpless.app/terms/';
 /** Rendered from GUIDE.md the same way: how to use every part of the app. */

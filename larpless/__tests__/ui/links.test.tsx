@@ -56,7 +56,7 @@ describe('palette Help commands', () => {
 describe('guide links', () => {
   it('the keyword tips anchor is a heading in GUIDE.md (the site renders it at /guide/)', () => {
     const guide = readFileSync(resolve(__dirname, '../../../GUIDE.md'), 'utf8');
-    // The same slug as site/vite.config.ts and GitHub: lowercase, punctuation dropped, spaces to dashes.
+    // The same slug as the website's vite.config.ts (AlperErg/larpless-site) and GitHub: lowercase, punctuation dropped, spaces to dashes.
     const slugs = [...guide.matchAll(/^#{1,6} (.+)$/gm)].map((m) =>
       m[1].toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, '').trim().replace(/\s/g, '-'),
     );
