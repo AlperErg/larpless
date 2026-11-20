@@ -58,6 +58,8 @@ const PASSWORD_SYMBOL_RE = /[!@#$%^&*()_+\-=[\]{};'\\:"|<>?,./`~]/;
 export const MAX_CAPTION = 280;
 /** Most subjects a post's breakdown carries. supabase/schema.sql enforces the same cap. */
 export const MAX_BREAKDOWN = 20;
+/** Longest breakdown label (characters, i.e. code points), as supabase/schema.sql's valid_breakdown() allows. */
+export const MAX_LABEL = 100;
 const TAG_COLORS: readonly TagColor[] = ['gray', 'brown', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'red'];
 const EMAIL_DOMAIN = 'larpless.local';
 /** Accounts created before the rebrand. Username sign-in still accepts them. */
@@ -288,7 +290,13 @@ export function postPayload(myId: string, input: PublishInput) {
     focus_pct: Math.round(input.focusPct),
     pomodoros: input.summary.pomodoros,
     streak: input.streak,
-    breakdown: input.breakdown.slice(0, MAX_BREAKDOWN).map((e) => ({ label: e.label, color: e.color, seconds: Math.round(e.seconds), pct: e.pct })),
+    breakdown: input.breakdown.slice(0, MAX_BREAKDOWN).map((e) => ({
+      // By code point: cutting a surrogate pair in half would make the JSON invalid for Postgres.
+      label: Array.from(e.label).slice(0, MAX_LABEL).join(''),
+      color: e.color,
+      seconds: Math.round(e.seconds),
+      pct: Math.min(100, Math.max(0, e.pct)),
+    })),
     caption: caption || null,
     started_at: new Date(input.summary.startedAt).toISOString(),
   };

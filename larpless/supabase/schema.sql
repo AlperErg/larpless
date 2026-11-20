@@ -13,6 +13,8 @@ create table if not exists public.profiles (
 
 alter table public.profiles enable row level security;
 
+create index if not exists profiles_created_at_idx on public.profiles (created_at);
+
 -- Who can read a profile is set after the friendships table (see "profiles visible to you and your
 -- connections"): yourself, friends and people with a pending request. Nobody can list everyone (#6).
 drop policy if exists "profiles readable by signed-in users" on public.profiles;
@@ -25,8 +27,11 @@ set search_path = ''
 as $$
 begin
   -- No CAPTCHA yet (#14): Supabase limits sign-ups per IP (Authentication > Rate Limits), and this
-  -- caps new accounts across the whole project, so a bot spread over many IPs can't flood it.
-  if (select count(*) from public.profiles p where p.created_at > now() - interval '1 hour') >= 100 then
+  -- caps new accounts across the whole project, so a bot spread over many IPs can't flood it. The cap
+  -- is a backstop, set high enough that one script can't use it up and lock real people out for long.
+  -- The lock makes concurrent sign-ups take turns, so they can't all count the same total.
+  perform pg_advisory_xact_lock(hashtextextended('larpless:signup', 0));
+  if (select count(*) from public.profiles p where p.created_at > now() - interval '1 hour') >= 500 then
     raise exception 'signup_limit' using errcode = 'P0001';
   end if;
   insert into public.profiles (id, username)
@@ -89,6 +94,9 @@ begin
   if me is null then
     return;
   end if;
+  -- One request per user and kind at a time: without it, parallel requests each count only the
+  -- events already committed and all get through.
+  perform pg_advisory_xact_lock(hashtextextended(me::text || ':' || p_kind, 0));
   delete from public.rate_events e where e.user_id = me and e.at < now() - interval '1 day';
   select count(*) filter (where e.at > now() - interval '1 hour'), count(*)
     into last_hour, last_day
@@ -121,15 +129,20 @@ create unique index if not exists friendships_pair_key on public.friendships (
 
 alter table public.friendships enable row level security;
 
+-- Every policy below looks friendships up by one side; without these each check reads the whole table.
+create index if not exists friendships_requester_idx on public.friendships (requester_id, status);
+create index if not exists friendships_addressee_idx on public.friendships (addressee_id, status);
+
+-- Policies call auth.uid() as `(select auth.uid())` so Postgres evaluates it once per query, not per row.
 drop policy if exists "profiles visible to you and your connections" on public.profiles;
 create policy "profiles visible to you and your connections" on public.profiles
   for select to authenticated
   using (
-    id = auth.uid()
+    id = (select auth.uid())
     or exists (
       select 1 from public.friendships f
-      where (f.requester_id = auth.uid() and f.addressee_id = profiles.id)
-         or (f.addressee_id = auth.uid() and f.requester_id = profiles.id)
+      where (f.requester_id = (select auth.uid()) and f.addressee_id = profiles.id)
+         or (f.addressee_id = (select auth.uid()) and f.requester_id = profiles.id)
     )
   );
 
@@ -159,6 +172,7 @@ set search_path = ''
 as $$
 begin
   perform public.check_rate('friend_request', 20, 50);
+  new.created_at := now();
   return new;
 end;
 $$;
@@ -173,23 +187,23 @@ create trigger friendships_rate_limit
 drop policy if exists "friendships visible to both sides" on public.friendships;
 create policy "friendships visible to both sides" on public.friendships
   for select to authenticated
-  using (auth.uid() in (requester_id, addressee_id));
+  using ((select auth.uid()) in (requester_id, addressee_id));
 
 drop policy if exists "send requests as yourself" on public.friendships;
 create policy "send requests as yourself" on public.friendships
   for insert to authenticated
-  with check (requester_id = auth.uid() and status = 'pending');
+  with check (requester_id = (select auth.uid()) and status = 'pending');
 
 drop policy if exists "addressee accepts" on public.friendships;
 create policy "addressee accepts" on public.friendships
   for update to authenticated
-  using (addressee_id = auth.uid() and status = 'pending')
-  with check (addressee_id = auth.uid() and status = 'accepted');
+  using (addressee_id = (select auth.uid()) and status = 'pending')
+  with check (addressee_id = (select auth.uid()) and status = 'accepted');
 
 drop policy if exists "either side removes" on public.friendships;
 create policy "either side removes" on public.friendships
   for delete to authenticated
-  using (auth.uid() in (requester_id, addressee_id));
+  using ((select auth.uid()) in (requester_id, addressee_id));
 
 -- Only the status can change on update; the two ids are fixed once sent.
 revoke update on public.friendships from anon, authenticated;
@@ -233,9 +247,13 @@ create table if not exists public.posts (
 );
 
 create index if not exists posts_created_at_idx on public.posts (created_at desc);
+create index if not exists posts_user_created_idx on public.posts (user_id, created_at desc);
 
 -- Friends' clients render the breakdown, so only well-formed entries in the tag palette get in
--- (src/social/api.ts MAX_BREAKDOWN). Not valid: rows already stored aren't re-checked.
+-- (src/social/api.ts MAX_BREAKDOWN, MAX_LABEL). The size caps keep one account from filling the
+-- database (the Free plan turns read-only at 500 MB): a request body of several MB reaches Postgres.
+-- The CASEs guard the casts, since SQL doesn't promise to short-circuit OR.
+-- Not valid: rows already stored aren't re-checked.
 create or replace function public.valid_breakdown(b jsonb)
 returns boolean
 language sql
@@ -245,6 +263,7 @@ as $$
   select case
     when jsonb_typeof(b) <> 'array' then false
     when jsonb_array_length(b) > 20 then false
+    when octet_length(b::text) > 16384 then false
     else not exists (
       select 1 from jsonb_array_elements(b) e
       where jsonb_typeof(e) is distinct from 'object'
@@ -252,12 +271,28 @@ as $$
         or coalesce(e ->> 'color', '') not in ('gray', 'brown', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'red')
         or jsonb_typeof(e -> 'seconds') is distinct from 'number'
         or jsonb_typeof(e -> 'pct') is distinct from 'number'
+        or case when jsonb_typeof(e -> 'label') = 'string' then char_length(e ->> 'label') > 100 else false end
+        or case when jsonb_typeof(e -> 'seconds') = 'number' then (e -> 'seconds')::numeric not between 0 and 604800 else false end
+        or case when jsonb_typeof(e -> 'pct') = 'number' then (e -> 'pct')::numeric not between 0 and 100 else false end
     )
   end
 $$;
 
+-- Checks the breakdown as a table constraint, which runs as the caller: signed-in users need it.
+revoke execute on function public.valid_breakdown(jsonb) from public, anon;
+grant execute on function public.valid_breakdown(jsonb) to authenticated;
+
 alter table public.posts drop constraint if exists posts_breakdown_valid;
 alter table public.posts add constraint posts_breakdown_valid check (public.valid_breakdown(breakdown)) not valid;
+
+-- Session ids are ~16 characters; a week is longer than any session.
+alter table public.posts drop constraint if exists posts_bounds;
+alter table public.posts add constraint posts_bounds check (
+  char_length(local_session_id) <= 64
+  and total_s <= 604800
+  and pomodoros <= 1000
+  and streak <= 100000
+) not valid;
 
 alter table public.posts enable row level security;
 
@@ -269,6 +304,8 @@ set search_path = ''
 as $$
 begin
   perform public.check_rate('post', 10, 30);
+  -- The feed is ordered by created_at, so a client-chosen date could pin a post to the top.
+  new.created_at := now();
   return new;
 end;
 $$;
@@ -280,17 +317,31 @@ create trigger posts_rate_limit
   before insert on public.posts
   for each row execute function public.limit_posts();
 
+-- The friend list is an uncorrelated subquery, worked out once per query (calling are_friends() per
+-- post made the feed read all of friendships for every post).
 drop policy if exists "posts visible to author and friends" on public.posts;
 create policy "posts visible to author and friends" on public.posts
   for select to authenticated
-  using (user_id = auth.uid() or public.are_friends(auth.uid(), user_id));
+  using (
+    user_id = (select auth.uid())
+    or user_id in (
+      select f.addressee_id from public.friendships f where f.requester_id = (select auth.uid()) and f.status = 'accepted'
+      union all
+      select f.requester_id from public.friendships f where f.addressee_id = (select auth.uid()) and f.status = 'accepted'
+    )
+  );
 
 drop policy if exists "post as yourself" on public.posts;
 create policy "post as yourself" on public.posts
   for insert to authenticated
-  with check (user_id = auth.uid());
+  with check (user_id = (select auth.uid()));
 
 drop policy if exists "delete your own posts" on public.posts;
 create policy "delete your own posts" on public.posts
   for delete to authenticated
-  using (user_id = auth.uid());
+  using (user_id = (select auth.uid()));
+
+-- Hardening ------------------------------------------------------------------
+-- Supabase grants every table to anon too. Signed-out callers never need these, so take the grants
+-- away and RLS isn't the only wall if a policy is ever loosened by mistake.
+revoke all on public.profiles, public.friendships, public.posts from anon;

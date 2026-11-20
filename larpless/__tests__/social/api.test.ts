@@ -223,6 +223,15 @@ describe('posts', () => {
     expect(api.postPayload(ME, { summary, breakdown, focusPct: 80, streak: 0, caption: '   ' }).caption).toBeNull();
   });
 
+  it('keeps labels and percentages within what the server accepts', () => {
+    const long = { key: 'x', label: `${'a'.repeat(99)}📐📐`, color: 'blue' as const, seconds: 10, pct: 100.0000001 };
+    const [entry] = api.postPayload(ME, { summary, breakdown: [long], focusPct: 80, streak: 0, caption: '' }).breakdown;
+    // Cut by code point: the emoji stays whole instead of leaving half a surrogate pair.
+    expect(entry.label).toBe(`${'a'.repeat(99)}📐`);
+    expect(Array.from(entry.label)).toHaveLength(api.MAX_LABEL);
+    expect(entry.pct).toBe(100);
+  });
+
   it('posting the same session twice is fine, other errors throw', async () => {
     const f = fakeSupabase({
       posts: [{ error: { message: 'dup', code: '23505' } }, { error: { message: 'boom' } }, { error: { message: 'rate_limit:post', code: 'P0001' } }],
