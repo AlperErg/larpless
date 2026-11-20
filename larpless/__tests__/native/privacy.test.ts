@@ -16,10 +16,11 @@ const read = (path: string) => readFileSync(join(root, path), 'utf8');
 /** Source without comments, so a commented-out line doesn't count. Strings with `//` (URLs) aren't in these files' checks. */
 const code = (source: string) => source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 
+/** Paths relative to `root`, always with `/` (Windows' readdir and join give `\`), so they compare equal on every platform. */
 function filesUnder(dir: string, ext: RegExp): string[] {
   return readdirSync(join(root, dir), { recursive: true, encoding: 'utf8' })
     .filter((f) => ext.test(f))
-    .map((f) => join(dir, f));
+    .map((f) => join(dir, f).replace(/\\/g, '/'));
 }
 
 describe('macOS startup', () => {
