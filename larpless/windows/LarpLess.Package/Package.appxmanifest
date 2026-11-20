@@ -11,7 +11,7 @@
   <Identity
     Name="GarciaIgelmo.LarpLess"
     Publisher="CN=C46A4420-229A-4946-9836-AB6A1014CE96"
-    Version="0.2.0.0" />
+    Version="0.2.1.0" />
 
   <Properties>
     <DisplayName>LarpLess</DisplayName>
