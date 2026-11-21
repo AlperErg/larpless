@@ -242,6 +242,12 @@ export const space = {
   xxxl: 48,
 } as const;
 
+/**
+ * The app icon's colours (brand/larpless-icon.svg, "Heatmap green" from #67). Fixed in
+ * both schemes, like the icon itself: the body's gradient top and bottom, and the slab under it.
+ */
+export const brand = { bodyTop: '#5BC98F', bodyBottom: '#2E9A69', base: '#1F6B4B', shine: '#FFFFFF' } as const;
+
 export const radius = 10;
 
 export const motion = { fast: 140, base: 180, slow: 240 } as const;
