@@ -179,7 +179,7 @@
     <ResourceCompile Include="LarpLess.rc" />
   </ItemGroup>
   <ItemGroup>
-    <!-- Generated from brand/larpless-logo.png by scripts/make-windows-icons.ps1. -->
+    <!-- Generated from brand/larpless-icon.png by scripts/make-windows-icons.ps1. -->
     <Image Include="LarpLess.ico" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
