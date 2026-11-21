@@ -50,7 +50,7 @@
       <SubType>Designer</SubType>
     </AppxManifest>
   </ItemGroup>
-  <!-- Generated from brand/larpless-logo.png by scripts/make-windows-icons.ps1. -->
+  <!-- Generated from brand/larpless-icon.png by scripts/make-windows-icons.ps1. -->
   <ItemGroup>
     <Content Include="Images\SplashScreen.scale-200.png" />
     <Content Include="Images\LockScreenLogo.scale-200.png" />
