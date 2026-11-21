@@ -3,3 +3,5 @@
 */.DS_Store
 # Claude
 .claude/
+# Demo Video
+brand/*video
