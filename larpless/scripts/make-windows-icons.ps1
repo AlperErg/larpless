@@ -1,4 +1,4 @@
-# Regenerates the Windows app icons from brand/larpless-logo.png:
+# Regenerates the Windows app icons from brand/larpless-icon.png:
 #   windows/LarpLess/LarpLess.ico          exe + window icon (16-256 px, PNG-compressed entries)
 #   windows/LarpLess.Package/Images/*.png  MSIX tile, taskbar, Start, store and splash assets
 # Usage (from larpless/):  powershell -ExecutionPolicy Bypass -File scripts/make-windows-icons.ps1
@@ -7,26 +7,12 @@ Add-Type -AssemblyName System.Drawing
 # .NET resolves relative paths against the process directory, not the PowerShell location, so build absolute ones.
 $root = Split-Path -Parent $PSScriptRoot
 
-$logo = [System.Drawing.Bitmap]::FromFile((Join-Path $root '..\brand\larpless-logo.png'))
+# The brand icon is a free-standing shape on a transparent square canvas (no plate or baked shadow),
+# which is what Windows expects for unplated taskbar/Start icons, so it is drawn as-is.
+$tile = [System.Drawing.Bitmap]::FromFile((Join-Path $root '..\brand\larpless-icon.png'))
+$tileSize = $tile.Width
 
-# The brand PNG is the macOS icon: an 823 px rounded tile at (100,100) on an opaque white canvas with a baked
-# drop shadow. Windows draws its own plates and shadows, so cut the tile out with an anti-aliased rounded mask.
-$tileX = 100; $tileSize = 823; $radius = 185
-$tile = New-Object System.Drawing.Bitmap $tileSize, $tileSize
-$g = [System.Drawing.Graphics]::FromImage($tile)
-$g.SmoothingMode = 'AntiAlias'
-$g.PixelOffsetMode = 'HighQuality'
-$brush = New-Object System.Drawing.TextureBrush $logo
-$brush.TranslateTransform(-$tileX, -$tileX)
-$path = New-Object System.Drawing.Drawing2D.GraphicsPath
-$d = 2 * $radius; $e = $tileSize - $d
-$path.AddArc(0, 0, $d, $d, 180, 90); $path.AddArc($e, 0, $d, $d, 270, 90)
-$path.AddArc($e, $e, $d, $d, 0, 90); $path.AddArc(0, $e, $d, $d, 90, 90)
-$path.CloseFigure()
-$g.FillPath($brush, $path)
-$g.Dispose(); $brush.Dispose(); $path.Dispose(); $logo.Dispose()
-
-# Draws the tile scaled to $size x $size, centred on a transparent $width x $height canvas.
+# Draws the icon scaled to $size x $size, centred on a transparent $width x $height canvas.
 function New-Canvas([int]$width, [int]$height, [int]$size) {
   $bmp = New-Object System.Drawing.Bitmap $width, $height
   $g = [System.Drawing.Graphics]::FromImage($bmp)
@@ -48,7 +34,7 @@ function Save-Png([string]$file, [int]$width, [int]$height, [int]$size) {
 }
 
 # Flat theme canvas (src/ui/theme.ts light bg). The launch animation is drawn in JS, so the
-# splash must not place the beige app tile on the old cream or the two frames fight.
+# splash must not place the app icon on it or the two frames fight.
 function Save-Solid([string]$file, [int]$width, [int]$height, [System.Drawing.Color]$color) {
   $bmp = New-Object System.Drawing.Bitmap $width, $height
   $g = [System.Drawing.Graphics]::FromImage($bmp)
