@@ -32,32 +32,47 @@ It was started on a hackathon as an app for macOS built on react-native-macos. I
 
 ## How it works
 
-![How LarpLess works: screen and webcam are analysed on your Mac or PC, fused into one label per chunk, and only the post you choose leaves the device](docs/images/how-it-works.png)
-
 ```mermaid
-flowchart LR
-  subgraph native [Native modules, in process: Swift on Mac, C++ on Windows]
-    SC[FLScreenCapture] -->|snapshot, memory only| F
-    WC[FLWebcam: YOLO 1 fps] -->|samples| F
-    PN[FLFloatingPanel] -->|panel actions| F
-    AS[FLAppShell: menu / shortcuts, App Nap / EcoQoS] -->|menu commands| F
-    NP[FLNowPlaying] -->|song, native only| PN
-    NT[FLNotifications]
-    SD[FLSound]
-    OH[FLOllama: open / restart Ollama]
+flowchart TB
+  UI[React Native UI] <-->|actions · state| ST[zustand stores]
+  ST <-->|store actions · setState| CTRL
+
+  subgraph core [src/core: pure TypeScript]
+    CTRL[sessionController<br/>1 s live tick · 10–30 s chunks]
+    CLS[classifier<br/>rules → cache → read the screen]
+    CHUNK[each chunk<br/>chunkFuser → alerts]
+    DB[(db: labels only<br/>AsyncStorage)]
+    CTRL --> CLS
+    CTRL --> CHUNK
+    CTRL --> DB
   end
-  F[src/native facades] --> CTRL[core/sessionController]
-  CTRL --> CLS[core/classifier: rules → cache → VLM or screen model]
-  CLS -->|classifier mode: scores only| SM[FLScreenModel: SigLIP 2 + OCR + MiniLM]
-  CLS -->|POST /api/chat, vision LLM mode| OL[Ollama 127.0.0.1:11434]
-  CTRL --> FU[core/chunkFuser] --> ST[zustand stores]
-  CTRL --> AL[core/alerts] --> NT
-  CTRL --> PN
-  CTRL --> SD
-  CTRL -->|session start| OH
-  CTRL --> DB[core/db → AsyncStorage, labels only]
-  ST --> UI[React Native UI]
-  UI -->|store actions| CTRL
+
+  subgraph in [Native inputs]
+    SC[FLScreenCapture<br/>frontmost window ·<br/>screenshot in memory]
+    WC[FLWebcam<br/>YOLO11n, 1 fps]
+    AS[FLAppShell<br/>menu · sleep ·<br/>App Nap / EcoQoS]
+  end
+
+  subgraph read [Screen readers: one per mode]
+    SM[FLScreenModel<br/>SigLIP 2 + OCR + MiniLM]
+    OH[FLOllama<br/>open / restart / quit] --> OL[(Ollama vision LLM<br/>127.0.0.1:11434)]
+  end
+
+  subgraph out [Native outputs]
+    NP[FLNowPlaying] -->|song, never sent to JS| PN[FLFloatingPanel]
+    OUT[FLNotifications · FLSound]
+  end
+
+  SC -->|frontmost window · screenshot| core
+  WC -->|presence · phone| CTRL
+  AS <-->|sleep · session activity| CTRL
+  AS -->|menu commands| UI
+  CLS -->|on-device classifier mode: scores only| SM
+  CLS -->|vision LLM mode: POST /api/chat| OL
+  CTRL -->|session start / end| OH
+  ST -->|app launch| OH
+  CTRL <-->|panel state · actions| PN
+  CTRL -->|nudges · focus sound| OUT
 ```
 
 The session controller runs two cycles: a **live** one every second that keeps the floating panel current, and a **chunk** of 10, 15 or 30 s (set by the [power profile](#power-profiles)) that records what you did. Both label the screen the same way.
