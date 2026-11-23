@@ -196,6 +196,49 @@ final class FLAppShell: RCTEventEmitter {
     FLOllama.quitNow()
   }
 
+  // MARK: Quit guard (#74)
+
+  // Main thread only (AppDelegate's applicationShouldTerminate, and the two methods below hop there).
+  private static var quitAllowed = false
+  private static var quitHeld = false
+  private static var quitPendingSince: Date?
+
+  /// JS took the 'quitRequested' command and is saving the session.
+  @objc func holdQuit() {
+    DispatchQueue.main.async { FLAppShell.quitHeld = true }
+  }
+
+  /// Quit past the guard (once the session is saved).
+  @objc func quit() {
+    DispatchQueue.main.async {
+      FLAppShell.quitAllowed = true
+      NSApp.terminate(nil)
+    }
+  }
+
+  /// Called by AppDelegate's applicationShouldTerminate. True: cancel this quit, JS saves the session first.
+  /// Only during a session and while JS listens; never for logout/restart/shutdown (those carry a quit
+  /// reason). A request JS never held within 3 s means JS is stuck, so the next quit goes through.
+  @objc static func holdTerminate() -> Bool {
+    activityLock.lock()
+    let sessionActive = activity != nil
+    activityLock.unlock()
+    guard sessionActive, !quitAllowed else { return false }
+    let quitReason = AEKeyword(0x7768_793F) // 'why?' (kAEQuitReason)
+    if NSAppleEventManager.shared().currentAppleEvent?.attributeDescriptor(forKeyword: quitReason) != nil {
+      return false
+    }
+    let now = Date()
+    if let since = quitPendingSince, !quitHeld, now.timeIntervalSince(since) > 3 { return false }
+    if quitPendingSince == nil || quitHeld {
+      quitPendingSince = now
+      quitHeld = false
+    }
+    guard emitCommand("quitRequested") else { return false }
+    flShellLog("[FLAppShell] quit held during a session")
+    return true
+  }
+
   /// { memoryBytes, appleSilicon, chip, gpu: null } for onboarding's recommendation. Not logged or stored.
   @objc func hardware(_ resolve: @escaping RCTPromiseResolveBlock,
                       reject: @escaping RCTPromiseRejectBlock) {

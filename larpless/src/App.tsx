@@ -19,6 +19,7 @@ import { useSocialStore } from './store/socialStore';
 import { BootScreen } from './ui/components/BootScreen';
 import { installUiIntrospection } from './ui/dev/introspect';
 import { CommandPalette } from './ui/layout/CommandPalette';
+import { SavingOnQuit, saveSessionAndQuit } from './ui/layout/SavingOnQuit';
 import { AppLayout } from './ui/layout/AppLayout';
 import { ErrorBoundary } from './ui/layout/ErrorBoundary';
 import { endSession, isLive, startSession } from './ui/lib/actions';
@@ -133,6 +134,7 @@ function useMenuCommands(): void {
         else if (c === 'feedback') openFeedback();
         else if (c === 'privacyPolicy') openLink(PRIVACY_URL);
         else if (c === 'termsOfUse') openLink(TERMS_URL);
+        else if (c === 'quitRequested') saveSessionAndQuit();
       }),
     [],
   );
@@ -175,6 +177,7 @@ function App() {
         <AppLayout route={route}>{renderPage(route)}</AppLayout>
       )}
       <CommandPalette />
+      <SavingOnQuit />
       {bootCover ? <BootScreen ready={booted} onDone={() => setBootCover(false)} /> : null}
     </View>
   );
