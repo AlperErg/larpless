@@ -1,114 +1,51 @@
 /**
- * Launch cover for Mac and Windows. The logo assembles itself: the crown drops in,
- * one pen stroke draws the session ring clockwise (study, break, distracted, away)
- * in the brand logo's colours (its distracted arc is yellow, though `kindColor`
- * uses red) taken from the live theme tags, the hands fade in at the logo's time and start turning
- * like a clock running fast, and the serif name settles. The hands keep turning
- * until the cover has gone, so nothing snaps or stops on screen.
- * Plain views only: Windows Fabric drops painted content out of Animated.View, so
- * the arcs and hands are rows of overlapping discs rather than SVG paths.
+ * Launch cover for Mac and Windows: the app icon's monitor (brand/larpless-icon.svg, #67)
+ * wakes up. It rises in with its eyes shut, opens them looking straight at you
+ * ("locked in"), blinks, then glances aside and stops in the icon's own pose while the
+ * serif name settles. If the app is still loading after that, it keeps blinking now and
+ * then, so nothing freezes on screen.
+ * The eyes are holes in the body, as in the icon, so the darker slab underneath shows
+ * through their top edge; a shut eye is a short dash, the icon's "away" face.
+ * The SVG sits in plain Views and is redrawn from a timer, never inside an
+ * Animated.View: Windows Fabric drops painted content out of those (see platform.ts).
  */
 import { memo, useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, StyleSheet, View } from 'react-native';
-import type { TagColor } from '../../contracts/domain';
-import { colors, currentScheme, tag, themed } from '../theme';
-import type { SchemeName } from '../theme';
+import Svg, { Defs, LinearGradient, Path, Stop } from 'react-native-svg';
+import { brand, colors, themed } from '../theme';
 import { Text } from './Text';
 
-export const BOOT_INTRO_MS = 1080;
+export const BOOT_INTRO_MS = 1200;
 export const BOOT_EXIT_MS = 280;
 
-// Geometry is brand/larpless-logo.png scaled by 1/5 around the clock centre.
-const MARK = 112;
-const CX = 56;
-const CY = 64;
-const RADIUS = 38;
-const STROKE = 11;
-const HAND = 9;
-/** Hand lengths include the round cap behind the pivot. */
-const HOUR_LEN = 29;
-const MINUTE_LEN = 36;
-/** Disc spacing along the ring's centre line, px. Small enough that the edge scallop is < 0.05 px. */
-const DISC_STEP = 1.2;
-/** Disc spacing along a hand, px. The edge scallop is ~0.06 px; wider spacing means fewer views re-rendered per frame. */
-const HAND_STEP = 1.5;
-/**
- * How far each arc is trimmed at both ends, in degrees: most of the round cap's
- * reach, so the caps land near the logo's cuts while the gaps stay open (a full
- * trim made the gaps look wider than the logo's and shrank the gray arc to a dot).
- */
-const CAP_DEG = 0.85 * (STROKE / 2 / RADIUS) * (180 / Math.PI);
+/** On-screen size of the mascot, px. */
+const MARK = 128;
+/** The icon's own viewBox (its 1024 canvas trimmed to the artwork). */
+const VIEWBOX = '55 95 914 914';
+/** The slab under the body is the same outline, moved down this far. */
+const BASE_DY = 42;
 
-/** The hands appear here, then spin up to speed over `SPIN_RAMP_MS`. */
-export const BOOT_HANDS_AT = 380;
-const HANDS_FADE_MS = 260;
-const SPIN_RAMP_MS = 600;
-/** One minute-hand lap; the hour hand turns twelve times slower, as on a real clock. */
-const MINUTE_LAP_MS = 1600;
+// Eye geometry in icon units. The icon draws the glance: eyes at x 606 and 770.
+const EYE_W = 96;
+const EYE_H = 200;
+const EYE_CY = 450;
+/** Looking straight ahead, the pair is centred on the body (x 512). */
+export const EYE_CENTERS = [430, 594] as const;
+/** How far the eyes travel to reach the icon's pose. */
+export const GLANCE_DX = 176;
+/** A shut eye: the "away" dash, a little wider than an open eye and thinner than the slab's lip. */
+const SHUT_W = 112;
+const SHUT_H = 28;
 
-type ArcColor = Extract<TagColor, 'green' | 'blue' | 'yellow' | 'gray'>;
-
-/** Screen angles, 0° east, clockwise positive. Measured from the brand mark. */
-const ARCS: { color: ArcColor; start: number; sweep: number }[] = [
-  { color: 'green', start: -83, sweep: 173 },
-  { color: 'blue', start: 96, sweep: 94 },
-  { color: 'yellow', start: -164, sweep: 37 },
-  { color: 'gray', start: -120, sweep: 23 },
-];
-
-/** One disc of the ring, `STROKE` wide, centred on the ring's centre line. */
-interface Segment {
-  color: ArcColor;
-  deg: number;
-  /** Clockwise distance from the start of the study arc, where the pen begins. */
-  rel: number;
-  x: number;
-  y: number;
-}
-
-function wrap(deg: number): number {
-  return ((deg % 360) + 360) % 360;
-}
-
-/**
- * The ring as overlapping discs. Their outline is an exact annulus with round ends,
- * and nothing is rotated, so no edge is snapped to the pixel grid at an angle: the
- * old row of tiny rotated rectangles came out ragged, with seams where they met.
- */
-function buildSegments(): Segment[] {
-  const origin = ARCS[0].start;
-  const stepDeg = (DISC_STEP / RADIUS) * (180 / Math.PI);
-  const out: Segment[] = [];
-  for (const arc of ARCS) {
-    const from = arc.start + CAP_DEG;
-    const sweep = Math.max(0, arc.sweep - 2 * CAP_DEG);
-    const n = Math.max(1, Math.ceil(sweep / stepDeg));
-    for (let k = 0; k <= n; k++) {
-      const deg = from + (sweep * k) / n;
-      const rad = (deg * Math.PI) / 180;
-      out.push({
-        color: arc.color,
-        deg,
-        rel: wrap(deg - origin),
-        x: CX + RADIUS * Math.cos(rad),
-        y: CY + RADIUS * Math.sin(rad),
-      });
-    }
-  }
-  return out.sort((a, b) => a.rel - b.rel);
-}
-
-export const BOOT_SEGMENTS: Segment[] = buildSegments();
-/** Pen position (degrees from the start of the study arc) once every disc is drawn. */
-export const BOOT_PEN_END = BOOT_SEGMENTS[BOOT_SEGMENTS.length - 1].rel;
-
-/**
- * 1 once the pen has reached a disc, else 0. No partial opacity: overlapping
- * translucent discs would show as darker seams; the round front disc is the pen tip.
- */
-export function segmentReveal(s: Segment, pen: number): number {
-  return pen >= s.rel ? 1 : 0;
-}
+// Timeline, ms from mount.
+const RISE = { at: 0, dur: 320 };
+const OPEN = { at: 280, dur: 200 };
+const BLINK = { at: 640, dur: 170 };
+const GLANCE = { at: 880, dur: 300 };
+const WORD = { at: 760, dur: 360 };
+/** While the app is still loading, blink every `IDLE_EVERY` ms from `IDLE_FROM`. */
+export const BOOT_IDLE_FROM = BOOT_INTRO_MS + 600;
+export const BOOT_IDLE_EVERY = 2400;
 
 function clamp01(t: number): number {
   return Math.min(1, Math.max(0, t));
@@ -129,31 +66,23 @@ function easeInOut(t: number): number {
   return x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2;
 }
 
-function progress(elapsed: number, start: number, dur: number): number {
-  return clamp01((elapsed - start) / dur);
+function progress(elapsed: number, span: { at: number; dur: number }): number {
+  return clamp01((elapsed - span.at) / span.dur);
 }
 
-/**
- * Minute-hand angle `t` ms after the hands appear. The speed eases up from rest
- * (smoothstep), so the angle is its integral: no jolt when the spin starts.
- */
-export function spinAngle(t: number): number {
-  if (t <= 0) return 0;
-  const speed = 360 / MINUTE_LAP_MS;
-  const r = SPIN_RAMP_MS;
-  if (t >= r) return speed * (t - r / 2);
-  const x = t / r;
-  // ∫ smoothstep = r · (x³ − x⁴/2)
-  return speed * r * (x ** 3 - x ** 4 / 2);
+/** 0 → 1 → 0 over `dur` from `at`: the lids close and reopen. */
+function pulse(elapsed: number, span: { at: number; dur: number }): number {
+  const x = (elapsed - span.at) / span.dur;
+  return x <= 0 || x >= 1 ? 0 : Math.sin(Math.PI * x);
 }
 
 export interface BootPose {
-  crown: number;
-  /** Pen position in degrees; segments up to here are drawn (see `segmentReveal`). */
-  pen: number;
-  hands: number;
-  minuteDeg: number;
-  hourDeg: number;
+  /** The mascot rising in: 0 hidden, 1 in place. */
+  body: number;
+  /** Eye offset from straight ahead, icon units; `GLANCE_DX` is the icon's pose. */
+  eyeX: number;
+  /** 0 eyes open, 1 shut. */
+  lid: number;
   word: number;
   /** 1 while the cover is opaque, 0 once it has left. */
   cover: number;
@@ -163,30 +92,75 @@ export interface BootPose {
 /** Pose at `elapsed` ms. `exitAt` is the elapsed time the exit began, once the app is ready. */
 export function bootPose(elapsed: number, exitAt: number | null, reduced: boolean): BootPose {
   if (reduced) {
-    return {
-      crown: 1,
-      pen: BOOT_PEN_END,
-      hands: 1,
-      minuteDeg: 0,
-      hourDeg: 0,
-      word: 1,
-      cover: 1,
-      done: false,
-    };
+    return { body: 1, eyeX: GLANCE_DX, lid: 0, word: 1, cover: 1, done: false };
   }
-  const spin = spinAngle(elapsed - BOOT_HANDS_AT);
-  const exitT = exitAt == null ? 0 : progress(elapsed, exitAt, BOOT_EXIT_MS);
+  const idle = elapsed >= BOOT_IDLE_FROM ? pulse((elapsed - BOOT_IDLE_FROM) % BOOT_IDLE_EVERY, { at: 0, dur: BLINK.dur }) : 0;
+  const exitT = exitAt == null ? 0 : clamp01((elapsed - exitAt) / BOOT_EXIT_MS);
   return {
-    crown: easeOut(progress(elapsed, 60, 240)),
-    pen: easeInOut(progress(elapsed, 100, 620)) * BOOT_PEN_END,
-    hands: easeOut(progress(elapsed, BOOT_HANDS_AT, HANDS_FADE_MS)),
-    minuteDeg: spin % 360,
-    hourDeg: (spin / 12) % 360,
-    word: easeOut(progress(elapsed, 720, 360)),
+    body: easeOut(progress(elapsed, RISE)),
+    eyeX: easeInOut(progress(elapsed, GLANCE)) * GLANCE_DX,
+    lid: Math.max(1 - easeOut(progress(elapsed, OPEN)), pulse(elapsed, BLINK), idle),
+    word: easeOut(progress(elapsed, WORD)),
     cover: 1 - easeIn(exitT),
     done: exitAt != null && elapsed - exitAt >= BOOT_EXIT_MS,
   };
 }
+
+function n(v: number): string {
+  return String(Math.round(v * 100) / 100);
+}
+
+/**
+ * One eye hole: a pill centred on (cx, cy), traced counter-clockwise so the nonzero
+ * fill cuts it out of the clockwise body (evenodd would also cut where the neck
+ * and foot overlap the screen).
+ */
+export function eyeHole(cx: number, cy: number, w: number, h: number): string {
+  const r = Math.min(w, h) / 2;
+  const l = cx - w / 2;
+  const rt = cx + w / 2;
+  const t = cy - h / 2;
+  const b = cy + h / 2;
+  const arc = (x: number, y: number) => `A${n(r)},${n(r)} 0 0 0 ${n(x)},${n(y)}`;
+  return (
+    `M${n(cx)},${n(t)} H${n(l + r)} ${arc(l, t + r)} V${n(b - r)} ${arc(l + r, b)} ` +
+    `H${n(rt - r)} ${arc(rt, b - r)} V${n(t + r)} ${arc(rt - r, t)} Z`
+  );
+}
+
+/** Screen, neck and foot (clockwise), then both eye holes, all moved down by `dy`. */
+export function mascotPath(eyeX: number, lid: number, dy = 0): string {
+  const y = (v: number) => n(v + dy);
+  const outline =
+    `M300,${y(170)} H724 A190,190 0 0 1 914,${y(360)} V${y(570)} A190,190 0 0 1 724,${y(760)} ` +
+    `H300 A190,190 0 0 1 110,${y(570)} V${y(360)} A190,190 0 0 1 300,${y(170)} Z ` +
+    `M432,${y(700)} H592 V${y(850)} H432 Z ` +
+    `M352,${y(812)} H672 A40,40 0 0 1 672,${y(892)} H352 A40,40 0 0 1 352,${y(812)} Z`;
+  const k = clamp01(lid);
+  const w = EYE_W + (SHUT_W - EYE_W) * k;
+  const h = EYE_H + (SHUT_H - EYE_H) * k;
+  const eyes = EYE_CENTERS.map((cx) => eyeHole(cx + eyeX, EYE_CY + dy, w, h)).join(' ');
+  return `${outline} ${eyes}`;
+}
+
+const SHINE = 'M250,300 A150,150 0 0 1 380,232';
+
+/** Re-renders only when the face changes; the inputs are rounded so still frames are skipped. */
+const Mascot = memo(function Mascot({ eyeX, lid }: { eyeX: number; lid: number }) {
+  return (
+    <Svg width={MARK} height={MARK} viewBox={VIEWBOX}>
+      <Defs>
+        <LinearGradient id="fl-boot-body" x1="0" y1="0" x2="0.3" y2="1">
+          <Stop offset="0" stopColor={brand.bodyTop} />
+          <Stop offset="1" stopColor={brand.bodyBottom} />
+        </LinearGradient>
+      </Defs>
+      <Path d={mascotPath(eyeX, lid, BASE_DY)} fill={brand.base} />
+      <Path d={mascotPath(eyeX, lid)} fill="url(#fl-boot-body)" />
+      <Path d={SHINE} fill="none" stroke={brand.shine} strokeOpacity={0.5} strokeWidth={38} strokeLinecap="round" />
+    </Svg>
+  );
+});
 
 /**
  * Milliseconds since mount, stepped by a 16 ms timer. Not requestAnimationFrame: on
@@ -214,83 +188,6 @@ function useElapsed(running: boolean): number {
   }, [running]);
   return elapsed;
 }
-
-/** RGB channels of a `#RGB`, `#RRGGBB` or `#RRGGBBAA` colour (alpha ignored), else null. */
-function hexChannels(hex: string): [number, number, number] | null {
-  const m = /^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.exec(hex.trim());
-  if (!m) return null;
-  const h = m[1].length === 3 ? m[1].replace(/./g, (d) => d + d) : m[1];
-  return [0, 1, 2].map((i) => parseInt(h.slice(i * 2, i * 2 + 2), 16)) as [number, number, number];
-}
-
-/**
- * Blends two hex colours; fading a hand by colour keeps its overlapping discs from
- * showing seams. A token that isn't hex falls back to `to` rather than an invalid colour.
- */
-export function mixHex(from: string, to: string, t: number): string {
-  const a = hexChannels(from);
-  const b = hexChannels(to);
-  if (!a || !b) return to;
-  const k = clamp01(t);
-  const c = a.map((v, i) => Math.round(v + (b[i] - v) * k));
-  return `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
-}
-
-/**
- * A rounded hand from the clock centre at screen angle `deg` (0° east, clockwise).
- * Drawn as a row of discs `HAND_STEP` px apart, each placed by trigonometry, with no rotate
- * transform: on Windows a rotated 80 px square holding the hand swung it out past
- * the ring instead of pivoting it. Discs need no rotation, so the hand stays on its axis.
- */
-function Hand({ deg, length, color }: { deg: number; length: number; color: string }) {
-  return (
-    <>
-      {handDiscs(deg, length).map((p, k) => (
-        <View
-          key={k}
-          style={[styles.handDot, { left: p.x - HAND / 2, top: p.y - HAND / 2, backgroundColor: color }]}
-        />
-      ))}
-    </>
-  );
-}
-
-/** Disc centres for a hand, in mark coordinates (the clock centre is `BOOT_CENTER`). */
-export function handDiscs(deg: number, length: number): { x: number; y: number }[] {
-  const rad = (deg * Math.PI) / 180;
-  const reach = length - HAND;
-  const n = Math.max(2, Math.ceil(reach / HAND_STEP) + 1);
-  return Array.from({ length: n }, (_, k) => {
-    const d = (reach * k) / (n - 1);
-    return { x: CX + Math.cos(rad) * d, y: CY + Math.sin(rad) * d };
-  });
-}
-
-export const BOOT_CENTER = { x: CX, y: CY };
-export const BOOT_HANDS = { hour: HOUR_LEN, minute: MINUTE_LEN, width: HAND, ringInner: RADIUS - STROKE / 2, ringStroke: STROKE };
-
-/**
- * ~200 discs; memoised on the pen so it stops re-rendering once the ring is drawn.
- * `scheme` is in the props because `tag` is mutated in place by `applyScheme`: without
- * it a light/dark switch after the ring is drawn would leave the old arc colours.
- */
-const Ring = memo(function Ring({ pen }: { pen: number; scheme: SchemeName }) {
-  return (
-    <>
-      {BOOT_SEGMENTS.map((s, i) =>
-        segmentReveal(s, pen) ? (
-          <View
-            key={i}
-            style={[
-              styles.segment,
-              { left: s.x - STROKE / 2, top: s.y - STROKE / 2, backgroundColor: tag[s.color].text },
-            ]}
-          />
-        ) : null,
-      )}
-    </>
-  );
-});
 
 export function BootScreen({ ready, onDone }: { ready: boolean; onDone: () => void }) {
   const [reduced, setReduced] = useState(false);
@@ -336,8 +233,6 @@ export function BootScreen({ ready, onDone }: { ready: boolean; onDone: () => vo
     onDoneRef.current();
   }, [pose.done]);
 
-  const handColor = mixHex(colors.bg, colors.text, pose.hands);
-
   return (
     <View
       testID="boot-screen"
@@ -345,17 +240,13 @@ export function BootScreen({ ready, onDone }: { ready: boolean; onDone: () => vo
       accessibilityLabel="LarpLess"
       pointerEvents="auto"
       style={[styles.fill, { opacity: pose.cover }]}>
-      <View style={styles.mark}>
-        <View
-          style={[
-            styles.crown,
-            { backgroundColor: tag.red.text, opacity: pose.crown, transform: [{ translateY: (1 - pose.crown) * -6 }] },
-          ]}
-        />
-        <Ring pen={pose.pen} scheme={currentScheme()} />
-        <Hand deg={pose.hourDeg} length={HOUR_LEN} color={handColor} />
-        <Hand deg={pose.minuteDeg - 90} length={MINUTE_LEN} color={handColor} />
-        <View style={[styles.dot, { backgroundColor: tag.red.text, opacity: pose.hands }]} />
+      <View
+        testID="boot-mascot"
+        style={{
+          opacity: pose.body,
+          transform: [{ translateY: (1 - pose.body) * 12 }, { scale: 0.9 + 0.1 * pose.body }],
+        }}>
+        <Mascot eyeX={Math.round(pose.eyeX * 2) / 2} lid={Math.round(pose.lid * 100) / 100} />
       </View>
       <View style={{ opacity: pose.word, transform: [{ translateY: (1 - pose.word) * 14 }] }}>
         <Text serif center style={styles.word}>
@@ -375,27 +266,8 @@ const styles = themed(() =>
       justifyContent: 'center',
       backgroundColor: colors.bg,
     },
-    mark: { width: MARK, height: MARK },
-    crown: {
-      position: 'absolute',
-      width: 18,
-      height: 9,
-      borderRadius: 3,
-      left: CX - 9,
-      top: CY - 55 - 4.5,
-    },
-    segment: { position: 'absolute', width: STROKE, height: STROKE, borderRadius: STROKE / 2 },
-    handDot: { position: 'absolute', width: HAND, height: HAND, borderRadius: HAND / 2 },
-    dot: {
-      position: 'absolute',
-      width: 12,
-      height: 12,
-      borderRadius: 6,
-      left: CX - 6,
-      top: CY - 6,
-    },
     word: {
-      marginTop: 22,
+      marginTop: 18,
       fontSize: 44,
       lineHeight: 52,
       letterSpacing: -1.2,

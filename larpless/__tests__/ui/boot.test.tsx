@@ -1,6 +1,17 @@
 import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
-import { BOOT_EXIT_MS, BOOT_HANDS_AT, BOOT_INTRO_MS, BOOT_SEGMENTS, BOOT_CENTER, BOOT_HANDS, bootPose, BootScreen, handDiscs, mixHex, segmentReveal, spinAngle } from '../../src/ui/components/BootScreen';
+import {
+  BOOT_EXIT_MS,
+  BOOT_IDLE_EVERY,
+  BOOT_IDLE_FROM,
+  BOOT_INTRO_MS,
+  EYE_CENTERS,
+  GLANCE_DX,
+  bootPose,
+  BootScreen,
+  eyeHole,
+  mascotPath,
+} from '../../src/ui/components/BootScreen';
 
 function textOf(r: ReactTestRenderer): string {
   const out: string[] = [];
@@ -15,92 +26,46 @@ function textOf(r: ReactTestRenderer): string {
 }
 
 describe('boot pose', () => {
-  it('draws the study arc before the others, then rests on the full mark', () => {
-    const reveal = (pen: number) => BOOT_SEGMENTS.map((s) => segmentReveal(s, pen));
-    const early = bootPose(0, null, false);
-    expect(reveal(early.pen).every((t) => t === 0)).toBe(true);
-    expect(early.hands).toBe(0);
-    expect(early.word).toBe(0);
+  it('wakes with its eyes shut, looks at you, blinks, then rests in the icon pose', () => {
+    const first = bootPose(0, null, false);
+    expect(first.body).toBe(0);
+    expect(first.lid).toBe(1);
+    expect(first.eyeX).toBe(0);
+    expect(first.word).toBe(0);
 
-    const drawing = reveal(bootPose(320, null, false).pen);
-    expect(drawing[0]).toBe(1);
-    expect(drawing[0]).toBeGreaterThan(drawing[BOOT_SEGMENTS.length - 1]);
+    // Locked in: open and centred, before the blink.
+    const looking = bootPose(560, null, false);
+    expect(looking.lid).toBe(0);
+    expect(looking.eyeX).toBe(0);
+
+    // The blink shuts the eyes again for a moment.
+    const lids = Array.from({ length: 30 }, (_, i) => bootPose(600 + i * 10, null, false).lid);
+    expect(Math.max(...lids)).toBeGreaterThan(0.9);
 
     const settled = bootPose(BOOT_INTRO_MS, null, false);
-    expect(reveal(settled.pen).every((t) => t === 1)).toBe(true);
-    expect(settled.hands).toBe(1);
-    expect(settled.crown).toBe(1);
+    expect(settled.body).toBe(1);
+    expect(settled.lid).toBe(0);
+    expect(settled.eyeX).toBe(GLANCE_DX);
     expect(settled.word).toBe(1);
     expect(settled.cover).toBe(1);
     expect(settled.done).toBe(false);
   });
 
-  it('walks the ring clockwise: study, break, distracted, away', () => {
-    const colors = BOOT_SEGMENTS.map((t) => t.color);
-    const firstBreak = colors.indexOf('blue');
-    const firstDrift = colors.indexOf('yellow');
-    const firstAway = colors.indexOf('gray');
-    expect(colors.slice(0, firstBreak).every((c) => c === 'green')).toBe(true);
-    expect(firstBreak).toBeLessThan(firstDrift);
-    expect(firstDrift).toBeLessThan(firstAway);
+  it('ends on the app icon: eyes at x 606 and 770', () => {
+    expect(EYE_CENTERS.map((x) => x + GLANCE_DX)).toEqual([606, 770]);
   });
 
-  it('turns the hands smoothly from rest, the hour hand twelve times slower', () => {
-    expect(spinAngle(0)).toBe(0);
-    // Starts from rest: the first frame barely moves.
-    expect(spinAngle(16)).toBeLessThan(0.01);
-    // No step in angle or speed where the ramp ends.
-    const end = 600;
-    expect(spinAngle(end + 1) - spinAngle(end)).toBeCloseTo(spinAngle(end) - spinAngle(end - 1), 2);
-    for (let t = 0; t < 3000; t += 16) expect(spinAngle(t + 16)).toBeGreaterThan(spinAngle(t));
-
-    const p = bootPose(1500, null, false);
-    expect(p.minuteDeg).toBeGreaterThan(0);
-    expect(p.hourDeg).toBeCloseTo(spinAngle(1500 - BOOT_HANDS_AT) / 12);
-    const still = bootPose(1500, null, true);
-    expect(still.minuteDeg).toBe(0);
-    expect(still.hourDeg).toBe(0);
+  it('keeps blinking while the app is still loading', () => {
+    const lidAt = (t: number) => bootPose(t, null, false).lid;
+    expect(lidAt(BOOT_IDLE_FROM - 1)).toBe(0);
+    expect(lidAt(BOOT_IDLE_FROM + 85)).toBeGreaterThan(0.9);
+    expect(lidAt(BOOT_IDLE_FROM + 400)).toBe(0);
+    expect(lidAt(BOOT_IDLE_FROM + BOOT_IDLE_EVERY + 85)).toBeGreaterThan(0.9);
   });
 
-  it('fades the hand colour between hex tokens and never yields an invalid colour', () => {
-    expect(mixHex('#000000', '#FFFFFF', 0)).toBe('rgb(0, 0, 0)');
-    expect(mixHex('#000000', '#FFFFFF', 1)).toBe('rgb(255, 255, 255)');
-    expect(mixHex('#000', '#fff', 0.5)).toBe('rgb(128, 128, 128)');
-    expect(mixHex('#00000080', '#FFFFFFFF', 1)).toBe('rgb(255, 255, 255)');
-    expect(mixHex('rgba(0,0,0,1)', '#152033', 0.3)).toBe('#152033');
-  });
-
-  it('leaves a visible gap between neighbouring arcs', () => {
-    const disc = BOOT_HANDS.ringStroke;
-    for (let i = 0; i < BOOT_SEGMENTS.length; i++) {
-      for (let j = i + 1; j < BOOT_SEGMENTS.length; j++) {
-        const a = BOOT_SEGMENTS[i];
-        const b = BOOT_SEGMENTS[j];
-        if (a.color === b.color) continue;
-        expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeGreaterThan(disc + 1.5);
-      }
-    }
-  });
-
-  it('pivots both hands on the clock centre and keeps them inside the ring', () => {
-    for (let deg = 0; deg < 360; deg += 5) {
-      for (const len of [BOOT_HANDS.hour, BOOT_HANDS.minute]) {
-        const discs = handDiscs(deg, len);
-        expect(discs[0].x).toBeCloseTo(BOOT_CENTER.x);
-        expect(discs[0].y).toBeCloseTo(BOOT_CENTER.y);
-        for (const p of discs) {
-          const r = Math.hypot(p.x - BOOT_CENTER.x, p.y - BOOT_CENTER.y) + BOOT_HANDS.width / 2;
-          expect(r).toBeLessThan(BOOT_HANDS.ringInner);
-        }
-      }
-    }
-  });
-
-  it('keeps the hands turning through the exit', () => {
-    const a = bootPose(BOOT_INTRO_MS + 100, BOOT_INTRO_MS, false);
-    const b = bootPose(BOOT_INTRO_MS + 200, BOOT_INTRO_MS, false);
-    expect(b.minuteDeg).not.toBe(a.minuteDeg);
-    expect(b.hands).toBe(1);
+  it('shows the icon pose at once when motion is reduced', () => {
+    const p = bootPose(0, null, true);
+    expect(p).toMatchObject({ body: 1, eyeX: GLANCE_DX, lid: 0, word: 1, cover: 1 });
   });
 
   it('fades the cover out once the exit has started', () => {
@@ -110,6 +75,28 @@ describe('boot pose', () => {
     const gone = bootPose(BOOT_INTRO_MS + BOOT_EXIT_MS, BOOT_INTRO_MS, false);
     expect(gone.cover).toBe(0);
     expect(gone.done).toBe(true);
+  });
+});
+
+describe('mascot path', () => {
+  it('matches the icon eye hole exactly when open', () => {
+    expect(eyeHole(606, 450, 96, 200)).toBe(
+      'M606,350 H606 A48,48 0 0 0 558,398 V502 A48,48 0 0 0 606,550 H606 A48,48 0 0 0 654,502 V398 A48,48 0 0 0 606,350 Z',
+    );
+  });
+
+  it('moves both eyes with the glance and shifts the slab down', () => {
+    expect(mascotPath(GLANCE_DX, 0)).toContain('M606,350');
+    expect(mascotPath(GLANCE_DX, 0)).toContain('M770,350');
+    expect(mascotPath(0, 0, 42)).toContain('M300,212');
+    expect(mascotPath(0, 0, 42)).toContain('M430,392');
+  });
+
+  it('shuts the eyes to a thin dash that still sits inside the slab lip', () => {
+    const shut = mascotPath(0, 1);
+    // 28 units tall around y 450: under the 42-unit lip the dash shows the slab colour only.
+    expect(shut).toContain('M430,436');
+    expect(shut).toContain('V450');
   });
 });
 
