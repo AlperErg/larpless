@@ -29,6 +29,8 @@ export interface SessionStoreState {
   missingPermissions: PermissionKind[];
   privacy: { framesAnalysed: number; checksWithoutScreenshot: number; framesStored: 0 };
   pomodoro: PomodoroState | null;
+  /** Show the Pomodoro time left this session. Starts from Settings.pomodoroShowRemaining; the panel's eye button flips it. */
+  pomodoroCountdown: boolean;
   alert: { level: 0 | 1 | 2 | 3; distractedSinceMs: number | null };
   sound: { id: SoundId; volume: number };
   ollama: { status: OllamaStatus; model: string };
@@ -45,6 +47,8 @@ export interface SessionStoreActions {
   setVolume(v: number): void;
   togglePomodoro(): void;
   skipPomodoroPhase(): void;
+  /** Show or hide the Pomodoro time left for this session only (Settings holds the default). */
+  togglePomodoroCountdown(): void;
   refreshOllama(): Promise<void>;
 }
 export type SessionStore = SessionStoreState & SessionStoreActions;

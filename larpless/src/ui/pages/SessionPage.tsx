@@ -152,11 +152,15 @@ function LiveSession({ status }: { status: SessionStatus }) {
 
 function PomodoroChip({ p }: { p: PomodoroState }) {
   const now = useNow(1000);
+  const showRemaining = useSessionStore((s) => s.pomodoroCountdown);
   const left = remainingMs(p, now) / 1000; // frozen while paused
-  const label =
-    p.phase === 'focus'
-      ? `Round ${p.round} of ${p.roundsBeforeLong} · ${formatCountdown(left)} left`
-      : `${p.phase === 'longBreak' ? 'Long break' : 'Break'} · ${formatCountdown(left)}`;
+  const phaseText = p.phase === 'focus' ? `Round ${p.round} of ${p.roundsBeforeLong}` : p.phase === 'longBreak' ? 'Long break' : 'Break';
+  // Countdown hidden (Settings default, or the panel's eye button): phase and round only, the Pomodoro runs as usual.
+  const label = !showRemaining
+    ? phaseText
+    : p.phase === 'focus'
+      ? `${phaseText} · ${formatCountdown(left)} left`
+      : `${phaseText} · ${formatCountdown(left)}`;
   return (
     <Tag
       testID="pomodoro-chip"

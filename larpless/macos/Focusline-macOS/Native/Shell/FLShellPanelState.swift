@@ -7,6 +7,7 @@ struct FLShellPanelPomodoro: Equatable {
   var rounds: Int = 4
   var phaseEndsAtMs: Double = 0
   var pausedRemainingMs: Double? = nil  // set while paused: the countdown is frozen at this value
+  var showRemaining: Bool = true        // false: phase and round only, no time left or ring
 
   /// Phase time left at `nowMs`.
   func remainingMs(at nowMs: Double) -> Double {
@@ -48,6 +49,7 @@ struct FLShellPanelState: Equatable {
         if let v = num(p["rounds"]) { pom.rounds = max(1, min(12, Int(v))) }
         if let v = num(p["phaseEndsAtMs"]) { pom.phaseEndsAtMs = v }
         if p["pausedRemainingMs"] != nil { pom.pausedRemainingMs = num(p["pausedRemainingMs"]).map { max(0, $0) } }
+        if let v = p["showRemaining"] as? NSNumber { pom.showRemaining = v.boolValue }
         s.pomodoro = pom
       } else {
         s.pomodoro = nil
@@ -75,8 +77,9 @@ struct FLShellPanelState: Equatable {
     return timerBaseS + max(0, date.timeIntervalSince1970 * 1000 - since) / 1000
   }
 
+  /// Time left in the phase, or nil without a Pomodoro or with the countdown hidden (the pill and footer then omit it).
   func pomodoroRemainingS(at date: Date) -> Double? {
-    guard let p = pomodoro else { return nil }
+    guard let p = pomodoro, p.showRemaining else { return nil }
     return max(0, p.remainingMs(at: date.timeIntervalSince1970 * 1000)) / 1000
   }
 

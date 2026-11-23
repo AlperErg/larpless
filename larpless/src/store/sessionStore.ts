@@ -24,6 +24,7 @@ export const initialSessionState: SessionStoreState = {
   missingPermissions: [],
   privacy: { framesAnalysed: 0, checksWithoutScreenshot: 0, framesStored: 0 },
   pomodoro: null,
+  pomodoroCountdown: DEFAULT_SETTINGS.pomodoroShowRemaining,
   alert: { level: 0, distractedSinceMs: null },
   sound: { id: DEFAULT_SETTINGS.defaultSound, volume: DEFAULT_SETTINGS.volume },
   ollama: { status: 'unknown', model: DEFAULT_SETTINGS.model },
@@ -101,6 +102,7 @@ export const useSessionStore = create<SessionStore>()(() => ({
   setVolume: (v) => getSessionController().setVolume(v),
   togglePomodoro: () => getSessionController().togglePomodoro(),
   skipPomodoroPhase: () => getSessionController().skipPomodoroPhase(),
+  togglePomodoroCountdown: () => getSessionController().togglePomodoroCountdown(),
   refreshOllama: () => getSessionController().refreshOllama(),
 }));
 

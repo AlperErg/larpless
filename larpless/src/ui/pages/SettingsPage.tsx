@@ -303,6 +303,14 @@ export function SettingsPage() {
           onCustomChange={(c) => update({ pomodoroCustom: c })}
         />
       </Row>
+      <Row label="Pomodoro countdown" hint="Show the time left in each round by default. The eye button on the timer hides or shows it during a session.">
+        <Switch
+          testID="settings-pomodoro-countdown"
+          accessibilityLabel="Pomodoro countdown"
+          value={s.pomodoroShowRemaining}
+          onChange={(v) => update({ pomodoroShowRemaining: v })}
+        />
+      </Row>
       <Row label="Demo fast mode" hint="Alerts after 20 s. Check rate stays on the power profile you picked.">
         <Switch testID="settings-demoFast" accessibilityLabel="Demo fast mode" value={s.demoFast} onChange={(v) => update({ demoFast: v })} />
       </Row>

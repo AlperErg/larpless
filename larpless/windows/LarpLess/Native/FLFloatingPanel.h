@@ -104,6 +104,7 @@ struct Pomodoro {
   int round{1}, rounds{4};
   double phaseEndsAtMs{0};
   std::optional<double> pausedRemainingMs; // set while paused: the countdown is frozen at this value
+  bool showRemaining{true};                // false: phase and round only, no time left or ring
   // Phase time left at `nowMs`.
   double RemainingMs(double nowMs) const {
     return pausedRemainingMs ? *pausedRemainingMs : phaseEndsAtMs - nowMs;
@@ -272,6 +273,9 @@ class Window {
         if (auto it{obj->find("pausedRemainingMs")}; it != obj->end()) {
           if (it->second.IsNull()) p.pausedRemainingMs.reset();
           else if (Num(it->second, n)) p.pausedRemainingMs = (std::max)(0.0, n);
+        }
+        if (auto it{obj->find("showRemaining")}; it != obj->end() && it->second.TryGetBoolean()) {
+          p.showRemaining = *it->second.TryGetBoolean();
         }
         // Infer the phase start for the ring: a new phase/round starts now; an end-time shift keeps the length.
         const double now{NowMs()};
@@ -636,7 +640,7 @@ class Window {
     if (s.status == "away") return L"Away";
     if (s.status == "break") {
       std::wstring text{s.pomodoro && s.pomodoro->phase == "longBreak" ? L"Long break" : L"Break"};
-      if (s.pomodoro) text += L" \u00B7 " + Countdown(s.pomodoro->RemainingMs(NowMs()) / 1000.0) + L" left";
+      if (s.pomodoro && s.pomodoro->showRemaining) text += L" \u00B7 " + Countdown(s.pomodoro->RemainingMs(NowMs()) / 1000.0) + L" left";
       return text;
     }
     if (s.status == "paused") return L"Paused";
@@ -746,7 +750,7 @@ class Window {
     // Big serif timer + speaker icon + Pomodoro ring.
     Text(Clock(ElapsedS()), Format(true, DWRITE_FONT_WEIGHT_NORMAL, 44).Get(), {kPad, 6, kWidth - 70, 62}, Colors().text, a);
     float right{kWidth - kPad};
-    if (s.pomodoro) {
+    if (s.pomodoro && s.pomodoro->showRemaining) {
       const D2D1_POINT_2F c{right - 10, 34};
       m_rt->DrawEllipse(D2D1::Ellipse(c, 9, 9), Brush(tint.text, 0.18f * a).Get(), 2.5f);
       const double remaining{(std::clamp)(s.pomodoro->RemainingMs(NowMs()) / m_phaseLengthMs, 0.0, 1.0)};
@@ -785,7 +789,7 @@ class Window {
         else m_rt->FillEllipse(D2D1::Ellipse(c, 3.5f, 3.5f), Brush(Colors().muted, 0.25f * a).Get());
       }
       std::wstring footer{roundText};
-      if (focus) footer += L" \u00B7 " + Countdown(p.RemainingMs(NowMs()) / 1000.0) + L" left";
+      if (focus && p.showRemaining) footer += L" \u00B7 " + Countdown(p.RemainingMs(NowMs()) / 1000.0) + L" left";
       Text(footer, Format(false, DWRITE_FONT_WEIGHT_NORMAL, 11).Get(), {kPad, 140, kWidth - kPad, 158}, Colors().muted, a);
     }
   }
@@ -831,7 +835,14 @@ class Window {
     Button({x, 12, x + 26, 36}, L"\uE916", action("pomodoroToggle"), a, s.pomodoro.has_value(), tint, true);
     x += 28;
     Button({x, 12, x + 26, 36}, L"\uE893", action("pomodoroSkip"), a, false, std::nullopt, true);
-    x += 32;
+    x += 28;
+    // Show/hide the time left for this session (View / Hide glyphs); Settings holds the default. Only with a Pomodoro.
+    if (s.pomodoro) {
+      Button({x, 12, x + 26, 36}, s.pomodoro->showRemaining ? L"\uE890" : L"\uED1A", action("pomodoroCountdown"), a, false,
+             std::nullopt, true);
+      x += 28;
+    }
+    x += 4;
     for (char const *preset : {"25/5", "50/10"}) {
       Button({x, 12, x + 44, 36}, W(preset), [preset] {
         return JSValueObject{{"type", std::string{"pomodoroPreset"}}, {"preset", std::string{preset}}};

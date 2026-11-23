@@ -392,6 +392,14 @@ private struct FLShellHubView: View {
         FLShellIconButton(id: "pomodoroSkip", systemName: "forward.end.fill", active: false, tag: tag) {
           model.perform(["type": "pomodoroSkip"])
         }
+        // Show/hide the time left for this session (Settings → Pomodoro countdown is the default). Only with a Pomodoro.
+        if let p = state.pomodoro {
+          FLShellIconButton(id: "pomodoroCountdown",
+                            systemName: p.showRemaining ? "eye" : "eye.slash",
+                            active: false, tag: tag) {
+            model.perform(["type": "pomodoroCountdown"])
+          }
+        }
         FLShellChip(id: "preset:25/5", label: "25/5", tag: FLNotionColors.red, selected: false) {
           model.perform(["type": "pomodoroPreset", "preset": "25/5"])
         }

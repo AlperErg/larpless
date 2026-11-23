@@ -22,6 +22,7 @@ const INITIAL: SessionStoreState = {
   missingPermissions: [],
   privacy: { framesAnalysed: 0, checksWithoutScreenshot: 0, framesStored: 0 },
   pomodoro: null,
+  pomodoroCountdown: true,
   alert: { level: 0, distractedSinceMs: null },
   sound: { id: 'off', volume: 0.5 },
   ollama: { status: 'unknown', model: 'qwen3-vl:2b' },
@@ -153,8 +154,10 @@ describe('toPanelState', () => {
     expect(toPanelState({ ...base, current: cur('away') }, mods)).toMatchObject({ status: 'away', title: 'Away', tint: 'gray' });
     expect(toPanelState({ ...base, current: cur('unknown') }, mods)).toMatchObject({ status: 'studying', tint: 'gray' });
     expect(toPanelState({ ...base, current: cur('starting') }, mods)).toMatchObject({ status: 'studying', subtitle: 'Starting…' });
-    expect(toPanelState(running, mods).pomodoro).toEqual({ phase: 'focus', round: 1, rounds: 4, phaseEndsAtMs: running.pomodoro!.phaseEndsAtMs, pausedRemainingMs: null });
+    expect(toPanelState(running, mods).pomodoro).toEqual({ phase: 'focus', round: 1, rounds: 4, phaseEndsAtMs: running.pomodoro!.phaseEndsAtMs, pausedRemainingMs: null, showRemaining: true });
     expect(toPanelState(running, mods, 'backOnTrack').flash).toBe('backOnTrack');
+    // Countdown hidden (#70): same phase, round and end time, only the flag changes.
+    expect(toPanelState({ ...running, pomodoroCountdown: false }, mods).pomodoro).toMatchObject({ phase: 'focus', round: 1, showRemaining: false });
   });
 
   it('maps break / paused / idle', () => {
@@ -515,6 +518,31 @@ describe('sessionController', () => {
     h.sendPanel({ type: 'end' });
     await advance(0);
     expect(h.state.status).toBe('ended');
+  });
+
+  it('the panel eye button hides/shows the Pomodoro countdown for this session only (#70)', async () => {
+    // Settings default on: the session starts with the countdown shown.
+    const shown = setup();
+    await shown.ctrl.start({ pomodoro: '25/5' });
+    expect(shown.state.pomodoroCountdown).toBe(true);
+    expect(shown.panelUpdates.at(-1)?.pomodoro).toMatchObject({ showRemaining: true });
+    shown.sendPanel({ type: 'pomodoroCountdown' });
+    expect(shown.state.pomodoroCountdown).toBe(false);
+    expect(shown.panelUpdates.at(-1)?.pomodoro).toMatchObject({ phase: 'focus', round: 1, showRemaining: false });
+    shown.sendPanel({ type: 'pomodoroCountdown' });
+    expect(shown.panelUpdates.at(-1)?.pomodoro).toMatchObject({ showRemaining: true });
+    await shown.ctrl.end();
+
+    // Settings default off: starts hidden; flipping it doesn't touch the saved default.
+    const hidden = setup({ settings: { pomodoroShowRemaining: false } });
+    await hidden.ctrl.start({ pomodoro: '25/5' });
+    expect(hidden.panelUpdates.at(-1)?.pomodoro).toMatchObject({ showRemaining: false });
+    hidden.sendPanel({ type: 'pomodoroCountdown' });
+    expect(hidden.state.pomodoroCountdown).toBe(true);
+    await hidden.ctrl.end();
+    await hidden.ctrl.start({ pomodoro: '25/5' });
+    expect(hidden.state.pomodoroCountdown).toBe(false);
+    await hidden.ctrl.end();
   });
 
   it('relabelChunk marks the chunk user, persists it and recomputes the summary', async () => {
