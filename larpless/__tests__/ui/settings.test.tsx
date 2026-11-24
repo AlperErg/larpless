@@ -123,6 +123,7 @@ describe('Settings page', () => {
     await press(byTestID(r, 'settings-demoFast'));
     await press(byTestID(r, 'settings-webcam'));
     await press(byTestID(r, 'settings-sounds'));
+    await press(byTestID(r, 'settings-pomodoro-countdown'));
 
     const expected = {
       powerProfile: 'eco',
@@ -132,6 +133,7 @@ describe('Settings page', () => {
       demoFast: true,
       webcamEnabled: false,
       soundsEnabled: false,
+      pomodoroShowRemaining: false,
     };
     expect(settings()).toMatchObject(expected);
     expect(await stored()).toMatchObject(expected);

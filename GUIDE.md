@@ -69,6 +69,7 @@ While a session runs, a small timer floats above your other windows. Its colour 
 | Custom | 1–180 min | 1–60 min | none |
 
 - **Your default.** Set the default preset in **Settings → Focus → Pomodoro**. You can turn Pomodoro on or change the preset mid-session from the floating timer.
+- **Hiding the countdown.** If watching the time left distracts you, hover over the floating timer and press the **eye** button: the timer then shows only the round or break, without the time left or the ring. Press it again to bring the countdown back. This lasts for the current session; **Settings → Focus → Pomodoro countdown** (on by default) sets how new sessions start. Rounds and breaks still end on time, with the same chime and notification.
 - **During a break** LarpLess stops looking: no screen checks, no camera, and no alerts. Background sound drops to 30% and the session timer stops.
 - **Skipping.** **Skip break** jumps straight back to studying. A study round you skip doesn't count as a finished Pomodoro.
 - **Background sounds.** White, pink and brown noise, rain and café sounds play from the Session page's sound chip or the floating timer. Pick a default sound and volume in **Settings → Sound**.

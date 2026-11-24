@@ -126,6 +126,8 @@ export interface Settings {
   pomodoroDefault: PomodoroPreset | 'off';
   /** Study and break lengths for the 'custom' Pomodoro preset. */
   pomodoroCustom: PomodoroCustom;
+  /** Default for new sessions: show the Pomodoro phase's time left (text and ring). The panel can flip it per session. */
+  pomodoroShowRemaining: boolean;
   /** Ids of subjects (built-in or own courses) the classifier may not pick. New subjects start on. */
   disabledSubjects: string[];
   onboarded: boolean;

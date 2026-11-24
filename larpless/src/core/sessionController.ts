@@ -91,6 +91,7 @@ export interface SessionControllerDeps {
 export interface SessionController extends SessionStoreActions {
   handlePanelAction(a: PanelAction): void;
   setPomodoroPreset(preset: PomodoroPreset): void;
+  togglePomodoroCountdown(): void;
   /** Clear every timer and subscription (tests, hot reload). */
   dispose(): void;
   /**
@@ -105,7 +106,11 @@ export interface SessionController extends SessionStoreActions {
 /* ------------------------------------------------------------------ */
 
 export function toPanelState(
-  s: Pick<SessionStoreState, 'status' | 'timer' | 'current' | 'pomodoro' | 'sound' | 'alert'> & { pausedForSleep?: boolean },
+  s: Pick<SessionStoreState, 'status' | 'timer' | 'current' | 'pomodoro' | 'sound' | 'alert'> & {
+    pausedForSleep?: boolean;
+    /** False hides the phase countdown; the Pomodoro itself runs as usual. Missing means shown. */
+    pomodoroCountdown?: boolean;
+  },
   modules: readonly Pick<StudyModule, 'id' | 'name'>[],
   flash: PanelState['flash'] = null,
 ): PanelState {
@@ -116,6 +121,7 @@ export function toPanelState(
         rounds: s.pomodoro.roundsBeforeLong,
         phaseEndsAtMs: s.pomodoro.phaseEndsAtMs,
         pausedRemainingMs: s.status === 'paused' ? s.pomodoro.pausedRemainingMs ?? null : null,
+        showRemaining: s.pomodoroCountdown ?? true,
       }
     : null;
   const base = { timer: { ...s.timer }, pomodoro, sound: { ...s.sound }, pulse: false, flash };
@@ -656,6 +662,7 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
         missingPermissions: [],
         privacy: { framesAnalysed: 0, checksWithoutScreenshot: 0, framesStored: 0 },
         pomodoro: preset ? initPomodoro(preset, t, 0, settings.pomodoroCustom) : null,
+        pomodoroCountdown: settings.pomodoroShowRemaining,
         alert: { level: 0, distractedSinceMs: null },
         sound: { id: settings.defaultSound, volume: settings.volume },
         lastSummary: null,
@@ -860,6 +867,13 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
       pushPanel();
     },
 
+    togglePomodoroCountdown() {
+      if (!isActive()) return;
+      // This session only: Settings keeps the default for the next one.
+      set({ pomodoroCountdown: !get().pomodoroCountdown });
+      pushPanel();
+    },
+
     readerChanged() {
       if (!sessionId || demo || ending) return;
       const sid = sessionId;
@@ -891,6 +905,8 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
           return controller.skipPomodoroPhase();
         case 'pomodoroPreset':
           return controller.setPomodoroPreset(a.preset);
+        case 'pomodoroCountdown':
+          return controller.togglePomodoroCountdown();
         case 'sound':
           return controller.setSound(a.id);
         case 'volume':

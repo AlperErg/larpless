@@ -24,6 +24,7 @@ const INITIAL: SessionStoreState = {
   missingPermissions: [],
   privacy: { framesAnalysed: 0, checksWithoutScreenshot: 0, framesStored: 0 },
   pomodoro: null,
+  pomodoroCountdown: true,
   alert: { level: 0, distractedSinceMs: null },
   sound: { id: 'off', volume: 0.5 },
   ollama: { status: 'unknown', model: 'qwen3-vl:2b' },

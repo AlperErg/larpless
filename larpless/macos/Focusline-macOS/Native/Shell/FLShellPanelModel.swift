@@ -83,9 +83,9 @@ final class FLShellPanelModel: ObservableObject {
     }
   }
 
-  /// Fraction of the current Pomodoro phase still left (1 → 0), or nil without a Pomodoro.
+  /// Fraction of the current Pomodoro phase still left (1 → 0), or nil without a Pomodoro or with the countdown hidden.
   func pomodoroRemainingFraction(at date: Date) -> Double? {
-    guard let p = state.pomodoro, let start = phaseStartMs else { return nil }
+    guard let p = state.pomodoro, p.showRemaining, let start = phaseStartMs else { return nil }
     let total = p.phaseEndsAtMs - start
     guard total > 0 else { return 0 }
     return min(1, max(0, p.remainingMs(at: date.timeIntervalSince1970 * 1000) / total))
