@@ -2,6 +2,8 @@
 // - begin/endSessionActivity: a system-required power request + opting out of power throttling (EcoQoS), the
 //   Windows equivalents of macOS's "user-initiated activity" that stops App Nap and idle sleep.
 // - bringToFront: restore and focus the main window.
+// - Quit guard (#74): closing the main window during a session is held and sent to JS as 'quitRequested'
+//   (HoldClose, called from LarpLess.cpp); JS answers with holdQuit(), saves the session, then quit().
 // - Ctrl+K / Ctrl+Enter / Ctrl+. emit FLMenuCommand ('commandPalette' | 'startSession' | 'endSession'), like the
 //   macOS Session menu's ⌘K / ⌘↩ / ⌘. key equivalents.
 #pragma once
@@ -146,6 +148,7 @@ struct FLAppShell {
 
   REACT_METHOD(BeginSessionActivity, L"beginSessionActivity")
   void BeginSessionActivity() noexcept {
+    s_sessionActive = true; // the quit guard holds closes from here (even if the power request fails)
     if (m_powerRequest) {
       return; // idempotent, like the macOS activity token
     }
@@ -162,6 +165,7 @@ struct FLAppShell {
 
   REACT_METHOD(EndSessionActivity, L"endSessionActivity")
   void EndSessionActivity() noexcept {
+    s_sessionActive = false;
     if (!m_powerRequest) {
       return;
     }
@@ -179,6 +183,36 @@ struct FLAppShell {
   REACT_METHOD(StopOllama, L"stopOllama")
   void StopOllama() noexcept {
     StopLocalOllama();
+  }
+
+  // Quit guard (#74): JS took the 'quitRequested' command and is saving the session.
+  REACT_METHOD(HoldQuit, L"holdQuit")
+  void HoldQuit() noexcept {
+    s_quitHeld = true;
+  }
+
+  // Close the main window past the guard (once the session is saved).
+  REACT_METHOD(Quit, L"quit")
+  void Quit() noexcept {
+    s_quitAllowed = true;
+    if (const HWND hwnd{MainWindow()}) PostMessageW(hwnd, WM_CLOSE, 0, 0);
+  }
+
+  // Called from the main window's Closing handler (UI thread). True: cancel this close, JS saves the
+  // session first. Only during a session and while JS listens. A request that JS never held within 3 s means JS is
+  // stuck, so the next close goes through rather than leave a window that can't be closed.
+  static bool HoldClose() noexcept {
+    if (!s_sessionActive || s_quitAllowed) return false;
+    std::lock_guard lock{s_mutex};
+    if (!s_current || s_current->m_listeners <= 0) return false;
+    const ULONGLONG now{GetTickCount64()};
+    if (s_quitPendingSince != 0 && !s_quitHeld && now - s_quitPendingSince > 3000) return false;
+    if (s_quitPendingSince == 0 || s_quitHeld) {
+      s_quitPendingSince = now;
+      s_quitHeld = false;
+    }
+    s_current->Emit("quitRequested");
+    return true;
   }
 
   // NativeEventEmitter bookkeeping: only emit while JS listens.
@@ -252,6 +286,10 @@ struct FLAppShell {
   static inline std::atomic<DWORD> s_hookThread{0};
   static inline std::atomic<long> s_hookCalls{0};
   static inline std::atomic<long> s_matches{0};
+  static inline std::atomic<bool> s_sessionActive{false};
+  static inline std::atomic<bool> s_quitAllowed{false};
+  static inline std::atomic<bool> s_quitHeld{false};
+  static inline std::atomic<ULONGLONG> s_quitPendingSince{0};
 };
 
 } // namespace LarpLess

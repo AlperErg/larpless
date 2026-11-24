@@ -4,6 +4,7 @@
 #import <React/RCTDevLoadingViewSetEnabled.h>
 #import <React/RCTHTTPRequestHandler.h>
 #import <ReactAppDependencyProvider/RCTAppDependencyProvider.h>
+#import <objc/message.h>
 
 /// PRIVACY: nothing the app sends or receives over HTTP is kept on disk. React Native's fetch/XHR (Ollama, Supabase)
 /// would otherwise run on the default NSURLSession, whose NSURLCache stores responses together with their requests in
@@ -89,6 +90,18 @@ static void FLInstallPrivateNetworking(void)
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender
 {
   return NO;
+}
+
+// Quit guard (#74): during a session ⌘Q / Dock → Quit saves the session first (FLAppShell.holdTerminate in Swift, looked up
+// at runtime so this file needs no Swift header). JS then calls FLAppShell.quit(), which terminates past it.
+- (NSApplicationTerminateReply)applicationShouldTerminate:(NSApplication *)sender
+{
+  Class shell = NSClassFromString(@"FLAppShell");
+  SEL hold = NSSelectorFromString(@"holdTerminate");
+  if (shell && [shell respondsToSelector:hold] && ((BOOL (*)(id, SEL))objc_msgSend)(shell, hold)) {
+    return NSTerminateCancel;
+  }
+  return NSTerminateNow;
 }
 
 // Clicking the Dock icon brings the main window back.
