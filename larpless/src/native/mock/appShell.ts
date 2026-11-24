@@ -19,6 +19,12 @@ export const mockAppShell: AppShellApi & { setHardware(h: HardwareInfo): void } 
   stopOllama: () => {
     console.log('[mock appShell] stopOllama');
   },
+  holdQuit: () => {
+    console.log('[mock appShell] holdQuit');
+  },
+  quit: () => {
+    console.log('[mock appShell] quit');
+  },
   onMenuCommand: () => () => {},
   onSystemSleep: () => () => {},
 };

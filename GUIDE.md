@@ -46,6 +46,7 @@ The first time you open LarpLess, onboarding walks you through four short steps.
 Some other things to know about sessions:
 
 - **Sleep pauses the session.** If your computer sleeps, or LarpLess misses its checks for over 30 seconds, the session pauses from that moment so the time doesn't count. Press **Resume** when you're back.
+- **Closing LarpLess saves the session.** If you close LarpLess while a session runs (on Windows, closing its window; on a Mac, **⌘Q**), the session ends just as with **End session** and is saved to History before the app closes. If you didn't want it, delete it from History. (Closing the main window on a Mac only hides it; the session keeps running.)
 - **Try it without studying.** **⌥-click Start session** on Home, or **⌘K → Start demo session**, replays a recorded session through the real timer, alerts and summary. It never looks at your screen or camera.
 
 ## The floating timer

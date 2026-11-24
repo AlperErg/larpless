@@ -69,7 +69,7 @@ function setup(
     },
     notifications: { requestPermission: jest.fn(async () => 'granted' as const), post: jest.fn(async () => {}) },
     sound: { play: jest.fn(async () => {}), setVolume: jest.fn(), duck: jest.fn(), chime: jest.fn() },
-    appShell: { hardware: mockApis.appShell.hardware, beginSessionActivity: jest.fn(), endSessionActivity: jest.fn(), bringToFront: jest.fn(), stopOllama: jest.fn(), onMenuCommand: () => () => {}, onSystemSleep: () => () => {} },
+    appShell: { hardware: mockApis.appShell.hardware, beginSessionActivity: jest.fn(), endSessionActivity: jest.fn(), bringToFront: jest.fn(), stopOllama: jest.fn(), holdQuit: jest.fn(), quit: jest.fn(), onMenuCommand: () => () => {}, onSystemSleep: () => () => {} },
     ollamaHost: { ...mockApis.ollamaHost, quit: jest.fn(async () => {}) },
     ...opts.native,
   };

@@ -111,7 +111,10 @@ export interface NowPlayingApi {
 /* ---------- FLAppShell (WS-B) ---------- */
 /** 'acknowledgements' is macOS only: LarpLess → Acknowledgements, under About LarpLess. */
 /** 'guide', 'feedback', 'privacyPolicy' and 'termsOfUse' come from the Help menu (macOS only). */
-export type MenuCommand = 'commandPalette' | 'startSession' | 'endSession' | 'acknowledgements' | 'guide' | 'feedback' | 'privacyPolicy' | 'termsOfUse';
+export type MenuCommand =
+  | 'commandPalette' | 'startSession' | 'endSession' | 'acknowledgements' | 'guide' | 'feedback' | 'privacyPolicy' | 'termsOfUse'
+  /** The user closed/quit LarpLess during a session (see AppShellApi.holdQuit). */
+  | 'quitRequested';
 /**
  * What onboarding needs to recommend a screen reader (core/hardware.ts). Read locally when asked; never stored,
  * logged or sent anywhere.
@@ -134,6 +137,16 @@ export interface AppShellApi {
   endSessionActivity(): void;
   bringToFront(): void;
   stopOllama(): void;             // quit the Ollama LarpLess opened (never the user's own); the loaded model goes with it
+  /**
+   * Quit guard (#74). While a session runs (between begin/endSessionActivity), closing the main window (Windows)
+   * or ⌘Q (macOS) is cancelled and sent to JS as the menu command 'quitRequested'. JS calls holdQuit() at once
+   * to say it took it, ends the session as End session does (summary saved), then calls quit().
+   * A second request while the first was never held for 3 s quits anyway, so a stuck JS can't keep the app open.
+   * Logout/shutdown are never held.
+   */
+  holdQuit(): void;
+  /** Quit now, past the guard (after the session is saved). */
+  quit(): void;
   onMenuCommand(cb: (c: MenuCommand) => void): Unsubscribe;   // event 'FLMenuCommand'
   /** The system is about to sleep (macOS willSleep). The session pauses at that moment. */
   onSystemSleep(cb: (e: { at: number }) => void): Unsubscribe;   // event 'FLSystemSleep'

@@ -148,7 +148,13 @@ _Use_decl_annotations_ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE, PSTR 
   // Closing the window quits the process. JS may already be gone, so quit Ollama here too, including the
   // llama-server runner that holds the model: Windows doesn't end child processes with their parent.
   // Skip the full quit if a launch/restart holds the lock rather than block the close on it.
-  appWindow.Closing([](auto&&, auto&&) {
+  // During a session the close is held first (#74): JS ends and saves the session, then closes again with
+  // FLAppShell.quit(). Logging off or shutting down doesn't come here.
+  appWindow.Closing([](auto&&, winrt::Microsoft::UI::Windowing::AppWindowClosingEventArgs const &args) {
+    if (LarpLess::FLAppShell::HoldClose()) {
+      args.Cancel(true);
+      return;
+    }
     try {
       std::unique_lock lock{LarpLess::OllamaHost::g_busy, std::try_to_lock};
       if (lock.owns_lock()) LarpLess::OllamaHost::QuitApp();
