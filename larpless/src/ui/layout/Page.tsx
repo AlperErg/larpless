@@ -60,12 +60,20 @@ export function PageScroll({
   );
 }
 
-/** Bottom gutter inside the scroll content. Ignored when deciding if the page needs to scroll. */
+/** Bottom gutter under the content, drawn only when the page scrolls. */
 const END_PAD = 96;
 
 /**
- * Scroll only when the real content is taller than the page. The end gutter must not
- * turn a page that already shows everything into a scrolling one.
+ * Scrolling page. A page whose content fits looks fitted - no end gutter, no scrollbar, no rubber
+ * band - but the scroll view itself is never switched off. Switching it off is what stranded the
+ * Subjects table (#51: courses were added to a page that started short, the new height never
+ * reached that decision, and the rows below the fold became unreachable). A height report that
+ * arrives late or not at all can now only cost a gutter, never the content.
+ *
+ * The height comes from two reports, and the larger wins:
+ * - the wrapper View's own layout: plain Yoga, re-fires whenever rows are added or removed;
+ * - the scroll view's content size, minus the gutter: the platform's own idea of the content,
+ *   which some platforms report late or clamped.
  */
 function FittedScroll({
   testID,
@@ -79,11 +87,14 @@ function FittedScroll({
   children?: ReactNode;
 }) {
   const [viewport, setViewport] = useState(0);
-  const [contentH, setContentH] = useState(0);
-  const scrollable = viewport === 0 || contentH === 0 || contentH - END_PAD > viewport + 1;
+  const [wrappedH, setWrappedH] = useState(0);
+  const [scrollH, setScrollH] = useState(0);
+  const contentH = Math.max(wrappedH, scrollH - END_PAD);
+  // Unknown sizes count as scrollable: assume the content may not fit rather than hide it.
+  const scrollable = viewport === 0 || contentH === 0 || contentH > viewport + 1;
   const ref = useRef<ScrollView>(null);
-  // Turning scrolling off keeps the current offset (up to END_PAD + 1 px once content shrinks or the window grows),
-  // and Windows then blocks every way to scroll back: return to the top.
+  // A page that fits again (rows removed, window grown) returns to the top: otherwise a shrunk
+  // scroll range can leave it parked at an offset with no way back on Windows.
   useEffect(() => {
     if (!scrollable) ref.current?.scrollTo({ y: 0, animated: false });
   }, [scrollable]);
@@ -93,7 +104,11 @@ function FittedScroll({
   };
   const onContentSizeChange = (_w: number, h: number) => {
     const next = Math.round(h);
-    setContentH((prev) => (prev === next ? prev : next));
+    setScrollH((prev) => (prev === next ? prev : next));
+  };
+  const onContentLayout = (e: LayoutChangeEvent) => {
+    const next = Math.round(e.nativeEvent.layout.height);
+    setWrappedH((prev) => (prev === next ? prev : next));
   };
   return (
     <ScrollView
@@ -101,7 +116,7 @@ function FittedScroll({
       testID={testID}
       style={style}
       contentContainerStyle={contentContainerStyle}
-      scrollEnabled={scrollable}
+      scrollEnabled
       showsVerticalScrollIndicator={scrollable}
       bounces={scrollable}
       // react-native-macos maps this to NSScrollView elasticity for every page; leave the Mac's rubber band alone.
@@ -110,7 +125,10 @@ function FittedScroll({
       keyboardShouldPersistTaps={PIN_PAGE_HEADER ? 'handled' : undefined}
       onLayout={onLayout}
       onContentSizeChange={onContentSizeChange}>
-      {children}
+      <View testID="page-scroll-content" collapsable={false} onLayout={onContentLayout}>
+        {children}
+      </View>
+      {scrollable ? <View testID="page-scroll-end" style={styles.endPad} /> : null}
     </ScrollView>
   );
 }
@@ -129,7 +147,8 @@ const styles = themed(() => StyleSheet.create({
   frame: { flex: 1, backgroundColor: colors.bg },
   clip: { flex: 1, overflow: 'hidden' },
   scroll: { flex: 1, backgroundColor: colors.bg },
-  content: { paddingBottom: END_PAD, ...(PIN_PAGE_HEADER ? null : { flexGrow: 1 }) },
+  content: { ...(PIN_PAGE_HEADER ? null : { flexGrow: 1 }) },
+  endPad: { height: END_PAD },
   column: {
     width: '100%',
     maxWidth: layout.contentMaxWidth,
