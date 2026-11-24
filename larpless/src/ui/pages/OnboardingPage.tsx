@@ -89,7 +89,6 @@ export function OnboardingPage() {
   return (
     <PageScroll
       testID="page-onboarding"
-      contentContainerStyle={styles.scrollContent}
       header={<PageHeader icon="hand" title="Welcome to LarpLess" subtitle={<Text muted>{`Strava for studying. Everything is analysed on this ${DEVICE}.`}</Text>} />}>
       <PageBody>
         <Progress steps={steps} current={current} />
@@ -736,7 +735,6 @@ const styles = themed(() => StyleSheet.create({
   choiceSelected: { borderColor: colors.accent, backgroundColor: colors.accentSoft },
   choiceDisabled: { opacity: 0.5 },
   choiceModel: { color: colors.muted, marginBottom: 2 },
-  scrollContent: { paddingBottom: 96 },
   progress: { flexDirection: 'row', marginBottom: space.xl },
   progressItem: { flex: 1, marginRight: space.sm },
   progressBar: { height: 3, borderRadius: 2, marginBottom: space.xs + 2 },
