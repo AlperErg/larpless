@@ -57,6 +57,8 @@ function renderAt(step: 'ollama' | 'model'): ReactTestRenderer {
   });
   act(() => byTestID(r!, 'onboarding-pc-vlm').props.onPress());
   act(() => byTestID(r!, 'onboarding-next').props.onPress()); // your Mac
+  act(() => byTestID(r!, 'onboarding-next').props.onPress()); // language
+  act(() => byTestID(r!, 'onboarding-next').props.onPress()); // subjects
   act(() => byTestID(r!, 'onboarding-next').props.onPress()); // modules
   act(() => byTestID(r!, 'onboarding-next').props.onPress()); // permissions
   if (step === 'model') act(() => byTestID(r!, 'onboarding-next').props.onPress()); // ollama
@@ -180,6 +182,8 @@ describe('onboarding: Your Mac', () => {
     act(() => byTestID(r!, 'onboarding-pc-classifier').props.onPress());
     act(() => byTestID(r!, 'onboarding-next').props.onPress());
     expect(useAppStore.getState().settings.classifierMode).toBe('classifier');
+    act(() => byTestID(r!, 'onboarding-next').props.onPress()); // language
+    act(() => byTestID(r!, 'onboarding-next').props.onPress()); // subjects
     act(() => byTestID(r!, 'onboarding-next').props.onPress()); // modules
     act(() => byTestID(r!, 'onboarding-next').props.onPress()); // permissions
     expect(has(r!, 'onboarding-classifier')).toBe(true);

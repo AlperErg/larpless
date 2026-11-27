@@ -20,12 +20,16 @@
  * Ollama reads the screen and this model is never run. Custom courses have no image prompt (the SigLIP text
  * tower isn't shipped), so they're chosen from the screen text only. Pure: no React Native, no stores.
  */
-import type { ScreenVerdict, StudyModule } from '../contracts/domain';
+import type { ScreenLanguage, ScreenVerdict, StudyModule } from '../contracts/domain';
 import type { ActiveWindow, ScreenModelApi, ScreenModelFile, ScreenModelInput, ScreenModelScores } from '../contracts/native';
+import { OCR_LANGUAGE } from './screenLanguage';
+import { TEXT_DISTRACTIONS_ES } from './subjectKeywords.es';
 
 /**
  * Pinned Hugging Face files (commit + SHA-256), downloaded once at onboarding into LocalFolder\Models (Windows) or
- * ~/Library/Application Support/<bundle id>/Models (macOS).
+ * ~/Library/Application Support/<bundle id>/Models (macOS). One text model serves every screen language, so
+ * switching language never needs another download: the multilingual MiniLM (bench 2026-11: Spanish screens 7/14 →
+ * 13/14; English dev 50/54, holdout 9/11 vs 10/11 with all-MiniLM-L6-v2; same speed, ~50 MB more RAM).
  */
 export const SCREEN_MODEL_FILES: ScreenModelFile[] = [
   {
@@ -36,17 +40,20 @@ export const SCREEN_MODEL_FILES: ScreenModelFile[] = [
     size: 371_807_752,
   },
   {
-    // all-MiniLM-L6-v2 (Apache-2.0).
-    name: 'minilm.onnx',
-    url: 'https://huggingface.co/Xenova/all-MiniLM-L6-v2/resolve/751bff37182d3f1213fa05d7196b954e230abad9/onnx/model.onnx',
-    sha256: '759c3cd2b7fe7e93933ad23c4c9181b7396442a2ed746ec7c1d46192c469c46e',
-    size: 90_387_606,
+    // paraphrase-multilingual-MiniLM-L12-v2 (Apache-2.0), int8 ONNX export.
+    name: 'minilm-ml.onnx',
+    url: 'https://huggingface.co/Xenova/paraphrase-multilingual-MiniLM-L12-v2/resolve/2c4055b12046f11709e9df2c122e59ffbdc2f900/onnx/model_int8.onnx',
+    sha256: 'd6ea442ff6a891daefed7c83b2f596fc5dc66bf697e4d006236f64f34bbcf4c8',
+    size: 118_054_609,
   },
   {
-    name: 'minilm-vocab.txt',
-    url: 'https://huggingface.co/Xenova/all-MiniLM-L6-v2/resolve/751bff37182d3f1213fa05d7196b954e230abad9/vocab.txt',
-    sha256: '07eced375cec144d27c900241f3e339478dec958f92fddbc551f295c992038a3',
-    size: 231_508,
+    // Its SentencePiece Unigram vocabulary. The repo has no plain-text vocabulary, so native code downloads
+    // unigram.json (url, sha256 and size below are that file's) and converts it once into minilm-ml-vocab.txt,
+    // which has its own pinned SHA-256 and size natively (kVocabSha256 / kVocabBytes); status() checks that size.
+    name: 'minilm-ml-vocab.txt',
+    url: 'https://huggingface.co/Xenova/paraphrase-multilingual-MiniLM-L12-v2/resolve/2c4055b12046f11709e9df2c122e59ffbdc2f900/unigram.json',
+    sha256: '71b44701d7efd054205115acfa6ef126c5d2f84bd3affe0c59e48163674d19a6',
+    size: 14_763_234,
   },
 ];
 
@@ -82,15 +89,22 @@ export function isFinalAlone(v: ScreenVerdict): boolean {
   return v.studying || v.confidence >= EMBED_NOT_STUDY_CONFIDENCE;
 }
 
-/** What native code embeds and scores the screen text against. */
-export function screenModelTexts(modules: Pick<StudyModule, 'id' | 'name' | 'keywords'>[]): ScreenModelInput['texts'] {
+/**
+ * What native code embeds and scores the screen text against. `modules` come already localized
+ * (screenLanguage.ts localizeModules); with Spanish, the Spanish "not study" descriptions are added.
+ */
+export function screenModelTexts(
+  modules: Pick<StudyModule, 'id' | 'name' | 'keywords'>[],
+  language: ScreenLanguage = 'en',
+): ScreenModelInput['texts'] {
+  const distractions = language === 'es' ? [...TEXT_DISTRACTIONS, ...TEXT_DISTRACTIONS_ES] : TEXT_DISTRACTIONS;
   return [
     ...modules.map((m) => ({
       id: m.id,
       text: m.keywords.length ? `${m.name}: ${m.keywords.join(', ')}` : m.name,
       keywords: [...m.keywords, m.name],
     })),
-    ...TEXT_DISTRACTIONS.map((text, i) => ({ id: `distract:${i}`, text })),
+    ...distractions.map((text, i) => ({ id: `distract:${i}`, text })),
   ];
 }
 
@@ -185,7 +199,8 @@ export const UNLOAD_WAIT_MS = 3_000;
 export function createScreenModelStep(deps: {
   api: ScreenModelApi;
   now: () => number;
-  ocrLanguage?: () => string | undefined;
+  /** Settings → Screen language: the OCR language and the extra text distractions. Default English. */
+  language?: () => ScreenLanguage;
   log?: (line: string) => void;
 }): ScreenModelStep {
   let installed: boolean | null = null;
@@ -206,10 +221,11 @@ export function createScreenModelStep(deps: {
     },
     async classify(modules, { maxWidth }) {
       const started = deps.now();
+      const language = deps.language?.() ?? 'en';
       const scores = await deps.api.classify({
         maxWidth: Math.max(224, maxWidth),
-        ocrLanguage: deps.ocrLanguage?.(),
-        texts: screenModelTexts(modules),
+        ocrLanguage: OCR_LANGUAGE[language],
+        texts: screenModelTexts(modules, language),
       });
       const verdict = fuseScores(scores, modules);
       const tookMs = Math.max(0, deps.now() - started);

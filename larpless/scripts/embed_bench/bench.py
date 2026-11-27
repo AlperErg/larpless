@@ -1,6 +1,7 @@
 """Option 1 bench: zero-shot screen classification with image embeddings (SigLIP) + OCR text embeddings.
 
-Run from larpless/ (Windows, after the venv setup in requirements.txt):
+Run from larpless/ (Windows, after the venv setup in requirements.txt; on a Mac, scripts/embed_bench/.venv/bin/python
+with --ocr vision, the default there):
 
     node scripts/bench-classifier.ts --generate-only            # synthetic mock screens into bench/
     scripts\\embed_bench\\.venv\\Scripts\\python -I scripts\\embed_bench\\bench.py
@@ -13,6 +14,9 @@ Run from larpless/ (Windows, after the venv setup in requirements.txt):
     ...bench.py --subjects-n 3,5,8,15,46 --ablation             # few-module simulation + channel ablation (#28)
     ...bench.py --composite                                     # study screens with a Spotify/Discord/YouTube window on top
     ...bench.py --rollup                                        # optional subjects off: do their screens reach the core subject? (#35)
+    ...bench.py --lang es --dir es                              # Spanish screens: es-ES OCR, Spanish keywords, multilingual text model
+    ...bench.py --my-subjects                                   # only the subjects the study screens use are on (app roll-up rules)
+    ...bench.py --subjects my-subjects.json                     # the subjects someone ticked in onboarding (JSON list of names)
 
 Reads bench/<subject-slug>__<desc>.png|jpg; the file and sidecar format is in benchdata.py. Labels are the
 library subjects from src/core/subjectLibrary.ts plus "Not study".
@@ -29,15 +33,33 @@ import os
 import re
 import sys
 import time
+import unicodedata
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 
 p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
 p.add_argument("--image-model", default="google/siglip2-base-patch16-224")
-p.add_argument("--text-model", default="sentence-transformers/all-MiniLM-L6-v2")
-p.add_argument("--ocr", choices=["windows", "none"], default="windows" if sys.platform == "win32" else "none")
-p.add_argument("--ocr-lang", default="en-US")
+p.add_argument("--lang", choices=["en", "es"], default="en",
+               help="screen language, like Settings -> Screen language: sets the OCR language, adds the subjects' "
+                    "Spanish keywords (subjectKeywords.es.ts) and Spanish text distractions, and the default text model")
+p.add_argument("--text-model", default=None,
+               help="default: the app's model, paraphrase-multilingual-MiniLM-L12-v2 as its int8 ONNX export "
+                    "(APP_TEXT_ONNX); e.g. sentence-transformers/all-MiniLM-L6-v2 for the old English model")
+p.add_argument("--ocr", choices=["windows", "vision", "none"],
+               default="windows" if sys.platform == "win32" else "vision" if sys.platform == "darwin" else "none",
+               help="windows: Windows.Media.Ocr (the Windows app); vision: Apple Vision (the Mac app, ocr_vision.py)")
+p.add_argument("--no-language-correction", action="store_true",
+               help="with --ocr vision: usesLanguageCorrection off (the app has it on)")
+p.add_argument("--text-onnx", metavar="REPO@REV:FILE",
+               help="embed text with this ONNX export through ONNX Runtime, like FLScreenModel (input_ids, attention_mask, "
+                    "token_type_ids -> mean-pooled last_hidden_state), tokenised by --text-model's tokenizer. e.g. "
+                    "Xenova/paraphrase-multilingual-MiniLM-L12-v2@2c4055b12046f11709e9df2c122e59ffbdc2f900:onnx/model_int8.onnx")
+p.add_argument("--ocr-lang", default=None, help="default: en-US for --lang en, es-ES for --lang es")
+p.add_argument("--es-keywords-only", action="store_true",
+               help="with --lang es: Spanish keywords instead of English + Spanish (experiment; the app uses both)")
+p.add_argument("--ascii-keywords", action="store_true",
+               help="the old keyword matcher: only ASCII letters/digits are word characters and accents aren't folded")
 p.add_argument("--width", type=int, default=1024, help="capture width, as the app's power profile (768/1024/1280)")
 p.add_argument("--jpeg-quality", type=int, default=60)
 p.add_argument("--only", default="", help="only files whose name contains this")
@@ -54,8 +76,12 @@ p.add_argument("--drop-keywords", metavar="K1,K2",
 p.add_argument("--course-base", action="store_true",
                help="with --courses: experiment where each custom course borrows its closest library subject's image score")
 p.add_argument("--my-subjects", action="store_true",
-               help="experiment: only the library subjects the bench's study screenshots use can be chosen, as if the "
-                    "user had ticked the subjects they take")
+               help="as if the user had ticked, in onboarding, every library subject the bench's study screenshots use. "
+                    "Applied like the app (subjectLibrary.ts candidateSubjects + rollUpSubject): core subjects stay on, "
+                    "a subject that is off with a general subject stays a hidden candidate relabelled as it, the others "
+                    "can't be chosen; the study gate still uses every library image prompt")
+p.add_argument("--subjects", metavar="PATH",
+               help='like --my-subjects, with the ticked subjects from a JSON list of names, e.g. ["Calculus", "Law"]')
 p.add_argument("--codes-need-digits", action="store_true",
                help='course-code keywords (BIO, MATH, CS...) only match before a course number, e.g. "MATH 101"')
 p.add_argument("--keyword-report", action="store_true",
@@ -78,6 +104,15 @@ p.add_argument("--composite", nargs="?", const="spotify,discord-public,youtube-h
 p.add_argument("--composite-layouts", default="split,pip",
                help="split = a side window over the right 40%%; pip = a small window in the bottom-right corner")
 args = p.parse_args()
+# What the app ships for every screen language (src/core/screenModel.ts SCREEN_MODEL_FILES): the multilingual MiniLM,
+# int8 ONNX. With no --text-model, the bench runs exactly that; --text-model alone (no --text-onnx) uses PyTorch.
+APP_TEXT_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+APP_TEXT_ONNX = "Xenova/paraphrase-multilingual-MiniLM-L12-v2@2c4055b12046f11709e9df2c122e59ffbdc2f900:onnx/model_int8.onnx"
+OCR_LANGS = {"en": "en-US", "es": "es-ES"}
+if not args.text_model:
+    args.text_model = APP_TEXT_MODEL
+    args.text_onnx = args.text_onnx or APP_TEXT_ONNX
+args.ocr_lang = args.ocr_lang or OCR_LANGS[args.lang]
 sys.stdout.reconfigure(encoding="utf-8")  # Windows consoles default to cp1252; `-I` ignores PYTHONIOENCODING
 
 # Must be set before transformers / huggingface_hub are imported.
@@ -93,7 +128,7 @@ import torch  # noqa: E402
 
 sys.path.insert(0, str(HERE))  # `python -I` leaves the script's folder off sys.path
 from benchdata import (  # noqa: E402
-    GROUP_OF, LABELS, NOT_STUDY, SUBJECTS, capture_like, course_modules, coverage_curve, coverage_report, custom_courses,
+    GROUP_OF, LABELS, NOT_STUDY, SUBJECTS, capture_like, load_distractions, course_modules, coverage_curve, coverage_report, custom_courses,
     expectation, expected_label, group_report, hit, list_images, load_like_capture, misses_by_kind, pct, report, sidecar,
     verdict_curves, wilson,
 )
@@ -104,7 +139,10 @@ MIN_OCR_CHARS = 40
 MAX_TEXT_CHARS = 1000
 # Library subjects plus, with --courses, custom courses (no image prompt, as in the app). Set in main().
 MODULES: list[dict] = list(SUBJECTS)
-USED = None  # --my-subjects mask over SUBJECTS, set in main()
+# --my-subjects / --subjects, set in main(): library subjects that can't be chosen (off, no general subject), and
+# off subjects that stay hidden candidates, mapped to the general subject they are labelled as.
+OFF_DROP = None
+LANDING: dict[str, str] = {}
 
 TEXT_DISTRACTIONS = [
     "social media feed: likes, followers, comments, stories, reels, posts",
@@ -169,15 +207,41 @@ class ImageScorer:
 
 
 class TextScorer:
-    def __init__(self, model_id: str):
+    def __init__(self, model_id: str, onnx: str | None = None):
         from sentence_transformers import SentenceTransformer
 
         t = time.perf_counter()
         self.model = SentenceTransformer(model_id, device="cpu")
+        self.session = None
+        if onnx:
+            # The app's path: one sequence at a time, 4 threads, max 256 tokens, mean pooling, L2 norm.
+            import onnxruntime as ort
+            from huggingface_hub import hf_hub_download
+
+            repo_rev, file = onnx.split(":", 1)
+            repo, rev = repo_rev.split("@", 1)
+            path = hf_hub_download(repo, file, revision=rev)
+            so = ort.SessionOptions()
+            so.intra_op_num_threads = 4
+            self.session = ort.InferenceSession(path, so, providers=["CPUExecutionProvider"])
+            self.inputs = {i.name for i in self.session.get_inputs()}
+            self.onnx_mb = Path(path).stat().st_size / 1e6
         self.load_s = time.perf_counter() - t
 
     def embed(self, texts: list[str]) -> np.ndarray:
-        return self.model.encode(texts, normalize_embeddings=True, convert_to_numpy=True)
+        if self.session is None:
+            return self.model.encode(texts, normalize_embeddings=True, convert_to_numpy=True)
+        out = []
+        for text in texts:
+            enc = self.model.tokenizer(text, truncation=True, max_length=256, return_tensors="np")
+            feed = {"input_ids": enc["input_ids"].astype(np.int64),
+                    "attention_mask": np.ones_like(enc["input_ids"], dtype=np.int64)}
+            if "token_type_ids" in self.inputs:
+                feed["token_type_ids"] = np.zeros_like(enc["input_ids"], dtype=np.int64)
+            h = self.session.run(["last_hidden_state"], feed)[0][0]
+            v = h.mean(axis=0)
+            out.append(v / np.linalg.norm(v))
+        return np.stack(out)
 
 
 def is_course_code(kw: str) -> bool:
@@ -185,17 +249,30 @@ def is_course_code(kw: str) -> bool:
     return 2 <= len(kw) <= 5 and kw.isalpha() and kw.isupper()
 
 
+def fold(text: str) -> str:
+    """Lowercase without accents (NFD, combining marks dropped), as FLScreenModel matches keywords: OCR often
+    drops or mixes accents ("fotosintesis"), and "Cálculo" must still match "calculo"."""
+    if args.ascii_keywords:
+        return text.lower()
+    return "".join(c for c in unicodedata.normalize("NFD", text.lower()) if not unicodedata.combining(c))
+
+
+# Around a keyword: no Unicode letter or digit ([^\W_]), so "funci" + "ón" is one word. The old rule
+# (--ascii-keywords) counted only a-z/0-9 as word characters, which let a keyword match half of an accented word.
+BEFORE, AFTER = (r"(?<![a-z0-9])", r"(?![a-z0-9])") if args.ascii_keywords else (r"(?<![^\W_])", r"(?![^\W_])")
+
+
 def keyword_pattern(kw: str) -> str:
     """Whole word, case-insensitive. With --codes-need-digits a course code only counts before a course number
     ("MATH 101", "CS2010", "BIO-110"), so "bus", "law" or "fin" in ordinary text don't vote."""
     if args.codes_need_digits and is_course_code(kw):
-        return rf"(?<![a-z0-9]){re.escape(kw.lower())}[ -]?\d{{2,4}}(?![0-9])"
-    return rf"(?<![a-z0-9]){re.escape(kw.lower())}(?![a-z0-9])"
+        return rf"{BEFORE}{re.escape(fold(kw))}[ -]?\d{{2,4}}(?![0-9])"
+    return rf"{BEFORE}{re.escape(fold(kw))}{AFTER}"
 
 
 def keyword_matches(text: str) -> list[list[str]]:
     """Per subject, which of its keywords (or its name) appear as whole words, like FLScreenModel counts them."""
-    lower = text.lower()
+    lower = fold(text)
     return [[kw for kw in s["keywords"] + [s["name"]] if re.search(keyword_pattern(kw), lower)] for s in MODULES]
 
 
@@ -680,14 +757,40 @@ def main() -> None:
     courses = custom_courses(files, sides) if args.courses else []
     global MODULES
     MODULES = list(SUBJECTS) + course_modules(courses)
-    if args.my_subjects:
-        # "The subjects I take" = every library subject some study screenshot is labelled with.
-        global USED
-        # With --courses, a library subject whose screenshots all belong to custom courses is covered by them
-        # (Computer Architecture replaces Digital Logic), so the user wouldn't tick it.
-        taken = {expected_label(f) for f in files if not (courses and sides[f].get("course") in courses)} - {NOT_STUDY}
-        USED = np.array([s["name"] in taken for s in SUBJECTS])
-        print(f"  my subjects ({int(USED.sum())} of {len(SUBJECTS)}): {', '.join(s['name'] for s, u in zip(SUBJECTS, USED) if u)}")
+    if args.lang == "es":
+        # As the app's localizeModules (src/core/screenLanguage.ts): library subjects get their Spanish name and
+        # keywords first, then the English keywords minus the course codes (LAW, MUSIC...). The SigLIP prompts,
+        # built from SUBJECTS below, stay English.
+        extra = load_distractions()
+        codes = set(extra["courseCodes"])
+
+        def localize(m: dict) -> dict:
+            es = m.get("es")
+            if not es:
+                return m
+            base = [] if args.es_keywords_only else [k for k in m["keywords"] if k not in codes]
+            return {**m, "keywords": [es["name"], *es["keywords"], *base]}
+
+        MODULES = [localize(m) for m in MODULES[: len(SUBJECTS)]] + MODULES[len(SUBJECTS):]
+        global TEXT_DISTRACTIONS
+        TEXT_DISTRACTIONS = TEXT_DISTRACTIONS + extra["es"]
+    if args.my_subjects or args.subjects:
+        if args.subjects:
+            ticked = set(json.loads(Path(args.subjects).read_text(encoding="utf-8")))
+            unknown = ticked - {s["name"] for s in SUBJECTS}
+            if unknown:
+                sys.exit(f"--subjects: not library subjects: {', '.join(sorted(unknown))}")
+        else:
+            # "The subjects I take" = every library subject some study screenshot is labelled with. With --courses,
+            # a library subject whose screenshots all belong to custom courses is covered by them.
+            ticked = {expected_label(f) for f in files if not (courses and sides[f].get("course") in courses)} - {NOT_STUDY}
+        global OFF_DROP, LANDING
+        on = {s["name"] for s in SUBJECTS if s["name"] in ticked or s.get("core")}
+        off = [s for s in SUBJECTS if s["name"] not in on]
+        LANDING = {s["name"]: s["general"] for s in off if s.get("general")}
+        OFF_DROP = np.array([s["name"] not in on and not s.get("general") for s in SUBJECTS])
+        print(f"  subjects on ({len(on)} of {len(SUBJECTS)}, core included): {', '.join(sorted(on))}")
+        print(f"  hidden, relabelled: {len(LANDING)} · can't be chosen: {int(OFF_DROP.sum())}")
     if args.course_base:
         # A course's closest library subject is the prefix of its screenshots (what the user would pick).
         names = [s["name"] for s in SUBJECTS]
@@ -709,19 +812,23 @@ def main() -> None:
 
     print(f"embed bench · {len(files)} images{f' in bench/{args.dir}' if args.dir else ''}"
           f"{' (all synthetic)' if synthetic else ''} · image {args.image_model} · "
-          f"text {args.text_model} · OCR {args.ocr} · capture {args.width}px q{args.jpeg_quality} · {torch.get_num_threads()} threads")
+          f"text {args.text_model}{' (ONNX ' + args.text_onnx.rsplit(':', 1)[1] + ')' if args.text_onnx else ''} · lang {args.lang} · OCR {args.ocr} {args.ocr_lang} · capture {args.width}px q{args.jpeg_quality} · {torch.get_num_threads()} threads")
     if courses:
         print(f"  custom courses (text only): {', '.join(courses)}")
     if skipped:
         print(f"  skipped (unknown label prefix): {', '.join(skipped)}")
 
     img = ImageScorer(args.image_model)
-    txt = TextScorer(args.text_model)
+    txt = TextScorer(args.text_model, args.text_onnx)
     ocr = None
     if args.ocr == "windows":
         from ocr import WindowsOcr
 
         ocr = WindowsOcr(args.ocr_lang)
+    elif args.ocr == "vision":
+        from ocr_vision import VisionOcr
+
+        ocr = VisionOcr(args.ocr_lang, language_correction=not args.no_language_correction)
 
     # Prompt embeddings, once per run (no user data in them).
     prompts, idx = [], {"subjects": [], "study": [], "distract": []}
@@ -742,6 +849,9 @@ def main() -> None:
 
     def score(name: str, load, side: dict, expected: str, accept: set[str], timed: bool, quiet: bool = False):
         """Scores one capture (`load()` returns it, in memory) into a bench item, or None on error."""
+        # A hidden subject's win is labelled as its general subject (rollUpSubject): counting it as right wherever
+        # the general one is right is the same thing.
+        accept = accept | {hidden for hidden, general in LANDING.items() if general in accept}
         try:
             t0 = time.perf_counter()
             capture = load()
@@ -776,16 +886,17 @@ def main() -> None:
         img_scores = np.append(lib_subj, logits[idx["distract"]].max())
         img_margin = float(max(logits[idx["study"]].max(), lib_subj.max()) - logits[idx["distract"]].max())
         img_subj = np.append(lib_subj, [np.nan] * (len(MODULES) - len(SUBJECTS)))
-        if args.my_subjects:
-            # Experiment: the user marked which library subjects they take; the rest can't be chosen.
-            off = ~USED
+        if OFF_DROP is not None:
+            # Subjects that are off with no general subject can't be chosen (candidateSubjects). The gate keeps
+            # every library image prompt (fuseScores), so img_margin is unchanged; the text margin uses what's on.
+            off = OFF_DROP
             img_subj[: len(SUBJECTS)][off] = np.nan
             if has_text:
                 txt_subj = txt_subj.copy()
                 txt_subj[: len(SUBJECTS)][off] = -10.0
+                txt_margin = float(txt_subj.max() - txt_dist.max())
             kw = kw.copy()
             kw[: len(SUBJECTS)][off] = 0
-            img_margin = float(max(logits[idx["study"]].max(), lib_subj[USED].max()) - logits[idx["distract"]].max())
         if args.course_base:
             # Experiment: each custom course borrows its closest library subject's image score (not in the app).
             for j, m in enumerate(MODULES[len(SUBJECTS):], start=len(SUBJECTS)):

@@ -80,12 +80,13 @@ const EXTRAS = [
   },
   {
     group: 'Models',
-    name: 'all-MiniLM-L6-v2',
+    name: 'paraphrase-multilingual-MiniLM-L12-v2',
     license: 'Apache-2.0',
     notice:
-      'On-device screen classifier: text embeddings, by sentence-transformers; ONNX export by Xenova.\n' +
-      'Downloaded at onboarding (pinned commit, SHA-256 checked).\n' +
-      'Source: https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2',
+      'On-device screen classifier: multilingual text embeddings, by sentence-transformers; int8 ONNX export by Xenova.\n' +
+      'Downloaded at onboarding (pinned commit, SHA-256 checked), with its vocabulary (unigram.json), which is converted on the device.\n' +
+      'Source: https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2\n' +
+      'ONNX export: https://huggingface.co/Xenova/paraphrase-multilingual-MiniLM-L12-v2',
     file: 'licenses/Apache-2.0.txt',
   },
   {

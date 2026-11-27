@@ -2,3 +2,5 @@
 .venv/
 .models/
 __pycache__/
+# minilm-ml-vocab.txt: export_prompts.py writes it for unigram-check-windows.ps1; the app derives its own copy.
+minilm-ml-vocab.txt

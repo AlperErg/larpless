@@ -34,6 +34,7 @@ export const DEFAULT_SETTINGS: Settings = {
   strictness: 1,
   powerProfile: 'medium',
   classifierMode: 'vlm',
+  screenLanguage: 'en',
   demoFast: false,
   webcamEnabled: true,
   nowPlayingEnabled: true,

@@ -44,7 +44,7 @@ This is kept in the app's data folder: `~/Library/Application Support/com.larple
 - **Your sessions:** when each one started and ended, the time you studied, your focus score, the time per subject and the Pomodoros you finished.
 - **A timeline for each session**, with one entry every 10 to 30 seconds. Each entry records whether you were studying, distracted, away or unknown, the subject, the kind of distraction (such as "Social media") or the study tool (such as "Vivado"), the name of the app in front (such as "Safari"), and how the label was decided. It never records window titles, screenshots or images.
 - **Your courses** (names, colours and keywords) and your settings. If you use your own Friends server, its address and publishable key are saved with the settings.
-- **The on-device classifier's model files**, if you download them (about 460 MB).
+- **The on-device classifier's model files**, if you download them (about 505 MB). The same files work for every screen language.
 - **Your Friends sign-in token**, if you use Friends: in the macOS Keychain, or on Windows in a file encrypted for your Windows user account. Signing out, or deleting your account, removes it.
 
 LarpLess also writes technical messages to your computer's logs, such as how long a check took. They never contain anything from your screen or camera.

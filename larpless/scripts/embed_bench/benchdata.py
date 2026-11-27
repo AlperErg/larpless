@@ -24,7 +24,15 @@ NOT_STUDY = "Not study"
 
 def load_subjects() -> list[dict]:
     out = subprocess.run(
-        ["node", str(HERE / "export_subjects.mjs")], cwd=LARPLESS, capture_output=True, text=True, check=True
+        ["node", str(HERE / "export_subjects.mjs")], cwd=LARPLESS, capture_output=True, text=True, encoding="utf-8", check=True
+    )
+    return json.loads(out.stdout)
+
+
+def load_distractions() -> dict:
+    """{ es: [...] }: the Spanish text distractions from src/core/subjectKeywords.es.ts."""
+    out = subprocess.run(
+        ["node", str(HERE / "export_subjects.mjs"), "--distractions"], cwd=LARPLESS, capture_output=True, text=True, encoding="utf-8", check=True
     )
     return json.loads(out.stdout)
 

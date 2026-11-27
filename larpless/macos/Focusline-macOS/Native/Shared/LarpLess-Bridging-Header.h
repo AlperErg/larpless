@@ -5,3 +5,5 @@
 
 // FLScreenModel (ScreenModel/FLScreenModelEngine.swift): ONNX Runtime's Objective-C API.
 #import <onnxruntime-objc/onnxruntime.h>
+// FLScreenModel (ScreenModel/FLScreenModel.swift): unigram.json -> minilm-ml-vocab.txt, shared C++ with Windows.
+#import "../ScreenModel/FLScreenModelVocab.h"

@@ -62,7 +62,7 @@ describe('acknowledgements data (scripts/acknowledgements.mjs)', () => {
     expect(names('macos')).not.toContain('ONNX Runtime');
     expect(names('macos')).not.toContain('Hermes');
     expect(names('macos')).toEqual(
-      expect.arrayContaining(['Qwen3-VL 2B', 'SigLIP 2', 'all-MiniLM-L6-v2', 'onnxruntime-c', 'onnxruntime-objc']),
+      expect.arrayContaining(['Qwen3-VL 2B', 'SigLIP 2', 'paraphrase-multilingual-MiniLM-L12-v2', 'onnxruntime-c', 'onnxruntime-objc']),
     );
     expect(names('windows')).toEqual(
       expect.arrayContaining([
@@ -71,7 +71,7 @@ describe('acknowledgements data (scripts/acknowledgements.mjs)', () => {
         'Ultralytics YOLO11n',
         'Qwen3-VL 2B',
         'SigLIP 2',
-        'all-MiniLM-L6-v2',
+        'paraphrase-multilingual-MiniLM-L12-v2',
         'ONNX Runtime',
         'Hermes',
         'Folly',

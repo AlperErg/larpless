@@ -1,12 +1,15 @@
 // FLScreenModel (Windows only for now; the macOS app has no counterpart yet, so the classifier skips this step
 // there): on-device "decision" classifier. classify() captures the screen, reads its text with Windows.Media.Ocr,
-// embeds the image with SigLIP 2 (vision tower) and the title + text with all-MiniLM-L6-v2, both through ONNX
+// embeds the image with SigLIP 2 (vision tower) and the title + text with paraphrase-multilingual-MiniLM-L12-v2
+// (int8, tokenized by FLUnigram), both through ONNX
 // Runtime, and resolves with numbers only: a logit per fixed SigLIP prompt (Assets/Models/FLScreenModelPrompts.json,
 // built by scripts/embed_bench/export_prompts.py) and a cosine per caller-supplied text. src/core/screenModel.ts
 // turns those into a verdict.
 //
-// The model files (~460 MB) are downloaded once by download() from pinned Hugging Face URLs into
-// LocalFolder\Models and checked against their size and SHA-256.
+// The model files (~505 MB) are downloaded once by download() from pinned Hugging Face URLs into
+// LocalFolder\Models and checked against their size and SHA-256. The text model's vocabulary arrives as the
+// tokenizers library's unigram.json and is converted once into minilm-ml-vocab.txt (FLUnigramVocab), which has a
+// pinned SHA-256 of its own.
 //
 // PRIVACY: the frame, the OCR text and the embeddings stay in this process's memory and are dropped after each
 // call; nothing is written to disk or logged except sizes and timings. Only the window snapshot (the same
@@ -43,7 +46,8 @@
 
 #include "FLScreenCapture.h"
 #include "FLUtil.h"
-#include "FLWordPiece.h"
+#include "FLUnigram.h"
+#include "FLUnigramVocab.h"
 
 #pragma comment(lib, "bcrypt.lib")
 
@@ -60,10 +64,20 @@ struct FLScreenModelCore : std::enable_shared_from_this<FLScreenModelCore> {
   template <typename T>
   using ReactPromise = winrt::Microsoft::ReactNative::ReactPromise<T>;
 
-  // The only file names download() accepts and classify() loads.
+  // The only file names download() accepts and classify() loads. One text model for every screen language: the
+  // int8 paraphrase-multilingual-MiniLM-L12-v2, tokenized by FLUnigram.
   static constexpr wchar_t kVision[]{L"siglip2-vision.onnx"};
-  static constexpr wchar_t kText[]{L"minilm.onnx"};
-  static constexpr wchar_t kVocab[]{L"minilm-vocab.txt"};
+  static constexpr wchar_t kText[]{L"minilm-ml.onnx"};
+  // FLUnigram's vocabulary. JS lists it with the URL, size and SHA-256 of its source, unigram.json, which Fetch
+  // saves as kVocabSource and DeriveVocab converts into this file, checked against kVocabBytes / kVocabSha256
+  // (export_prompts.py ML_VOCAB_SHA256; scripts/embed_bench/unigram-vocab-check.sh checks the conversion).
+  static constexpr wchar_t kVocab[]{L"minilm-ml-vocab.txt"};
+  static constexpr wchar_t kVocabSource[]{L"unigram.json"};
+  static constexpr uint64_t kVocabBytes{7'763'089};
+  static constexpr char kVocabSha256[]{"62fce312d72594ad30235447483680a6d1bbce5d7e219bbe29a241539e449f92"};
+  // all-MiniLM-L6-v2's files from installs before the multilingual model (~90 MB); Status() deletes them once.
+  static constexpr wchar_t kLegacyText[]{L"minilm.onnx"};
+  static constexpr wchar_t kLegacyVocab[]{L"minilm-vocab.txt"};
 
   // Called by the module's destructor: stop emitting events, cancel a download, and make queued classify calls
   // bail out without loading or capturing.
@@ -81,13 +95,20 @@ struct FLScreenModelCore : std::enable_shared_from_this<FLScreenModelCore> {
     m_progress = progress;
   }
 
-  // files = [{ name, size }]. Resolves { supported, installed, missing: [name], loaded }.
+  // files = [{ name, size }] (JS lists the set for the chosen screen language). Resolves { supported, installed,
+  // missing: [name], loaded, ocrLanguages: [BCP-47 tag] } (ocrLanguages: the OCR language packs installed here, so
+  // Settings can say when the chosen screen language would fall back to another one).
   void Status(JSValueArray &&files, ReactPromise<JSValue> &&result) noexcept {
     std::thread([this, self = shared_from_this(), files = std::move(files), result = std::move(result)]() mutable noexcept {
       winrt::init_apartment(winrt::apartment_type::multi_threaded);
       JSValueArray missing;
       try {
         const auto dir{ModelDir()};
+        if (!m_legacyRemoved.exchange(true)) {
+          std::error_code ec;  // best-effort: a locked or missing file is simply left
+          std::filesystem::remove(dir / kLegacyText, ec);
+          std::filesystem::remove(dir / kLegacyVocab, ec);
+        }
         for (auto const &f : files) {
           auto const *obj{f.TryGetObject()};
           if (!obj) {
@@ -98,7 +119,8 @@ struct FLScreenModelCore : std::enable_shared_from_this<FLScreenModelCore> {
           std::error_code ec;
           const auto path{dir / winrt::to_hstring(name).c_str()};
           if (!std::filesystem::is_regular_file(path, ec) ||
-              static_cast<double>(std::filesystem::file_size(path, ec)) != size) {
+              static_cast<double>(std::filesystem::file_size(path, ec)) !=
+                  InstalledSize(winrt::to_hstring(name).c_str(), size)) {
             missing.push_back(JSValue{name});
           }
         }
@@ -106,9 +128,19 @@ struct FLScreenModelCore : std::enable_shared_from_this<FLScreenModelCore> {
         result.Reject(ReactError{"E_STATUS", "model folder unavailable", {}});
         return;
       }
+      JSValueArray ocrLanguages;
+      try {
+        for (auto const &lang : winrt::Windows::Media::Ocr::OcrEngine::AvailableRecognizerLanguages()) {
+          ocrLanguages.push_back(JSValue{winrt::to_string(lang.LanguageTag())});
+        }
+      } catch (...) {
+      }
       const bool installed{missing.empty()};
-      result.Resolve(JSValue{JSValueObject{
-          {"supported", true}, {"installed", installed}, {"missing", std::move(missing)}, {"loaded", m_loaded.load()}}});
+      result.Resolve(JSValue{JSValueObject{{"supported", true},
+                                           {"installed", installed},
+                                           {"missing", std::move(missing)},
+                                           {"loaded", m_loaded.load()},
+                                           {"ocrLanguages", std::move(ocrLanguages)}}});
     }).detach();
   }
 
@@ -123,7 +155,8 @@ struct FLScreenModelCore : std::enable_shared_from_this<FLScreenModelCore> {
       }
       FileSpec s{winrt::to_hstring(Text(*obj, "name")).c_str(), Text(*obj, "url"), Text(*obj, "sha256"),
                  static_cast<uint64_t>(Number(*obj, "size", 0))};
-      const bool knownName{s.name == kVision || s.name == kText || s.name == kVocab};
+      const bool knownName{s.name == kVision || s.name == kText ||
+                           (s.name == kVocab && EndsWith(s.url, "/unigram.json"))};
       if (!knownName || s.url.rfind("https://huggingface.co/", 0) != 0 || s.sha256.size() != 64 || s.size == 0) {
         result.Reject(ReactError{"E_INVALID_ARG", "unexpected model file spec", {}});
         return;
@@ -145,16 +178,27 @@ struct FLScreenModelCore : std::enable_shared_from_this<FLScreenModelCore> {
           auto const &s{specs[i]};
           std::error_code ec;
           const auto path{dir / s.name};
-          if (std::filesystem::is_regular_file(path, ec) && std::filesystem::file_size(path, ec) == s.size) {
+          if (std::filesystem::is_regular_file(path, ec) &&
+              static_cast<double>(std::filesystem::file_size(path, ec)) ==
+                  InstalledSize(s.name, static_cast<double>(s.size))) {
             continue;
           }
+          const bool derived{s.name == kVocab};
+          const auto fetched{derived ? dir / kVocabSource : path};
           try {
-            code = Fetch(s, path, i, specs.size(), message);
+            code = Fetch(s, fetched, i, specs.size(), message);
+            if (code.empty() && derived) {
+              code = DeriveVocab(fetched, path, message);
+            }
           } catch (...) {
             // A dropped connection throws out of Fetch: don't leave up to 372 MB of .part behind.
-            auto part{path};
-            part += L".part";
-            std::filesystem::remove(part, ec);
+            for (auto leftover : {fetched, path}) {
+              leftover += L".part";
+              std::filesystem::remove(leftover, ec);
+            }
+            if (derived) {
+              std::filesystem::remove(fetched, ec);
+            }
             throw;
           }
         }
@@ -196,7 +240,7 @@ struct FLScreenModelCore : std::enable_shared_from_this<FLScreenModelCore> {
               if (auto const *list{kws->second.TryGetArray()}) {
                 for (auto const &k : *list) {
                   if (auto const *kw{k.TryGetString()}; kw && !kw->empty()) {
-                    label.keywords.push_back(Lower(winrt::to_hstring(*kw).c_str()));
+                    label.keywords.push_back(Fold(winrt::to_hstring(*kw).c_str()));
                   }
                 }
               }
@@ -224,9 +268,12 @@ struct FLScreenModelCore : std::enable_shared_from_this<FLScreenModelCore> {
       std::string code, message;
       JSValueObject out;
       try {
+        if (language.empty()) {
+          language = L"en-US";
+        }
         code = EnsureLoaded(message);
         if (code.empty()) {
-          code = Run(maxWidth, language.empty() ? L"en-US" : language, texts, out);
+          code = Run(maxWidth, language, texts, out);
           if (code == "E_CAPTURE") {
             message = "screen capture failed";
           }
@@ -263,6 +310,7 @@ struct FLScreenModelCore : std::enable_shared_from_this<FLScreenModelCore> {
       std::lock_guard<std::mutex> lock{m_runMutex};
       m_vision = nullptr;
       m_text = nullptr;
+      m_unigram = Unigram{};  // ~250k pieces; reloaded with the model
       m_textCache.clear();
       m_ocr = nullptr;
       m_loaded = false;
@@ -298,7 +346,7 @@ struct FLScreenModelCore : std::enable_shared_from_this<FLScreenModelCore> {
   };
 
   std::atomic<int> m_listeners{0};
-  std::atomic<bool> m_downloading{false}, m_cancel{false}, m_loaded{false};
+  std::atomic<bool> m_downloading{false}, m_cancel{false}, m_loaded{false}, m_legacyRemoved{false};
   std::mutex m_runMutex;  // one classify / load / unload at a time
   std::atomic<uint64_t> m_generation{0};  // bumped by Unload / Detach
   std::mutex m_emitMutex;
@@ -307,7 +355,7 @@ struct FLScreenModelCore : std::enable_shared_from_this<FLScreenModelCore> {
   // Guarded by m_runMutex.
   std::unique_ptr<Ort::Env> m_env;
   std::unique_ptr<Ort::Session> m_vision, m_text;
-  WordPiece m_vocab;
+  Unigram m_unigram;
   std::vector<Prompt> m_prompts;
   float m_logitScale{1}, m_logitBias{0};
   std::unordered_map<std::wstring, std::vector<float>> m_textCache;  // embeddings of caller texts (module labels)
@@ -332,6 +380,15 @@ struct FLScreenModelCore : std::enable_shared_from_this<FLScreenModelCore> {
   static double Number(JSValueObject const &obj, char const *key, double fallback) {
     const auto it{obj.find(key)};
     return it == obj.end() || it->second.IsNull() ? fallback : it->second.AsDouble();
+  }
+
+  static bool EndsWith(std::string const &s, std::string_view suffix) {
+    return s.size() >= suffix.size() && s.compare(s.size() - suffix.size(), suffix.size(), suffix) == 0;
+  }
+
+  // The size a listed file has once installed: its download size, except the vocabulary, which is converted.
+  static double InstalledSize(std::wstring const &name, double listed) {
+    return name == kVocab ? static_cast<double>(kVocabBytes) : listed;
   }
 
   static double Ms(std::chrono::steady_clock::time_point since) {
@@ -448,6 +505,46 @@ struct FLScreenModelCore : std::enable_shared_from_this<FLScreenModelCore> {
     return {};
   }
 
+  // unigram.json (already size- and SHA-256-checked by Fetch) -> minilm-ml-vocab.txt, once per download. The JSON
+  // is deleted either way; a converted file that doesn't match the pin is never moved into place.
+  std::string DeriveVocab(std::filesystem::path const &source, std::filesystem::path const &path, std::string &message) {
+    std::error_code ec;
+    std::string json;
+    {
+      std::ifstream file{source, std::ios::binary};
+      json.assign(std::istreambuf_iterator<char>{file}, std::istreambuf_iterator<char>{});
+    }
+    std::filesystem::remove(source, ec);
+    std::string vocab;
+    const bool converted{UnigramVocabJson::Convert(json, vocab)};
+    json = std::string{};  // ~15 MB
+    Sha256 hash;
+    hash.Update(reinterpret_cast<uint8_t const *>(vocab.data()), static_cast<uint32_t>(vocab.size()));
+    if (!converted || vocab.size() != kVocabBytes || hash.Hex() != kVocabSha256) {
+      message = "the text model's vocabulary failed its conversion check";
+      return "E_CHECKSUM";
+    }
+    auto part{path};
+    part += L".part";
+    {
+      std::ofstream file{part, std::ios::binary | std::ios::trunc};
+      file.write(vocab.data(), static_cast<std::streamsize>(vocab.size()));
+      file.close();
+      if (!file) {
+        std::filesystem::remove(part, ec);
+        message = "cannot write the model file (is the disk full?)";
+        return "E_DOWNLOAD";
+      }
+    }
+    std::filesystem::rename(part, path, ec);
+    if (ec) {
+      std::filesystem::remove(part, ec);
+      message = "cannot move the model into place";
+      return "E_DOWNLOAD";
+    }
+    return {};
+  }
+
   static JSValueObject ProgressPayload(FileSpec const &s, size_t index, size_t count, uint64_t received) {
     return JSValueObject{{"name", winrt::to_string(s.name)},
                          {"receivedBytes", static_cast<double>(received)},
@@ -506,7 +603,7 @@ struct FLScreenModelCore : std::enable_shared_from_this<FLScreenModelCore> {
       }
     }
     const auto start{std::chrono::steady_clock::now()};
-    if (!LoadPrompts() || !m_vocab.Load((dir / kVocab).wstring())) {
+    if (!LoadPrompts() || !m_unigram.Load((dir / kVocab).wstring())) {
       message = "prompt table or vocabulary unreadable";
       return "E_MODEL";
     }
@@ -598,7 +695,7 @@ struct FLScreenModelCore : std::enable_shared_from_this<FLScreenModelCore> {
     JSValue text{nullptr}, keywords{nullptr};
     if (!input.empty() && !texts.empty()) {
       const auto embedding{EmbedText(input)};
-      std::wstring lower{Lower(input)};
+      std::wstring lower{Fold(input)};
       JSValueObject scores, hits;
       for (auto const &label : texts) {
         auto cached{m_textCache.find(label.text)};
@@ -741,9 +838,10 @@ struct FLScreenModelCore : std::enable_shared_from_this<FLScreenModelCore> {
     return Normalized(std::vector<float>(data, data + count));
   }
 
-  // Mean-pooled, L2-normalised last_hidden_state (sentence-transformers' default for all-MiniLM-L6-v2).
+  // Mean-pooled, L2-normalised last_hidden_state (sentence-transformers' pooling for this model). The ONNX export
+  // declares input_ids, attention_mask and token_type_ids (zeros; XLM-R ignores them).
   std::vector<float> EmbedText(std::wstring const &text) {
-    std::vector<int64_t> ids{m_vocab.Encode(text, 256)};
+    std::vector<int64_t> ids{m_unigram.Encode(text, 256)};
     std::vector<int64_t> mask(ids.size(), 1), types(ids.size(), 0);
     std::array<int64_t, 2> shape{1, static_cast<int64_t>(ids.size())};
     auto memory{Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeCPU)};
@@ -767,21 +865,83 @@ struct FLScreenModelCore : std::enable_shared_from_this<FLScreenModelCore> {
     return Normalized(std::move(pooled));
   }
 
-  static std::wstring Lower(std::wstring s) {
-    for (auto &c : s) {
-      c = static_cast<wchar_t>(towlower(c));
+  // Lowercase without accents, as bench.py's fold(): lowercase, NFD, drop code points with a non-zero canonical
+  // combining class (unicodedata.combining), so "Calculo" with or without the accent on the a (OCR often drops it) matches "calculo".
+  // PRIVACY: the input may be screen text; the intermediate buffers are wiped.
+  static std::wstring Fold(std::wstring const &s) {
+    std::wstring lower;
+    lower.reserve(s.size());
+    for (size_t i = 0; i < s.size(); ++i) {
+      UChar32 c{s[i]};
+      if (U16_IS_LEAD(s[i]) && i + 1 < s.size() && U16_IS_TRAIL(s[i + 1])) {
+        c = U16_GET_SUPPLEMENTARY(s[i], s[i + 1]);
+        ++i;
+      }
+      c = u_tolower(c);
+      if (c >= 0x10000) {
+        lower += static_cast<wchar_t>(U16_LEAD(c));
+        lower += static_cast<wchar_t>(U16_TRAIL(c));
+      } else {
+        lower += static_cast<wchar_t>(c);
+      }
     }
-    return s;
+    std::wstring nfd;
+    const int size{NormalizeString(NormalizationD, lower.c_str(), static_cast<int>(lower.size()), nullptr, 0)};
+    if (size > 0) {
+      nfd.resize(static_cast<size_t>(size));
+      const int written{NormalizeString(NormalizationD, lower.c_str(), static_cast<int>(lower.size()), nfd.data(), size)};
+      nfd.resize(written > 0 ? static_cast<size_t>(written) : 0);
+    }
+    if (nfd.empty() && !lower.empty()) {
+      nfd = lower;  // normalisation failed: match without folding accents
+    }
+    std::wstring out;
+    out.reserve(nfd.size());
+    for (size_t i = 0; i < nfd.size(); ++i) {
+      UChar32 c{nfd[i]};
+      const size_t start{i};
+      if (U16_IS_LEAD(nfd[i]) && i + 1 < nfd.size() && U16_IS_TRAIL(nfd[i + 1])) {
+        c = U16_GET_SUPPLEMENTARY(nfd[i], nfd[i + 1]);
+        ++i;
+      }
+      if (u_getCombiningClass(c) == 0) {
+        out.append(nfd, start, i - start + 1);
+      }
+    }
+    lower.assign(lower.size(), L'\0');
+    nfd.assign(nfd.size(), L'\0');
+    return out;
   }
 
-  // Whole-word match on lowercase text: the neighbours may not be ASCII letters or digits (bench.py's
-  // (?<![a-z0-9])keyword(?![a-z0-9])).
+  // bench.py's word characters ([^\W_]): Unicode letters and anything with a numeric value.
+  static bool IsWordChar(UChar32 c) {
+    return u_isalpha(c) || u_getIntPropertyValue(c, UCHAR_NUMERIC_TYPE) != U_NT_NONE;
+  }
+
+  // Whole-word match on folded text (both sides through Fold): the neighbours may not be word characters, so a
+  // keyword never matches part of an accented word ("funcion" in "funcionar"). bench.py:
+  // (?<![^\W_])keyword(?![^\W_]).
   static bool ContainsWord(std::wstring const &text, std::wstring const &word) {
-    auto isWordChar = [](wchar_t c) { return (c >= L'a' && c <= L'z') || (c >= L'0' && c <= L'9'); };
+    if (word.empty()) {
+      return false;
+    }
     for (size_t at{text.find(word)}; at != std::wstring::npos; at = text.find(word, at + 1)) {
-      const bool before{at == 0 || !isWordChar(text[at - 1])};
+      bool before{true}, after{true};
+      if (at > 0) {
+        UChar32 c{text[at - 1]};
+        if (U16_IS_TRAIL(text[at - 1]) && at > 1 && U16_IS_LEAD(text[at - 2])) {
+          c = U16_GET_SUPPLEMENTARY(text[at - 2], text[at - 1]);
+        }
+        before = !IsWordChar(c);
+      }
       const size_t end{at + word.size()};
-      const bool after{end >= text.size() || !isWordChar(text[end])};
+      if (end < text.size()) {
+        UChar32 c{text[end]};
+        if (U16_IS_LEAD(text[end]) && end + 1 < text.size() && U16_IS_TRAIL(text[end + 1])) {
+          c = U16_GET_SUPPLEMENTARY(text[end], text[end + 1]);
+        }
+        after = !IsWordChar(c);
+      }
       if (before && after) {
         return true;
       }

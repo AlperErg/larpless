@@ -30,10 +30,13 @@ final class FLScreenModelDownloader: NSObject, URLSessionDataDelegate {
   private var lastEmit = Date.distantPast
   private var failure: Failure?
 
-  init(spec: Spec, into dir: URL, isCancelled: @escaping () -> Bool, onProgress: @escaping (Int64) -> Void) {
+  /// `fileName` names the downloaded file when it differs from the installed one (the vocabulary arrives as
+  /// unigram.json and is converted afterwards).
+  init(spec: Spec, into dir: URL, as fileName: String? = nil, isCancelled: @escaping () -> Bool,
+       onProgress: @escaping (Int64) -> Void) {
     self.spec = spec
-    destination = dir.appendingPathComponent(spec.name)
-    part = dir.appendingPathComponent(spec.name + ".part")
+    destination = dir.appendingPathComponent(fileName ?? spec.name)
+    part = dir.appendingPathComponent((fileName ?? spec.name) + ".part")
     self.isCancelled = isCancelled
     self.onProgress = onProgress
   }

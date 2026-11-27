@@ -131,10 +131,11 @@
     <ClInclude Include="Native\FLScreenCapture.h" />
     <ClInclude Include="Native\FLScreenModel.h" />
     <ClInclude Include="Native\FLSound.h" />
+    <ClInclude Include="Native\FLUnigram.h" />
+    <ClInclude Include="Native\FLUnigramVocab.h" />
     <ClInclude Include="Native\FLUtil.h" />
     <ClInclude Include="Native\FLWebcam.h" />
     <ClInclude Include="Native\FLWindow.h" />
-    <ClInclude Include="Native\FLWordPiece.h" />
   </ItemGroup>
   <ItemGroup>
     <!-- Packaged next to the exe (Assets\) for the notification logo; copied from the macOS bundle resources. -->

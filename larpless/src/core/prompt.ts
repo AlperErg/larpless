@@ -4,8 +4,9 @@
  * Node runs this file directly (scripts/bench-classifier.ts, type stripping), so it may only use
  * `import type` imports and erasable TypeScript: no enums, namespaces or parameter properties.
  */
-import type { ScreenVerdict, StudyModule } from '../contracts/domain';
+import type { ScreenLanguage, ScreenVerdict, StudyModule } from '../contracts/domain';
 import { ACTIVITY_CATEGORIES } from '../contracts/domain';
+import { screenLanguageHint } from './screenLanguage';
 import { normalizeActivityCategory, siteLookHint } from './sites';
 
 export const NOT_STUDY = 'Not study';
@@ -92,6 +93,8 @@ export interface PromptInput {
   imageBase64: string;
   /** Append the empty-think assistant prefill (see NO_THINK_PREFILL). */
   prefillNoThink?: boolean;
+  /** Settings → Screen language; adds one line to the system prompt for Spanish. */
+  language?: ScreenLanguage;
 }
 
 /** Max keywords per subject sent to the model. */
@@ -102,9 +105,11 @@ export const PROMPT_KEYWORDS_PER_SUBJECT = 8;
  * processed tokens and only the screenshot and window line are new (bench: 5.3 s → 3.0 s per call
  * with the ~930-token library list). Keep anything that changes per call out of here.
  */
-export function buildSystem(modules: Pick<StudyModule, 'name' | 'keywords'>[]): string {
+export function buildSystem(modules: Pick<StudyModule, 'name' | 'keywords'>[], language?: ScreenLanguage): string {
+  const hint = screenLanguageHint(language);
   const lines = [
     SYSTEM,
+    ...(hint ? [hint] : []),
     '',
     'Modules:',
     ...modules.map((m) => {
@@ -131,9 +136,9 @@ export function buildTitleUserText(appName: string | null, windowTitle: string |
   ].join('\n');
 }
 
-export function buildMessages({ appName, windowTitle, modules, imageBase64, prefillNoThink }: PromptInput): ChatMessage[] {
+export function buildMessages({ appName, windowTitle, modules, imageBase64, prefillNoThink, language }: PromptInput): ChatMessage[] {
   const msgs: ChatMessage[] = [
-    { role: 'system', content: buildSystem(modules) },
+    { role: 'system', content: buildSystem(modules, language) },
     { role: 'user', content: buildUserText(appName, windowTitle), images: [imageBase64] },
   ];
   if (prefillNoThink) msgs.push({ role: 'assistant', content: NO_THINK_PREFILL });

@@ -6,6 +6,7 @@ import type { Settings, SoundId } from '../../contracts/domain';
 import type { OllamaHostInfo } from '../../contracts/native';
 import { hasHostedServer, supabaseKeyProblem } from '../../core/friendsServer';
 import { isLocalUrl } from '../../core/ollamaHost';
+import { ocrLanguageMissing, SCREEN_LANGUAGES } from '../../core/screenLanguage';
 import { useAppStore } from '../../store/appStore';
 import { useNavStore } from '../../store/navStore';
 import { useOllamaStore } from '../../store/ollamaStore';
@@ -46,6 +47,7 @@ export function SettingsPage() {
   const go = useNavStore((st) => st.go);
   // ScreenModelDownload (in the "Screen check" row) refreshes this on mount and after a download.
   const screenModelInstalled = useScreenModelStore((st) => st.status?.installed === true);
+  const ocrLanguages = useScreenModelStore((st) => st.status?.ocrLanguages);
   const [model, setModel] = useState(s.model);
   const [url, setUrl] = useState(s.ollamaUrl);
   const [urlRejected, setUrlRejected] = useState(false);
@@ -215,6 +217,21 @@ export function SettingsPage() {
         <View style={styles.screenModel}>
           <ScreenModelDownload testID="settings-screen-model" />
         </View>
+      </Row>
+      <Row
+        label="Screen language"
+        hint="The language most of your study material is in. LarpLess reads the screen's text in it and adds that language's subject keywords.">
+        <Segmented
+          testID="settings-screen-language"
+          options={SCREEN_LANGUAGES}
+          value={s.screenLanguage}
+          onChange={(v) => update({ screenLanguage: v })}
+        />
+        {s.classifierMode === 'classifier' && ocrLanguageMissing(ocrLanguages, s.screenLanguage) ? (
+          <Text testID="settings-ocr-language-missing" variant="small" color={tag.red.text} style={styles.ocrHint}>
+            {`This ${DEVICE} can't read ${SCREEN_LANGUAGES.find((l) => l.value === s.screenLanguage)?.label ?? ''} text yet. Add it in Windows Settings → Time & language → Language & region (with its optical character recognition feature), then restart LarpLess.`}
+          </Text>
+        ) : null}
       </Row>
       <Row label="Model" hint="Ollama vision model used to read the screen.">
         <TextField
@@ -546,4 +563,5 @@ const styles = themed(() => StyleSheet.create({
   gapLeft: { marginLeft: space.md },
   code: { alignSelf: 'stretch', maxWidth: 420, marginTop: space.xs },
   screenModel: { alignSelf: 'stretch', maxWidth: 420, marginTop: space.sm },
+  ocrHint: { maxWidth: 420, marginTop: space.sm },
 }));

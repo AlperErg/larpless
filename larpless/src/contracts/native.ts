@@ -205,11 +205,15 @@ export interface KeychainApi {
  * with MiniLM, via ONNX Runtime. Returns scores only; src/core/screenModel.ts turns them into a verdict.
  */
 export interface ScreenModelFile {
-  /** One of 'siglip2-vision.onnx', 'minilm.onnx', 'minilm-vocab.txt'. */
+  /**
+   * One of 'siglip2-vision.onnx', 'minilm-ml.onnx', 'minilm-ml-vocab.txt'. The vocabulary is downloaded as
+   * unigram.json and converted natively, so its url, sha256 and size are that download's.
+   */
   name: string;
   /** https://huggingface.co/… pinned to a commit. */
   url: string;
   sha256: string;
+  /** Download size; status() checks the converted vocabulary against its own pinned size. */
   size: number;
 }
 export interface ScreenModelStatus {
@@ -220,6 +224,11 @@ export interface ScreenModelStatus {
   missing: string[];
   /** Sessions are in memory (about 1 GB). */
   loaded: boolean;
+  /**
+   * BCP-47 tags of the OCR languages this computer can read (Windows: the installed OCR language packs; an
+   * uninstalled one silently falls back to another). Absent where every supported language works (Apple Vision).
+   */
+  ocrLanguages?: string[];
 }
 export interface ScreenModelProgress {
   name: string;

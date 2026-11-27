@@ -84,6 +84,8 @@ export type PowerProfile = 'eco' | 'medium' | 'high';
  * 'classifier': the on-device screen model alone; Ollama is never started or asked.
  */
 export type ClassifierMode = 'vlm' | 'classifier';
+/** The language most screens are in (Settings -> Screen language): sets the OCR language and adds that language's subject keywords. */
+export type ScreenLanguage = 'en' | 'es';
 export type PomodoroPreset = '25/5' | '50/10' | 'custom' | 'demo';
 /** The user's own Pomodoro lengths, in whole minutes (used by the 'custom' preset). */
 export interface PomodoroCustom {
@@ -116,6 +118,8 @@ export interface Settings {
   powerProfile: PowerProfile;
   /** Ollama's vision LLM or the on-device screen model. Ignored (always 'vlm') where the screen model is unsupported. */
   classifierMode: ClassifierMode;
+  /** The language most screens are in: OCR language, subject keywords and the text model's language. */
+  screenLanguage: ScreenLanguage;
   demoFast: boolean;                   // shorter alerts; check rate comes from powerProfile
   webcamEnabled: boolean;
   /** System now-playing strip on the floating panel. The track title is never stored. */
