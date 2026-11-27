@@ -205,11 +205,15 @@ export interface KeychainApi {
  * with MiniLM, via ONNX Runtime. Returns scores only; src/core/screenModel.ts turns them into a verdict.
  */
 export interface ScreenModelFile {
-  /** One of 'siglip2-vision.onnx', 'minilm.onnx', 'minilm-vocab.txt'. */
+  /**
+   * One of 'siglip2-vision.onnx', 'minilm-ml.onnx', 'minilm-ml-vocab.txt'. The vocabulary is downloaded as
+   * unigram.json and converted natively, so its url, sha256 and size are that download's.
+   */
   name: string;
   /** https://huggingface.co/… pinned to a commit. */
   url: string;
   sha256: string;
+  /** Download size; status() checks the converted vocabulary against its own pinned size. */
   size: number;
 }
 export interface ScreenModelStatus {

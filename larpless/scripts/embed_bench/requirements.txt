@@ -1,8 +1,10 @@
-# Embed bench (Windows, Python 3.12). From larpless/:
+# Embed bench (Windows, Python 3.12; macOS works too, with Apple Vision OCR). From larpless/:
 #   py -3.12 -m venv scripts\embed_bench\.venv      (or the full path to python.exe)
 #   scripts\embed_bench\.venv\Scripts\python -m pip install torch==2.14.1 --index-url https://download.pytorch.org/whl/cpu
 #   scripts\embed_bench\.venv\Scripts\python -m pip install -r scripts\embed_bench\requirements.txt
 # torch comes from the CPU-only index above (no CUDA, ~200 MB).
+# macOS: python3 -m venv scripts/embed_bench/.venv && scripts/embed_bench/.venv/bin/python -m pip install torch==2.14.1
+#   -r scripts/embed_bench/requirements.txt (the winrt packages are skipped; pyobjc gives bench.py --ocr vision).
 transformers==5.19.0
 sentence-transformers==6.1.0
 sentencepiece==0.2.2
@@ -13,10 +15,12 @@ scikit-learn==1.9.1
 psutil==7.2.2
 onnx==1.23.2
 onnxruntime==1.31.0
-winrt-runtime==3.2.1
-winrt-Windows.Foundation==3.2.1
-winrt-Windows.Foundation.Collections==3.2.1
-winrt-Windows.Globalization==3.2.1
-winrt-Windows.Graphics.Imaging==3.2.1
-winrt-Windows.Media.Ocr==3.2.1
-winrt-Windows.Storage.Streams==3.2.1
+winrt-runtime==3.2.1 ; sys_platform == "win32"
+winrt-Windows.Foundation==3.2.1 ; sys_platform == "win32"
+winrt-Windows.Foundation.Collections==3.2.1 ; sys_platform == "win32"
+winrt-Windows.Globalization==3.2.1 ; sys_platform == "win32"
+winrt-Windows.Graphics.Imaging==3.2.1 ; sys_platform == "win32"
+winrt-Windows.Media.Ocr==3.2.1 ; sys_platform == "win32"
+winrt-Windows.Storage.Streams==3.2.1 ; sys_platform == "win32"
+pyobjc-framework-Vision==12.1 ; sys_platform == "darwin"
+pyobjc-framework-Quartz==12.1 ; sys_platform == "darwin"

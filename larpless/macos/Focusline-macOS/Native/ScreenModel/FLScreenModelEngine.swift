@@ -1,8 +1,9 @@
 import Accelerate
 import Foundation
 
-/// The two ONNX Runtime sessions behind FLScreenModel: the SigLIP 2 base/16 vision tower and all-MiniLM-L6-v2,
-/// plus the fixed SigLIP prompt embeddings (`FLScreenModelPrompts.json`, built by
+/// The two ONNX Runtime sessions behind FLScreenModel: the SigLIP 2 base/16 vision tower and the int8
+/// paraphrase-multilingual-MiniLM-L12-v2 (one text model for every screen language, tokenized by
+/// FLScreenModelUnigram), plus the fixed SigLIP prompt embeddings (`FLScreenModelPrompts.json`, built by
 /// scripts/embed_bench/export_prompts.py). A line-for-line port of the Windows `FLScreenModel.h`, so the same
 /// pinned ONNX files give the same numbers on both platforms.
 ///
@@ -10,9 +11,13 @@ import Foundation
 /// PRIVACY: pixels and token ids live in local buffers that are zeroed after each call; nothing is logged.
 final class FLScreenModelEngine {
   static let visionFile = "siglip2-vision.onnx"
-  static let textFile = "minilm.onnx"
-  static let vocabFile = "minilm-vocab.txt"
+  static let textFile = "minilm-ml.onnx"
+  /// Converted from the downloaded unigram.json (`vocabSource`) by FLScreenModelCore.deriveVocab.
+  static let vocabFile = "minilm-ml-vocab.txt"
+  static let vocabSource = "unigram.json"
   static let files = [visionFile, textFile, vocabFile]
+  /// all-MiniLM-L6-v2's files from installs before the multilingual model (~90 MB); status() deletes them once.
+  static let legacyFiles = ["minilm.onnx", "minilm-vocab.txt"]
 
   private static let size = 224
 
@@ -30,7 +35,7 @@ final class FLScreenModelEngine {
 
   private let vision: ORTSession
   private let text: ORTSession
-  private let vocab: FLScreenModelWordPiece
+  private let vocab: FLScreenModelUnigram
   private let prompts: [Prompt]
   private let logitScale: Float
   private let logitBias: Float
@@ -55,10 +60,10 @@ final class FLScreenModelEngine {
     logitScale = scale.floatValue
     logitBias = bias.floatValue
     guard !prompts.isEmpty else { throw LoadError(errorDescription: "prompt table unreadable") }
-    guard let wp = FLScreenModelWordPiece(contentsOf: modelDir.appendingPathComponent(Self.vocabFile)) else {
+    guard let tokenizer = FLScreenModelUnigram(contentsOf: modelDir.appendingPathComponent(Self.vocabFile)) else {
       throw LoadError(errorDescription: "vocabulary unreadable")
     }
-    vocab = wp
+    vocab = tokenizer
 
     let env: ORTEnv
     if let e = Self.sharedEnv {
@@ -156,7 +161,8 @@ final class FLScreenModelEngine {
 
   // MARK: text
 
-  /// Mean-pooled, L2-normalised last_hidden_state (sentence-transformers' default for all-MiniLM-L6-v2).
+  /// Mean-pooled, L2-normalised last_hidden_state (sentence-transformers' pooling for this model). The ONNX export
+  /// declares input_ids, attention_mask and token_type_ids (zeros; XLM-R ignores them).
   func embedText(_ s: String) throws -> [Float] {
     var ids = vocab.encode(s, maxLength: 256)
     defer { for i in ids.indices { ids[i] = 0 } }

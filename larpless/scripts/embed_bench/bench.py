@@ -1,6 +1,7 @@
 """Option 1 bench: zero-shot screen classification with image embeddings (SigLIP) + OCR text embeddings.
 
-Run from larpless/ (Windows, after the venv setup in requirements.txt):
+Run from larpless/ (Windows, after the venv setup in requirements.txt; on a Mac, scripts/embed_bench/.venv/bin/python
+with --ocr vision, the default there):
 
     node scripts/bench-classifier.ts --generate-only            # synthetic mock screens into bench/
     scripts\\embed_bench\\.venv\\Scripts\\python -I scripts\\embed_bench\\bench.py
@@ -45,7 +46,11 @@ p.add_argument("--lang", choices=["en", "es"], default="en",
 p.add_argument("--text-model", default=None,
                help="default: the app's model, paraphrase-multilingual-MiniLM-L12-v2 as its int8 ONNX export "
                     "(APP_TEXT_ONNX); e.g. sentence-transformers/all-MiniLM-L6-v2 for the old English model")
-p.add_argument("--ocr", choices=["windows", "none"], default="windows" if sys.platform == "win32" else "none")
+p.add_argument("--ocr", choices=["windows", "vision", "none"],
+               default="windows" if sys.platform == "win32" else "vision" if sys.platform == "darwin" else "none",
+               help="windows: Windows.Media.Ocr (the Windows app); vision: Apple Vision (the Mac app, ocr_vision.py)")
+p.add_argument("--no-language-correction", action="store_true",
+               help="with --ocr vision: usesLanguageCorrection off (the app has it on)")
 p.add_argument("--text-onnx", metavar="REPO@REV:FILE",
                help="embed text with this ONNX export through ONNX Runtime, like FLScreenModel (input_ids, attention_mask, "
                     "token_type_ids -> mean-pooled last_hidden_state), tokenised by --text-model's tokenizer. e.g. "
@@ -820,6 +825,10 @@ def main() -> None:
         from ocr import WindowsOcr
 
         ocr = WindowsOcr(args.ocr_lang)
+    elif args.ocr == "vision":
+        from ocr_vision import VisionOcr
+
+        ocr = VisionOcr(args.ocr_lang, language_correction=not args.no_language_correction)
 
     # Prompt embeddings, once per run (no user data in them).
     prompts, idx = [], {"subjects": [], "study": [], "distract": []}

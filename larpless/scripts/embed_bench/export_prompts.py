@@ -13,17 +13,13 @@ so the mean embedding gives the mean logit), "study:<i>", "distract:<i>".
 Also checks the C++ preprocessing (box downsample) against the processor, and writes tokenizer test vectors
 (token ids for fixed sample strings, never user text) that the native tokenizers must reproduce.
 
---text-model picks the text model whose ONNX IO and tokenizer cases are checked:
-    minilm-ml  (default; the app's one text model for every language since 2026-11-27) the int8
-               paraphrase-multilingual-MiniLM-L12-v2, XLM-R SentencePiece Unigram: hash-checks the pinned
-               tokenizer.json and unigram.json (the vocabulary the app downloads), checks they hold the same
-               vocabulary, derives scripts/embed_bench/minilm-ml-vocab.txt ("piece<TAB>score" per line, id =
-               line number, gitignored: what FLUnigram.h loads once the app has converted unigram.json) and checks
-               its SHA-256, checks the C++ normalisation rule against the tokenizer's charsmap and writes
-               unigram_cases.json.
-    minilm     the old all-MiniLM-L6-v2 (BERT WordPiece) -> wordpiece_cases.json, still what the Mac's
-               FLScreenModelWordPiece.swift is checked against (wordpiece-check-mac.sh) until Part B ports
-               FLUnigram; Windows no longer uses it.
+--text-model minilm-ml (the only one; kept so documented commands still work) checks the app's one text model for
+every language, the int8 paraphrase-multilingual-MiniLM-L12-v2, XLM-R SentencePiece Unigram: hash-checks the
+pinned tokenizer.json and unigram.json (the vocabulary the app downloads), checks they hold the same vocabulary,
+derives scripts/embed_bench/minilm-ml-vocab.txt ("piece<TAB>score" per line, id = line number, gitignored: what
+FLUnigram.h and FLScreenModelUnigram.swift load once the app has converted unigram.json) and checks its SHA-256,
+checks the C++ normalisation rule against the tokenizer's charsmap and writes unigram_cases.json (checked by
+unigram-check-windows.ps1 and unigram-check-mac.sh). The all-MiniLM-L6-v2 / WordPiece path is gone (2026-11-27).
 --text-only skips the SigLIP steps (it doesn't rewrite FLScreenModelPrompts.json).
 """
 
@@ -53,7 +49,6 @@ from prompts import DISTRACTION_PROMPTS, IMAGE_TEMPLATES, STUDY_PROMPTS  # noqa:
 
 TORCH_MODEL = "google/siglip2-base-patch16-224"
 VISION = ("onnx-community/siglip2-base-patch16-224-ONNX", "ba1f3b0843f24bc5417d38e19c37b287d719b2f4", "onnx/vision_model.onnx")
-MINILM = ("Xenova/all-MiniLM-L6-v2", "751bff37182d3f1213fa05d7196b954e230abad9", "onnx/model.onnx")
 # paraphrase-multilingual-MiniLM-L12-v2 (Transformers.js v3 export). Both ONNX files declare input_ids,
 # attention_mask and token_type_ids (all int64 [batch, seq]; XLM-R ignores the last, feed zeros) and return
 # last_hidden_state [batch, seq, 384]; mean-pool + L2 like L6. tokenizer.json gives the same ids as the
@@ -152,7 +147,7 @@ def siglip() -> None:
         print(f"  {f.name}: cos(onnx[{key}], torch) = {onnx_emb @ ref:.5f}   cos(box-resize, processor) = {box_emb @ ref:.5f}")
 
 
-# Fixed sample strings for the tokenizer checks (never user text). The first four are the WordPiece cases.
+# Fixed sample strings for the tokenizer checks (never user text). The first four were the old WordPiece cases.
 SAMPLES = ["Calculus: derivative, integral, limit", "HIST110 essay – Causes of the French Revolution",
            "Café résumé naïve!! (ECON-214) e^x=2.5%", "unaffable tokenization x² 中文"]
 UNIGRAM_SAMPLES = SAMPLES + [
@@ -182,20 +177,6 @@ UNIGRAM_SAMPLES = SAMPLES + [
     "3) Calcula la recta tangente a y = arctan(x) en x = 1. Lecture 7 – Chain rule and implicit differentiation; "
     "homework due Friday 23:59 via Campus Virtual. Página 12 de 48 · 125 % · Español (España) · Guardado ✓ " * 3,
 ]
-
-
-def minilm_cases() -> None:
-    # 3. MiniLM ONNX IO + tokenizer test vectors (fixed sample strings only).
-    mpath = hf_hub_download(MINILM[0], MINILM[2], revision=MINILM[1])
-    vocab = hf_hub_download(MINILM[0], "vocab.txt", revision=MINILM[1])
-
-    print("minilm vocab.txt sha256", hashlib.sha256(Path(vocab).read_bytes()).hexdigest(), Path(vocab).stat().st_size)
-    msess = ort.InferenceSession(mpath, providers=["CPUExecutionProvider"])
-    print("minilm onnx inputs", [i.name for i in msess.get_inputs()], "outputs", [o.name for o in msess.get_outputs()])
-    tok = AutoTokenizer.from_pretrained("sentence-transformers/all-MiniLM-L6-v2")
-    cases = [{"text": s, "ids": tok(s, truncation=True, max_length=256)["input_ids"]} for s in SAMPLES]
-    (HERE / "wordpiece_cases.json").write_text(json.dumps(cases, ensure_ascii=True), encoding="ascii")
-    print(f"wrote wordpiece_cases.json ({len(cases)} cases)")
 
 
 # FLUnigram.h's normalisation, mirrored here to check it: SentencePiece's nmt_nfkc (the tokenizer's Precompiled
@@ -322,15 +303,12 @@ def unigram_cases() -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--text-model", choices=["minilm-ml", "minilm"], default="minilm-ml")
+    ap.add_argument("--text-model", choices=["minilm-ml"], default="minilm-ml")
     ap.add_argument("--text-only", action="store_true", help="skip the SigLIP prompt export and checks")
     args = ap.parse_args()
     if not args.text_only:
         siglip()
-    if args.text_model == "minilm":
-        minilm_cases()
-    else:
-        unigram_cases()
+    unigram_cases()
 
 
 if __name__ == "__main__":

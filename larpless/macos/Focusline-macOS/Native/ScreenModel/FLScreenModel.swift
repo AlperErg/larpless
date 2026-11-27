@@ -1,17 +1,21 @@
 import CoreGraphics
 import CoreText
+import CryptoKit
 import Foundation
 import QuartzCore
 import Vision
 
 /// FLScreenModel: the on-device "decision" classifier, the macOS counterpart of windows/LarpLess/Native/FLScreenModel.h
 /// (same methods, events, payloads and error codes). classify() captures the screen (FLScreenCapture.screenshot),
-/// reads its text with Vision OCR, embeds the image with SigLIP 2 (vision tower) and the title + text with
-/// all-MiniLM-L6-v2, both through ONNX Runtime (FLScreenModelEngine), and resolves with numbers only: a logit per
-/// fixed SigLIP prompt and a cosine per caller-supplied text. src/core/screenModel.ts turns those into a verdict.
+/// reads its text with Vision OCR in the chosen screen language, embeds the image with SigLIP 2 (vision tower) and
+/// the title + text with the int8 paraphrase-multilingual-MiniLM-L12-v2, both through ONNX Runtime
+/// (FLScreenModelEngine), and resolves with numbers only: a logit per fixed SigLIP prompt and a cosine per
+/// caller-supplied text. src/core/screenModel.ts turns those into a verdict.
 ///
-/// The model files (~460 MB) are downloaded once by download() from pinned Hugging Face URLs into
-/// ~/Library/Application Support/<bundle id>/Models and checked against their size and SHA-256.
+/// The model files (~505 MB) are downloaded once by download() from pinned Hugging Face URLs into
+/// ~/Library/Application Support/<bundle id>/Models and checked against their size and SHA-256. The text model's
+/// vocabulary arrives as unigram.json and is converted once into minilm-ml-vocab.txt (FLScreenModelVocab, the same
+/// C++ as Windows), which has a pinned size and SHA-256 of its own.
 ///
 /// PRIVACY: the frame, the OCR text and the embeddings stay in this process's memory and are dropped after each
 /// call; nothing is written to disk or logged except sizes and timings. Only the window snapshot (the same fields
@@ -96,10 +100,21 @@ final class FLScreenModelCore: @unchecked Sendable {
   private struct Label {
     let id: String
     let text: String
-    let keywords: [String]
+    /// Folded (see `fold`).
+    let keywords: [[Unicode.Scalar]]
   }
 
   private static let maxTextChars = 1000
+
+  /// minilm-ml-vocab.txt as converted from the pinned unigram.json: Windows' kVocabBytes / kVocabSha256
+  /// (export_prompts.py ML_VOCAB_SHA256; scripts/embed_bench/unigram-vocab-check.sh checks the conversion).
+  private static let vocabBytes: Int64 = 7_763_089
+  private static let vocabSha256 = "62fce312d72594ad30235447483680a6d1bbce5d7e219bbe29a241539e449f92"
+
+  /// The size a listed file has once installed: its download size, except the vocabulary, which is converted.
+  private static func installedSize(_ name: String, listed: Int64) -> Int64 {
+    name == FLScreenModelEngine.vocabFile ? vocabBytes : listed
+  }
 
   var onProgress: (([String: Any]) -> Void)? {
     get { lock.lock(); defer { lock.unlock() }; return _onProgress }
@@ -111,6 +126,7 @@ final class FLScreenModelCore: @unchecked Sendable {
   private var downloading = false
   private var cancelled = false
   private var loaded = false
+  private var legacyRemoved = false
   /// Bumped by unload / detach: classify calls queued before it give up.
   private var generation: UInt64 = 0
 
@@ -160,20 +176,26 @@ final class FLScreenModelCore: @unchecked Sendable {
         reject("E_STATUS", "model folder unavailable", nil)
         return
       }
+      if !locked({ () -> Bool in defer { legacyRemoved = true }; return legacyRemoved }) {
+        for name in FLScreenModelEngine.legacyFiles { // best-effort, once per launch
+          try? FileManager.default.removeItem(at: dir.appendingPathComponent(name))
+        }
+      }
       var missing: [String] = []
       for f in files {
         guard let obj = f as? [String: Any] else { continue }
         let name = obj["name"] as? String ?? ""
         let size = (obj["size"] as? NSNumber)?.int64Value ?? -1
-        if Self.fileSize(dir.appendingPathComponent(name)) != size { missing.append(name) }
+        if Self.fileSize(dir.appendingPathComponent(name)) != Self.installedSize(name, listed: size) { missing.append(name) }
       }
-      // A download cut off by quitting the app leaves its .part behind (up to 372 MB). Under the lock, so a
-      // download() starting now can't have its fresh .part removed.
+      // A download cut off by quitting the app leaves its .part (up to 372 MB) or an unconverted unigram.json
+      // behind. Under the lock, so a download() starting now can't have its fresh files removed.
       locked {
         guard !downloading else { return }
-        for name in FLScreenModelEngine.files {
+        for name in FLScreenModelEngine.files + [FLScreenModelEngine.vocabSource] {
           try? FileManager.default.removeItem(at: dir.appendingPathComponent(name + ".part"))
         }
+        try? FileManager.default.removeItem(at: dir.appendingPathComponent(FLScreenModelEngine.vocabSource))
       }
       resolve(["supported": true, "installed": missing.isEmpty, "missing": missing, "loaded": locked { loaded }])
     }
@@ -190,6 +212,7 @@ final class FLScreenModelCore: @unchecked Sendable {
       let sha = obj["sha256"] as? String ?? ""
       let size = (obj["size"] as? NSNumber)?.int64Value ?? 0
       guard FLScreenModelEngine.files.contains(name), urlText.hasPrefix("https://huggingface.co/"),
+            name != FLScreenModelEngine.vocabFile || urlText.hasSuffix("/unigram.json"),
             let url = URL(string: urlText), sha.count == 64, size > 0
       else {
         reject("E_INVALID_ARG", "unexpected model file spec", nil)
@@ -213,9 +236,12 @@ final class FLScreenModelCore: @unchecked Sendable {
         let dir = try Self.modelDir()
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         for (i, spec) in specs.enumerated() {
-          if Self.fileSize(dir.appendingPathComponent(spec.name)) == spec.size { continue }
+          if Self.fileSize(dir.appendingPathComponent(spec.name)) == Self.installedSize(spec.name, listed: spec.size) {
+            continue
+          }
+          let derived = spec.name == FLScreenModelEngine.vocabFile
           let downloader = FLScreenModelDownloader(
-            spec: spec, into: dir,
+            spec: spec, into: dir, as: derived ? FLScreenModelEngine.vocabSource : nil,
             isCancelled: { [self] in locked { cancelled } },
             onProgress: { [self] received in
               onProgress?([
@@ -224,6 +250,7 @@ final class FLScreenModelCore: @unchecked Sendable {
               ])
             })
           try downloader.run()
+          if derived { try Self.deriveVocab(in: dir) }
         }
       } catch let f as FLScreenModelDownloader.Failure {
         failure = f
@@ -244,6 +271,29 @@ final class FLScreenModelCore: @unchecked Sendable {
     locked { cancelled = true }
   }
 
+  /// unigram.json (already size- and SHA-256-checked by the downloader) -> minilm-ml-vocab.txt, once per download.
+  /// The JSON is deleted either way; a converted file that doesn't match the pin is never moved into place.
+  private static func deriveVocab(in dir: URL) throws {
+    let source = dir.appendingPathComponent(FLScreenModelEngine.vocabSource)
+    let destination = dir.appendingPathComponent(FLScreenModelEngine.vocabFile)
+    let part = dir.appendingPathComponent(FLScreenModelEngine.vocabFile + ".part")
+    let json = try? Data(contentsOf: source)
+    try? FileManager.default.removeItem(at: source)
+    guard let json, let vocab = FLScreenModelVocab.vocab(fromUnigramJSON: json), Int64(vocab.count) == vocabBytes,
+          SHA256.hash(data: vocab).map({ String(format: "%02x", $0) }).joined() == vocabSha256
+    else {
+      throw FLScreenModelDownloader.Failure(code: "E_CHECKSUM", message: "the text model's vocabulary failed its conversion check")
+    }
+    do {
+      try vocab.write(to: part)
+      try? FileManager.default.removeItem(at: destination)
+      try FileManager.default.moveItem(at: part, to: destination)
+    } catch {
+      try? FileManager.default.removeItem(at: part)
+      throw FLScreenModelDownloader.Failure(code: "E_DOWNLOAD", message: "cannot write the model file (is the disk full?)")
+    }
+  }
+
   // MARK: classify
 
   func classify(_ input: [String: Any], resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
@@ -251,7 +301,7 @@ final class FLScreenModelCore: @unchecked Sendable {
     let language = (input["ocrLanguage"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "en-US"
     let labels: [Label] = (input["texts"] as? [Any] ?? []).compactMap { t in
       guard let obj = t as? [String: Any] else { return nil }
-      let keywords = (obj["keywords"] as? [Any] ?? []).compactMap { ($0 as? String).flatMap { $0.isEmpty ? nil : $0.lowercased() } }
+      let keywords = (obj["keywords"] as? [Any] ?? []).compactMap { ($0 as? String).flatMap { $0.isEmpty ? nil : Self.fold($0) } }
       return Label(id: obj["id"] as? String ?? "", text: obj["text"] as? String ?? "", keywords: keywords)
     }
     guard (224...8192).contains(maxWidth) else {
@@ -347,7 +397,7 @@ final class FLScreenModelCore: @unchecked Sendable {
     let captureMs = (CACurrentMediaTime() - t0) * 1000
 
     t0 = CACurrentMediaTime()
-    var screenText = Self.ocr(image, language: language)
+    var screenText = Self.ocr(image, languages: [language])
     let ocrMs = (CACurrentMediaTime() - t0) * 1000
 
     t0 = CACurrentMediaTime()
@@ -372,12 +422,13 @@ final class FLScreenModelCore: @unchecked Sendable {
     var keywords: Any = NSNull()
     if !input.isEmpty && !labels.isEmpty {
       let embedding = try engine.embedText(input)
-      let lower = Array(input.lowercased().utf16)
+      var folded = Self.fold(input)
+      defer { folded = [] }
       var scores: [String: Double] = [:]
       var hits: [String: Int] = [:]
       for label in labels {
         scores[label.id] = Double(FLScreenModelEngine.dot(embedding, try engine.cachedEmbedding(label.text)))
-        hits[label.id] = label.keywords.reduce(0) { $0 + (Self.containsWord(lower, Array($1.utf16)) ? 1 : 0) }
+        hits[label.id] = label.keywords.reduce(0) { $0 + (Self.containsWord(folded, $1) ? 1 : 0) }
       }
       text = scores
       keywords = hits
@@ -407,7 +458,8 @@ final class FLScreenModelCore: @unchecked Sendable {
   /// Vision's accurate recognizer has a cold start of 30-60 s the first time a new build of the app uses it
   /// (relaunches of the same build start warm in ~0.1 s), which would time out the first check of a session. Run
   /// it once per launch in the background, on a generated line of text, when JS asks (warmUp(): the 'classifier'
-  /// mode with the model installed).
+  /// mode with the model installed), with every screen language the app offers (OCR_LANGUAGE in
+  /// src/core/screenLanguage.ts), since warmUp() isn't told which one is chosen.
   static func warmUpOcr() {
     warmUpLock.lock()
     defer { warmUpLock.unlock() }
@@ -427,16 +479,16 @@ final class FLScreenModelCore: @unchecked Sendable {
       CTLineDraw(CTLineCreateWithAttributedString(text), ctx)
       guard let image = ctx.makeImage() else { return }
       let t0 = CACurrentMediaTime()
-      _ = ocr(image, language: "en-US")
+      _ = ocr(image, languages: ["en-US", "es-ES"])
       log(String(format: "OCR warm-up %.0f ms", (CACurrentMediaTime() - t0) * 1000))
     }
   }
 
   /// Vision OCR, lines top to bottom joined by newlines (the Windows build uses Windows.Media.Ocr).
-  private static func ocr(_ image: CGImage, language: String) -> String {
+  private static func ocr(_ image: CGImage, languages: [String]) -> String {
     let request = VNRecognizeTextRequest()
     request.recognitionLevel = .accurate
-    request.recognitionLanguages = [language]
+    request.recognitionLanguages = languages
     request.usesLanguageCorrection = true
     do {
       try VNImageRequestHandler(cgImage: image, options: [:]).perform([request])
@@ -450,11 +502,29 @@ final class FLScreenModelCore: @unchecked Sendable {
     return lines.joined(separator: "\n")
   }
 
-  /// Whole-word match on lowercase UTF-16: the neighbours may not be ASCII letters or digits (bench.py's
-  /// (?<![a-z0-9])keyword(?![a-z0-9])).
-  private static func containsWord(_ text: [UInt16], _ word: [UInt16]) -> Bool {
+  /// Lowercase without accents, as bench.py's fold() and the Windows Fold(): lowercase, NFD, drop code points with
+  /// a non-zero canonical combining class, so "Cálculo" (or OCR's "Calculo") matches "calculo".
+  /// PRIVACY: the input may be screen text; callers drop the result after matching.
+  static func fold(_ s: String) -> [Unicode.Scalar] {
+    s.lowercased().decomposedStringWithCanonicalMapping.unicodeScalars.filter {
+      $0.properties.canonicalCombiningClass.rawValue == 0
+    }
+  }
+
+  /// bench.py's word characters ([^\W_]) and the Windows IsWordChar: Unicode letters and anything with a numeric
+  /// value.
+  private static func isWordChar(_ c: Unicode.Scalar) -> Bool {
+    switch c.properties.generalCategory {
+    case .uppercaseLetter, .lowercaseLetter, .titlecaseLetter, .modifierLetter, .otherLetter: return true
+    default: return c.properties.numericType != nil
+    }
+  }
+
+  /// Whole-word match on folded text (both sides through `fold`): the neighbours may not be word characters, so a
+  /// keyword never matches part of an accented word ("funcion" in "funcionar"). bench.py:
+  /// (?<![^\W_])keyword(?![^\W_]).
+  static func containsWord(_ text: [Unicode.Scalar], _ word: [Unicode.Scalar]) -> Bool {
     guard !word.isEmpty, word.count <= text.count else { return false }
-    func isWordChar(_ c: UInt16) -> Bool { (97...122).contains(c) || (48...57).contains(c) }
     for at in 0...(text.count - word.count) where text[at] == word[0] {
       var match = true
       for k in 1..<word.count where text[at + k] != word[k] {
