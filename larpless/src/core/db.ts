@@ -77,6 +77,7 @@ export function cleanSettings(raw: unknown): Settings {
   if (!['off', '25/5', '50/10', 'custom', 'demo'].includes(out.pomodoroDefault)) out.pomodoroDefault = DEFAULT_SETTINGS.pomodoroDefault;
   out.pomodoroCustom = cleanCustom(out.pomodoroCustom);
   if (typeof out.pomodoroShowRemaining !== 'boolean') out.pomodoroShowRemaining = DEFAULT_SETTINGS.pomodoroShowRemaining;
+  if (out.screenLanguage !== 'en' && out.screenLanguage !== 'es') out.screenLanguage = DEFAULT_SETTINGS.screenLanguage;
   if (out.appearance !== 'system' && out.appearance !== 'light' && out.appearance !== 'dark') {
     out.appearance = DEFAULT_SETTINGS.appearance;
   }

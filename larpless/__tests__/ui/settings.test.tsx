@@ -451,3 +451,30 @@ describe('Settings page', () => {
     act(() => r.unmount());
   });
 });
+
+describe('Settings: screen language', () => {
+  it('saves the screen language and shows it as selected', async () => {
+    const r = render();
+    expect(isSelected(r, 'settings-screen-language-en')).toBe(true);
+    await press(byTestID(r, 'settings-screen-language-es'));
+    expect(settings().screenLanguage).toBe('es');
+    expect((await stored()).screenLanguage).toBe('es');
+    expect(isSelected(r, 'settings-screen-language-es')).toBe(true);
+    act(() => r.unmount());
+  });
+
+  it('warns when the on-device classifier would read Spanish without the OCR language pack', () => {
+    const { useScreenModelStore } = require('../../src/store/screenModelStore');
+    const status = { supported: true, installed: true, missing: [], loaded: false, ocrLanguages: ['en-US'] };
+    act(() => {
+      useScreenModelStore.setState({ status, refresh: async () => {} });
+      useAppStore.setState({ settings: { ...settings(), classifierMode: 'classifier', screenLanguage: 'es' } });
+    });
+    const r = render();
+    expect(byID(r, 'settings-ocr-language-missing')).toBeDefined();
+    act(() => useScreenModelStore.setState({ status: { ...status, ocrLanguages: ['en-US', 'es-ES'] } }));
+    expect(byID(r, 'settings-ocr-language-missing')).toBeUndefined();
+    act(() => r.unmount());
+    act(() => useScreenModelStore.setState({ status: null }));
+  });
+});

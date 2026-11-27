@@ -220,6 +220,11 @@ export interface ScreenModelStatus {
   missing: string[];
   /** Sessions are in memory (about 1 GB). */
   loaded: boolean;
+  /**
+   * BCP-47 tags of the OCR languages this computer can read (Windows: the installed OCR language packs; an
+   * uninstalled one silently falls back to another). Absent where every supported language works (Apple Vision).
+   */
+  ocrLanguages?: string[];
 }
 export interface ScreenModelProgress {
   name: string;

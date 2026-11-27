@@ -11,6 +11,7 @@ import { fixtureChunks } from '../fixtures/data';
 import { native } from '../native';
 import { appDb, upsertSessionSummary, useAppStore } from './appStore';
 import { useOllamaStore } from './ollamaStore';
+import { localizeModules } from '../core/screenLanguage';
 import { allSubjects, candidateSubjects, rollUpSubject } from '../core/subjectLibrary';
 
 export const initialSessionState: SessionStoreState = {
@@ -51,6 +52,7 @@ export function getSessionController(): SessionController {
       baseUrl: () => settings().ollamaUrl,
       model: () => settings().model,
       timeoutMs: config.CLASSIFY_TIMEOUT_MS,
+      language: () => settings().screenLanguage,
     });
     // A subject that's off but has a general subject stays a hidden candidate; its time is labelled as the general one.
     const classifier = relabelVerdicts(
@@ -60,7 +62,7 @@ export function getSessionController(): SessionController {
         now: Date.now,
         config,
         getPower: () => effectiveProfile(settings().powerProfile),
-        screenModel: createScreenModelStep({ api: native.screenModel, now: Date.now }),
+        screenModel: createScreenModelStep({ api: native.screenModel, now: Date.now, language: () => settings().screenLanguage }),
         screenModelOnly: () => isClassifierMode(),
       }),
       (id) => {
@@ -75,7 +77,8 @@ export function getSessionController(): SessionController {
       getModules: () => allSubjects(useAppStore.getState().modules),
       getDetectModules: () => {
         const { modules, settings: s } = useAppStore.getState();
-        return candidateSubjects(allSubjects(modules), s.disabledSubjects);
+        // Settings → Screen language: built-in subjects also carry that language's name and keywords.
+        return localizeModules(candidateSubjects(allSubjects(modules), s.disabledSubjects), s.screenLanguage);
       },
       getSettings: settings,
       classifier,

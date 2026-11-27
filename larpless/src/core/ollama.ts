@@ -3,7 +3,7 @@
  *
  * PRIVACY: the snapshot and the request body are never logged or kept. Only latency and the verdict are logged.
  */
-import type { ScreenVerdict, StudyModule } from '../contracts/domain';
+import type { ScreenLanguage, ScreenVerdict, StudyModule } from '../contracts/domain';
 import type { ScreenSnapshot } from '../contracts/native';
 import type { OllamaStatus } from '../contracts/store';
 import {
@@ -56,6 +56,8 @@ export interface OllamaOptions {
   warmUpTimeoutMs?: number;
   /** Logger for latency + verdict lines; default console.log. Pass () => {} to silence. */
   log?: (line: string) => void;
+  /** Settings → Screen language, for one line of the system prompt. Default English. */
+  language?: () => ScreenLanguage;
 }
 
 export interface OllamaCallOptions {
@@ -294,6 +296,7 @@ export function createOllama(opts: OllamaOptions): OllamaClient {
           imageBase64: snapshot.jpegBase64,
           // Qwen3-VL ignores think:false; the empty-think prefill skips reasoning (bench: p50 3.2 s).
           prefillNoThink: true,
+          language: opts.language?.(),
         }),
         snapshot.windowTitle,
         call,
@@ -306,7 +309,7 @@ export function createOllama(opts: OllamaOptions): OllamaClient {
       return ask(
         modules,
         [
-          { role: 'system', content: buildSystem(modules) },
+          { role: 'system', content: buildSystem(modules, opts.language?.()) },
           { role: 'user', content: buildTitleUserText(appName, windowTitle) },
           { role: 'assistant', content: NO_THINK_PREFILL },
         ],
@@ -333,7 +336,7 @@ export function createOllama(opts: OllamaOptions): OllamaClient {
               keep_alive: call?.keepAlive ?? '30m',
               options: { temperature: 0, num_ctx: NUM_CTX, num_predict: 1 },
               messages: [
-                { role: 'system', content: buildSystem(modules) },
+                { role: 'system', content: buildSystem(modules, opts.language?.()) },
                 { role: 'user', content: 'Ready?' },
               ],
             }),

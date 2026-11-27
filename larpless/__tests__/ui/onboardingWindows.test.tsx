@@ -76,8 +76,8 @@ afterEach(() => {
 
 describe('onboardingSteps', () => {
   it('starts with the computer question and follows the chosen model', () => {
-    expect(onboardingSteps('vlm')).toEqual(['pc', 'modules', 'permissions', 'ollama', 'model']);
-    expect(onboardingSteps('classifier')).toEqual(['pc', 'modules', 'permissions', 'classifier']);
+    expect(onboardingSteps('vlm')).toEqual(['pc', 'language', 'subjects', 'modules', 'permissions', 'ollama', 'model']);
+    expect(onboardingSteps('classifier')).toEqual(['pc', 'language', 'subjects', 'modules', 'permissions', 'classifier']);
   });
 });
 
@@ -102,9 +102,11 @@ describe('onboarding on Windows: Your PC', () => {
     expect(byTestID(r, 'onboarding-next').props.disabled).toBe(false);
     await press(r, 'onboarding-next');
     expect(useAppStore.getState().settings.classifierMode).toBe('classifier');
-    expect(has(r, 'onboarding-modules')).toBe(true);
-    expect(textOf(r)).toContain('4. Classifier');
+    expect(has(r, 'onboarding-language')).toBe(true);
+    expect(textOf(r)).toContain('6. Classifier');
     expect(textOf(r)).not.toContain('Ollama');
+    await press(r, 'onboarding-next'); // language
+    await press(r, 'onboarding-next'); // subjects
     await press(r, 'onboarding-next'); // modules
     await press(r, 'onboarding-next'); // permissions
     expect(has(r, 'onboarding-classifier')).toBe(true);
@@ -119,14 +121,16 @@ describe('onboarding on Windows: Your PC', () => {
     await press(r, 'onboarding-pc-vlm');
     await press(r, 'onboarding-next');
     expect(useAppStore.getState().settings.classifierMode).toBe('vlm');
+    await press(r, 'onboarding-next'); // language
+    await press(r, 'onboarding-next'); // subjects
     await press(r, 'onboarding-next'); // modules
     await press(r, 'onboarding-next'); // permissions
     expect(has(r, 'onboarding-ollama')).toBe(true);
-    expect(textOf(r)).toContain('5. AI model');
+    expect(textOf(r)).toContain('7. AI model');
     act(() => r.unmount());
   });
 
-  it('goes back from the modules step to the PC question', async () => {
+  it('goes back from the language step to the PC question', async () => {
     seed();
     const r = render();
     await press(r, 'onboarding-pc-vlm');
@@ -163,6 +167,65 @@ describe('onboarding on Windows: Your PC', () => {
     const r = render();
     expect(byTestID(r, 'onboarding-pc-classifier').props.disabled).toBe(true);
     expect(textOf(r)).toContain('Not available in this build');
+    act(() => r.unmount());
+  });
+});
+
+describe('onboarding: screen language and subjects', () => {
+  async function toLanguage(): Promise<ReactTestRenderer> {
+    seed();
+    const r = render();
+    await press(r, 'onboarding-pc-classifier');
+    await press(r, 'onboarding-next');
+    return r;
+  }
+
+  it('asks the screen language and saves Español', async () => {
+    const r = await toLanguage();
+    expect(has(r, 'onboarding-language')).toBe(true);
+    expect(textOf(r)).toContain('What language are your screens in?');
+    await press(r, 'onboarding-language-es');
+    await press(r, 'onboarding-next');
+    expect(useAppStore.getState().settings.screenLanguage).toBe('es');
+    expect(has(r, 'onboarding-subjects')).toBe(true);
+    act(() => r.unmount());
+  });
+
+  it('turns off every optional subject that was not picked, never a core one', async () => {
+    const r = await toLanguage();
+    await press(r, 'onboarding-next'); // language
+    expect(byTestID(r, 'onboarding-next').props.title).toBe('Skip: detect every subject');
+    await press(r, 'subject-Calculus');
+    await press(r, 'subject-Law');
+    expect(textOf(r)).toContain('2 picked, plus 8 core subjects');
+    expect(r.root.findAll((n) => n.props.testID === 'subject-Biology' && typeof n.props.onPress === 'function')).toHaveLength(0);
+    await press(r, 'onboarding-next');
+    const off = useAppStore.getState().settings.disabledSubjects;
+    expect(off).not.toContain('lib_calculus');
+    expect(off).not.toContain('lib_law');
+    expect(off).not.toContain('lib_biology');
+    expect(off).toContain('lib_astronomy');
+    expect(has(r, 'onboarding-modules')).toBe(true);
+    act(() => r.unmount());
+  });
+
+  it('keeps every subject on when nothing is picked', async () => {
+    const r = await toLanguage();
+    act(() => useAppStore.setState({ settings: { ...useAppStore.getState().settings, disabledSubjects: [] } }));
+    await press(r, 'onboarding-next'); // language
+    await press(r, 'onboarding-next'); // subjects, nothing picked
+    expect(useAppStore.getState().settings.disabledSubjects).toEqual([]);
+    act(() => r.unmount());
+  });
+
+  it('coming back shows the subjects already picked', async () => {
+    const r = await toLanguage();
+    await press(r, 'onboarding-next'); // language
+    await press(r, 'subject-Astronomy');
+    await press(r, 'onboarding-next');
+    const back = r.root.findAll((n) => n.props.title === 'Back' && typeof n.props.onPress === 'function')[0];
+    await act(async () => back.props.onPress());
+    expect(textOf(r)).toContain('1 picked, plus 8 core subjects');
     act(() => r.unmount());
   });
 });

@@ -12,6 +12,7 @@ import {
   rollUpSubject,
   SUBJECT_GROUPS,
 } from '../../src/core/subjectLibrary';
+import { SUBJECT_KEYWORDS_ES } from '../../src/core/subjectKeywords.es';
 import { fixtureModules } from '../../src/fixtures/data';
 
 const id = librarySubjectId;
@@ -76,6 +77,34 @@ describe('library keywords (#52)', () => {
     const kws = programming.keywords.map(lc);
     expect(kws).toEqual(expect.not.arrayContaining(['function', 'class', 'variable', 'exercise', 'cs', 'javascript', 'git']));
     expect(kws.filter((k) => owners.get(k)!.length > 1)).toEqual([]);
+  });
+});
+
+describe('Spanish keywords (screen language Español)', () => {
+  /** Lowercase without accents: how the screen model matches keywords. */
+  const fold = (k: string) => k.trim().toLowerCase().normalize('NFD').replace(/\p{M}/gu, '');
+  const groupOf = new Map<string, string>();
+  for (const g of SUBJECT_GROUPS) for (const s of g.presets) if (!groupOf.has(s.name)) groupOf.set(s.name, g.title);
+
+  it('covers every library subject, and only library subjects', () => {
+    expect(Object.keys(SUBJECT_KEYWORDS_ES).sort()).toEqual(names(LIBRARY_MODULES).sort());
+    for (const [subject, es] of Object.entries(SUBJECT_KEYWORDS_ES)) {
+      expect({ subject, name: es.name.trim().length > 0, keywords: es.keywords.length >= 2 }).toEqual({ subject, name: true, keywords: true });
+    }
+  });
+
+  it('no Spanish keyword or name is shared by subjects in different groups', () => {
+    const owners = new Map<string, Set<string>>();
+    for (const [subject, es] of Object.entries(SUBJECT_KEYWORDS_ES)) {
+      for (const k of [es.name, ...es.keywords]) owners.set(fold(k), (owners.get(fold(k)) ?? new Set()).add(groupOf.get(subject)!));
+    }
+    expect([...owners].filter(([, g]) => g.size > 1).map(([k]) => k)).toEqual([]);
+  });
+
+  it('leaves out Spanish words that show up on any screen or on distractions', () => {
+    const everyday = ['funcion', 'sistema', 'analisis', 'serie', 'oferta', 'valoracion', 'hilo', 'clasificacion', 'ley', 'van', 'media', 'modelo', 'indice', 'esquema', 'proceso', 'registro', 'artista', 'personaje', 'tratamiento', 'gestion'];
+    const all = Object.values(SUBJECT_KEYWORDS_ES).flatMap((es) => es.keywords.map(fold));
+    expect(all.filter((k) => everyday.includes(k))).toEqual([]);
   });
 });
 

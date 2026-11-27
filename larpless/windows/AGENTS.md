@@ -26,7 +26,7 @@ powershell -ExecutionPolicy Bypass -File scripts\release-windows.ps1 -Certificat
 Default installs embed `windows/LarpLess/Bundle/index.windows.bundle` (`EmbedJsBundle=true` → `BUNDLE` in `LarpLess.cpp`). Re-run `run-windows.ps1` after JS changes.
 
 - Stop the running app before rebuilding. A first build takes several minutes; incremental ones about one.
-- **`run-windows.ps1` deletes the downloaded screen model.** It removes the installed package, and that deletes its `LocalState` (`%LOCALAPPDATA%\Packages\LarpLess_96wyba02c09cm\LocalState\Models`, ~460 MB). Use the rebuild-only command instead, which keeps the package **as long as the manifest identity hasn't changed**: when the installed package has a different `Name`/`Publisher` (e.g. a build from a branch with the Microsoft Store identity), the deploy removes it (`removePackageList` in the AppXDeploymentServer log) and its `LocalState` (settings, session history and the screen model) is deleted with it. Check `(Get-AppxPackage *LarpLess*).PackageFamilyName` first, and back up `LocalState` if it differs. Otherwise: with `--msbuildprops EmbedJsBundle=true` after `scripts\bundle-windows.ps1` for an embedded install, without it for a Metro one. On a Metro install, JS-only changes need no rebuild: start Metro (`npx react-native start --port 8081`) and relaunch the installed build (command below). An embedded install ignores Metro, so it needs the bundle + rebuild.
+- **`run-windows.ps1` deletes the downloaded screen model.** It removes the installed package, and that deletes its `LocalState` (`%LOCALAPPDATA%\Packages\LarpLess_96wyba02c09cm\LocalState\Models`, ~490 MB). Use the rebuild-only command instead, which keeps the package **as long as the manifest identity hasn't changed**: when the installed package has a different `Name`/`Publisher` (e.g. a build from a branch with the Microsoft Store identity), the deploy removes it (`removePackageList` in the AppXDeploymentServer log) and its `LocalState` (settings, session history and the screen model) is deleted with it. Check `(Get-AppxPackage *LarpLess*).PackageFamilyName` first, and back up `LocalState` if it differs. Otherwise: with `--msbuildprops EmbedJsBundle=true` after `scripts\bundle-windows.ps1` for an embedded install, without it for a Metro one. On a Metro install, JS-only changes need no rebuild: start Metro (`npx react-native start --port 8081`) and relaunch the installed build (command below). An embedded install ignores Metro, so it needs the bundle + rebuild.
 - **The installed build has to come from a commit with `FLScreenModel`** (`main` and `add-embeddings` both have it now; older branches don't). A build without it has no `NativeModules.FLScreenModel`, so `native/index.ts` silently swaps in the mock, which always reports "not installed" even with the files in `LocalState\Models`: the `'classifier'` mode turns every chunk into `unknown`. Check with `js-eval "__FL.NativeModules.FLScreenModel"` (null = wrong build) and rebuild after switching branches.
 - Debug builds set `UseDeveloperSupport(false)` so RNW does not paint its green Metro **Loading** bar (that is not `BootScreen`). Themed launch is `BootScreen.tsx` after JS loads. `LarpLess.cpp` also sets the Win32 window canvas to match `theme.ts` before React paints.
 - Compile errors: the newest `windows\msbuild_*.err`. The build log written with `*>` is UTF-16 — read it with `Get-Content`.
@@ -59,7 +59,7 @@ Each module is **one header** (`REACT_MODULE` / `REACT_METHOD` / `REACT_EVENT` /
 | FLPermissions | camera via `AppCapability("webcam")`; `openSettings` → `ms-settings:privacy-webcam`; `relaunch` → `AppInstance::Restart` | no screen permission on Windows |
 | FLSound | XAudio2 port of the Swift engine (xorshift white, Kellet pink, brown; equal-power ramps; chimes) | — |
 | FLWebcam | MediaCapture + MediaFrameReader (BGRA), YOLO11n via ONNX Runtime | — (same `person` / `cell phone` thresholds as Mac) |
-| FLScreenModel | on-device screen classifier: GDI capture to BGRA (`FLScreenCapture::CaptureBgra`), `Windows.Media.Ocr`, SigLIP 2 vision tower + all-MiniLM-L6-v2 (C++ WordPiece in `FLWordPiece.h`) via ONNX Runtime; returns scores only, `core/screenModel.ts` fuses them. Models (~460 MB, pinned HF commits + SHA-256) download at onboarding into `LocalFolder\Models`; the fixed SigLIP prompt embeddings ship as `Assets/Models/FLScreenModelPrompts.json` (`scripts/embed_bench/export_prompts.py`) | — (the Mac's `Native/ScreenModel/FLScreenModel.swift` runs the same ONNX files through the `onnxruntime-objc` pod, with Apple Vision OCR) |
+| FLScreenModel | on-device screen classifier: GDI capture to BGRA (`FLScreenCapture::CaptureBgra`), `Windows.Media.Ocr`, SigLIP 2 vision tower + the int8 paraphrase-multilingual-MiniLM-L12-v2 for every language (C++ Unigram in `FLUnigram.h`, vocabulary shipped in `Assets/Models`) via ONNX Runtime; returns scores only, `core/screenModel.ts` fuses them. Models (~490 MB, pinned HF commits + SHA-256) download at onboarding into `LocalFolder\Models`; the fixed SigLIP prompt embeddings ship as `Assets/Models/FLScreenModelPrompts.json` (`scripts/embed_bench/export_prompts.py`) | — (the Mac's `Native/ScreenModel/FLScreenModel.swift` runs the same ONNX files through the `onnxruntime-objc` pod, with Apple Vision OCR) |
 | FLFloatingPanel | layered `WS_EX_TOPMOST\|TOOLWINDOW\|NOACTIVATE` popup drawn with Direct2D (DC render target on a DIB + `UpdateLayeredWindow`) and DirectWrite with the bundled Inter + Instrument Serif | — (same size, states, hub and payloads) |
 
 Closing the main window quits the app (Windows convention) instead of keeping it in the background.
@@ -116,6 +116,8 @@ On the old CPU-only PC, LarpLess crashed twice in `hermes.dll` with `0xc0000005`
 
 Seen again on 2026-10-12 (Ryzen 5 7545U, 15 GB, ~3 GB free) during the screen-model work: two crashes at the same offset in the first study sessions after launch with FLScreenModel installed, ~20–40 s after `start()` (Ollama warm-up and the first on-device check overlap there). A session with the screen model switched off at runtime ran 70 s without a crash, and a later session with it on ran 3+ min without one, so it's intermittent and not pinned to FLScreenModel yet. To narrow it down: several sessions each way, and watch free RAM while Ollama (2B) and FLScreenModel (~1 GB) are both loaded.
 
+Seen again on 2026-11-27 (Framework 13, 24 GB, `'classifier'` mode, so **no Ollama loaded**, webcam off, multilingual text model): 3 crashes at the same offset within ~5 s of `start()` sent through `js-eval` (first launch after a rebuild, then right after relaunching), in English and Spanish alike; the 4th session (started 4 s after a `js-eval --console` client connected) ran fine and classified normally. Direct `native.screenModel.classify` calls never crashed: 3 × 5 texts and 3 × the full 52-text session input, back to back. So it is neither memory pressure nor Ollama nor the screen model's inference; suspects are the session start itself on a freshly launched app (panel, sound, power request, the first `FLScreenCapture` ticks) or the inspector connection. Next: start sessions from the UI (no `js-eval`) right after launch, and from js-eval after waiting, to split those two.
+
 ### Benchmarking the classifier
 
 Windows Defender (AMSI) blocks PowerShell scripts that capture the screen, base64 it and POST it, even to localhost. Don't try to evade it: benchmark with a **generated** test image (System.Drawing text on a bitmap, never a real screenshot) posted to `/api/chat` with the app's options (`think: false`, the empty `<think>` prefill, `num_ctx: 4096`), or measure through the app, where `[ollama] <model> <ms> → <verdict>` lines show up in `js-eval --console`.
@@ -136,9 +138,64 @@ An LLM council compared the current generative VLM with a small "decision" model
 ### What was built
 
 - `scripts/embed_bench/` (Python 3.12 venv; setup in `requirements.txt`): `bench.py` scores `larpless/bench/` screenshots with image / text / keyword / fused methods and reports accuracy, confidence curves and latency; `--courses` adds sidecar `"course"` names as custom courses; `--onnx` times the image tower in ONNX Runtime; `--dump-scores` + `parity.mjs` check that `src/core/screenModel.ts` gives identical answers to the bench. `export_prompts.py` builds `Assets/Models/FLScreenModelPrompts.json` (fixed SigLIP prompt embeddings) and checks the pinned ONNX files and the C++ resize against PyTorch.
-- `Native/FLScreenModel.h`: capture to BGRA (`FLScreenCapture::CaptureBgra`), `Windows.Media.Ocr`, SigLIP 2 vision tower (PIL-style tent resize to 224, cosine 0.9999 to the official processor) and all-MiniLM-L6-v2 (`FLWordPiece.h`, matches Hugging Face's tokenizer on the test cases in `wordpiece_cases.json`) through ONNX Runtime, plus whole-word keyword counts. Returns numbers only. Downloads the models (pinned HF commits, SHA-256 checked) into `LocalFolder\Models`.
+- `Native/FLScreenModel.h`: capture to BGRA (`FLScreenCapture::CaptureBgra`), `Windows.Media.Ocr`, SigLIP 2 vision tower (PIL-style tent resize to 224, cosine 0.9999 to the official processor) and the int8 paraphrase-multilingual-MiniLM-L12-v2 (`FLUnigram.h`, matches Hugging Face's tokenizer on `unigram_cases.json`; all-MiniLM-L6-v2 with `FLWordPiece.h` until 2026-11-27) through ONNX Runtime, plus whole-word keyword counts. Returns numbers only. Downloads the models (pinned HF commits, SHA-256 checked) into `LocalFolder\Models`.
 - JS: contract `ScreenModelApi` (`src/contracts/native.ts`), `src/core/screenModel.ts` (fusion, files, step), `runScreenModel` in `src/core/classifier.ts`, which replaces the Ollama screenshot in the `'classifier'` mode (source `'embed'`), `src/store/screenModelStore.ts`, `ScreenModelDownload` on onboarding's classifier step and in Settings → Local AI.
 - macOS (2026-11-01): `macos/Focusline-macOS/Native/ScreenModel/` is a Swift port of the header (same methods, payloads and error codes): `FLScreenCapture.screenshot` → BGRA, Vision OCR (`.accurate`, lines top to bottom; warmed up in the background once per launch by `warmUp()`, which the Sidebar calls only in the `'classifier'` mode with the model installed (a no-op on Windows): the first use by a new build of the app takes 30–60 s, later launches ~0.1 s), the same tent weights applied as two `vDSP_mmul`s per channel (within 5e-7 of the loop), SigLIP 2 + MiniLM through the `onnxruntime-objc` 1.30.0 pod (CPU, 4 threads), `FLScreenModelWordPiece.swift` (checked by `scripts/embed_bench/wordpiece-check-mac.sh`). Models go to `~/Library/Application Support/com.larpless.app/Models`. Image scores should match Windows; text scores differ with the OCR engine, so the bench needs a Mac run with Vision OCR before trusting the fusion parameters there.
+
+### Multilingual text model: Unigram tokenizer (Spanish work, 2026-11-27)
+
+**One text model for every screen language** (decided 2026-11-27): the **int8** `paraphrase-multilingual-MiniLM-L12-v2`, downloaded as `minilm-ml.onnx`. It replaces all-MiniLM-L6-v2 for English too. It uses XLM-R's SentencePiece **Unigram** tokenizer instead of WordPiece.
+
+- **Results:**
+  - Spanish: 13/14, with the text channel going from 64% to 79%.
+  - English dev set: app 50/54, and 51/54 with subjects chosen; grouped 93%.
+  - English holdout: 10/11 → 9/11. That loss was accepted.
+- **Why one model:** in ONNX Runtime it runs at the same speed as L6, for ~+50 MB RAM and +28 MB download. In exchange, students who study in both languages need no second download.
+- **Engine** (`FLScreenModel.h`):
+  - It loads `siglip2-vision.onnx` + `minilm-ml.onnx`, tokenized by `FLUnigram.h` with the **shipped** vocabulary `Assets/Models/minilm-ml-vocab.txt`. The vocabulary is packaged like `FLScreenModelPrompts.json` and never downloaded.
+  - `download()` accepts only those two ONNX names.
+  - The ONNX gets `input_ids`, `attention_mask` (1s) and `token_type_ids` (0s), followed by mean pooling + L2.
+  - `unload()` also frees the vocabulary (~250k pieces).
+  - `FLWordPiece.h` is gone.
+- **Leftovers:** installs from before keep `minilm.onnx` + `minilm-vocab.txt` (~90 MB) in `LocalFolder\Models`. The first `status()` call after launch deletes them, best-effort.
+- **Mac:** it still runs L6 with `FLScreenModelWordPiece.swift` until Part B ports `FLUnigram.h`. That's why `export_prompts.py --text-model minilm` and `wordpiece_cases.json` remain.
+- **Keyword matching** (`Fold` + `ContainsWord`) matches `bench.py`'s `fold()` and `BEFORE`/`AFTER`:
+  - Both the text and the keyword are lowercased, put through NFD, and stripped of code points with a non-zero combining class.
+  - Word characters are Unicode letters plus anything with a numeric value (`[^\W_]`), not only `a-z0-9`.
+  - So `"funcion"` matches "la función de onda" but not "funcionar", and `"nino"` matches "niño".
+
+- **Pinned export:** `Xenova/paraphrase-multilingual-MiniLM-L12-v2@2c4055b12046f11709e9df2c122e59ffbdc2f900`.
+
+  | File | Bytes | SHA-256 |
+  | --- | --- | --- |
+  | `onnx/model.onnx` | 470268510 | `185ae63f…6856ca113` |
+  | `onnx/model_int8.onnx` (ships as `minilm-ml.onnx`) | 118054609 | `d6ea442f…f34bbcf4c8` |
+  | `tokenizer.json` | 17082913 | `b60b6b43…3686fa441` |
+
+  Full hashes are in `MINILM_ML_FILES` in `export_prompts.py`.
+  - Both ONNX files take `input_ids`, `attention_mask` **and `token_type_ids`**, all int64 `[batch, seq]`. The model is a BERT architecture, so feed zeros for `token_type_ids`.
+  - Both return `last_hidden_state [batch, seq, 384]`; the app mean-pools and L2-normalises it.
+- **What `tokenizer.json` does:**
+  - Normalizer: `Precompiled` only, the SentencePiece nmt_nfkc charsmap, with no space collapsing.
+  - Pre-tokenizer: `WhitespaceSplit` → `Metaspace("▁", add_prefix_space)`.
+  - Post-processor: `<s> $A </s>`.
+  - Model: `Unigram` with `unk_id` 3 and no byte fallback.
+  - Special tokens: `<s>` 0, `<pad>` 1, `</s>` 2, `<unk>` 3, and `<mask>` 250001 (`lstrip`). They are matched on the raw text.
+  - The file sets truncation to 128; the app uses 256.
+  - The ids match the `sentence-transformers` repo's tokenizer, which is what `bench.py` measures. **Don't load the Xenova repo with `AutoTokenizer`**: transformers 5 builds a `BertTokenizer` from its `config.json` and gives unrelated ids.
+- **Exporting the vocabulary and cases:** `scripts\embed_bench\.venv\Scripts\python -I scripts\embed_bench\export_prompts.py --text-model minilm-ml --text-only`. `--text-only` skips SigLIP, so the prompt JSONs aren't rewritten. `minilm-ml` is the default text model; `--text-model minilm` is the old L6/WordPiece path, kept for the Mac's check. The run:
+  - hash-checks `tokenizer.json`;
+  - writes `windows/LarpLess/Assets/Models/minilm-ml-vocab.txt` and fails if its SHA-256 isn't `ML_VOCAB_SHA256`. The file is `piece<TAB>score` per line, id = line number: 250,002 lines, 7,763,089 bytes with LF line endings, SHA-256 `62fce312…539e449f92`. The Mac will ship a byte-identical copy. `FLUnigram.h` also reads a CRLF checkout, but that copy won't match the hash;
+  - checks the normalisation rule against the charsmap;
+  - writes `unigram_cases.json`: 22 fixed strings, namely the 4 WordPiece ones, Spanish/¿¡/ñ, decomposed accents, full-width forms and ligatures, whitespace and control characters, the special tokens, charsmap quirks, and a long OCR-like page truncated at 256.
+- **How the charsmap behaves.** The export script decoded and measured it; `FLUnigram.h` mirrors this:
+  - **Per code point:** NFKC, except that C0 controls are removed, odd whitespace (tab, LF, ZWSP, LS, U+2581, BOM, U+FFFD…) becomes a space, and 11 ranges are left alone. Those are U+FF5E plus code points newer than the charsmap's Unicode version.
+  - **Per grapheme:** tokenizers applies the charsmap one grapheme at a time. A grapheme under 6 UTF-8 bytes is replaced **whole** by the entry of its shortest prefix that has one, so `ｏ` + U+031A becomes `o` and the mark is dropped.
+  - **Multi-code-point keys** are exactly the sequences that NFKC composes into one code point X and whose code points, each NFKC-mapped to one code point, spell NFD(X). Under that rule `Ḷ` + U+0304 is *not* a key and stays uncomposed. The rule is exact on all 219,874 keys.
+- **Parity check:** `powershell -ExecutionPolicy Bypass -File scripts\embed_bench\unigram-check-windows.ps1`, from `larpless/`. It compiles `unigram_check.cpp` with the header on its own (vswhere → vcvarsall → `cl /W4 /WX`, no app build) and must print `unigram 22/22 identical`. `-Vocab` (default: the shipped asset) and `-Cases` take other files.
+  - Result on 2026-11-27: 22/22, plus 20,000/20,000 random short mixed-script strings and 4,000/4,000 long fuzz strings. The fuzz files lived in a scratch folder and aren't committed.
+  - Speed: the vocabulary loads in ~100 ms, and a 1,500-character page encodes in ~0.3 ms.
+  - The Mac port (`FLScreenModelUnigram.swift` + `unigram-check-mac.sh`) must pass the same file.
 
 ### Classifier modes
 

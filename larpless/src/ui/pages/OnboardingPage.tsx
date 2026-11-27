@@ -1,5 +1,5 @@
 /**
- * Onboarding (D5): 1. Your modules → 2. Permissions → 3. Ollama → 4. AI model → Home.
+ * Onboarding (D5): Your PC → Language → Your subjects → Your courses → Permissions → Ollama → AI model → Home.
  * Full-window (no sidebar). Steps 3 and 4 install, open and fill Ollama without the terminal.
  *
  * It starts with "Your PC" / "Your Mac", which picks the screen reader (`classifierMode`): the vision LLM keeps
@@ -9,16 +9,16 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Animated, Easing, Linking, StyleSheet, View } from 'react-native';
 import { config } from '../../config';
-import type { ClassifierMode, TagColor } from '../../contracts/domain';
+import type { ClassifierMode, ScreenLanguage, TagColor } from '../../contracts/domain';
 import type { PermissionKind, PermissionStatus } from '../../contracts/native';
 import { recommendClassifierMode } from '../../core/hardware';
 import type { Recommendation } from '../../core/hardware';
 import { isLocalUrl } from '../../core/ollamaHost';
-import { SCREEN_MODEL_BYTES } from '../../core/screenModel';
 import { native } from '../../native';
 import { useAppStore } from '../../store/appStore';
 import { useNavStore } from '../../store/navStore';
 import { useOllamaStore } from '../../store/ollamaStore';
+import { SCREEN_MODEL_BYTES } from '../../core/screenModel';
 import { useScreenModelStore } from '../../store/screenModelStore';
 import { useSessionStore } from '../../store/sessionStore';
 import { Button, Callout, CodeBlock, EditableTable, Icon, MacPressable, ModelDownload, Muted, ScreenModelDownload, SubjectLibrary, PageHeader, Strong, Tag, Text } from '../components';
@@ -30,13 +30,16 @@ import { courseNameProblem, draftsFromModules, modulesFromDrafts } from '../lib/
 import type { ModuleDraft } from '../lib/modules';
 import { colors, motion, radius, space, tag, themed } from '../theme';
 import { ANIMATE, DEVICE, IS_WINDOWS, MotionView, OLLAMA_DOWNLOAD_URL } from '../platform';
-import { LIBRARY_MODULES } from '../../core/subjectLibrary';
+import { SCREEN_LANGUAGES } from '../../core/screenLanguage';
+import { CORE_SUBJECT_NAMES, isCoreSubject, LIBRARY_MODULES } from '../../core/subjectLibrary';
 
-export type OnboardingStep = 'pc' | 'modules' | 'permissions' | 'ollama' | 'model' | 'classifier';
+export type OnboardingStep = 'pc' | 'language' | 'subjects' | 'modules' | 'permissions' | 'ollama' | 'model' | 'classifier';
 
 const STEP_LABEL: Record<OnboardingStep, string> = {
   pc: `Your ${DEVICE}`,
-  modules: 'Your modules',
+  language: 'Language',
+  subjects: 'Your subjects',
+  modules: 'Your courses',
   permissions: 'Permissions',
   ollama: 'Ollama',
   model: 'AI model',
@@ -45,7 +48,7 @@ const STEP_LABEL: Record<OnboardingStep, string> = {
 
 /** The steps for the chosen screen reader. */
 export function onboardingSteps(mode: ClassifierMode): OnboardingStep[] {
-  return ['pc', 'modules', 'permissions', ...(mode === 'classifier' ? (['classifier'] as const) : (['ollama', 'model'] as const))];
+  return ['pc', 'language', 'subjects', 'modules', 'permissions', ...(mode === 'classifier' ? (['classifier'] as const) : (['ollama', 'model'] as const))];
 }
 
 export function OnboardingPage() {
@@ -102,6 +105,8 @@ export function OnboardingPage() {
               }}
             />
           ) : null}
+          {current === 'language' ? <LanguageStep onBack={back} onNext={next} /> : null}
+          {current === 'subjects' ? <SubjectsStep onBack={back} onNext={next} /> : null}
           {current === 'modules' ? <ModulesStep onBack={back} onNext={next} /> : null}
           {current === 'permissions' ? <PermissionsStep onBack={back} onNext={next} /> : null}
           {current === 'ollama' ? <OllamaStep onBack={back} onNext={next} /> : null}
@@ -250,7 +255,7 @@ function ChoiceCard({
   testID: string;
   icon: IconName;
   title: string;
-  model: string;
+  model?: string;
   badge?: string;
   selected: boolean;
   disabled?: boolean;
@@ -274,9 +279,11 @@ function ChoiceCard({
             <Text weight="semibold">{title}</Text>
             {badge && !disabled ? <Tag label={badge} color="green" style={styles.gapLeftSm} /> : null}
           </View>
-          <Text variant="small" weight="medium" style={styles.choiceModel}>
-            {`Uses: ${model}`}
-          </Text>
+          {model ? (
+            <Text variant="small" weight="medium" style={styles.choiceModel}>
+              {`Uses: ${model}`}
+            </Text>
+          ) : null}
           <Text variant="small">{children}</Text>
         </View>
         <Icon name={selected ? 'check' : 'circle'} size={16} color={selected ? colors.accent : colors.faint} />
@@ -299,11 +306,10 @@ function ModulesStep({ onBack, onNext }: { onBack?: () => void; onNext: () => vo
   return (
     <View testID="onboarding-modules">
       <Text variant="h2" style={styles.h}>
-        Your subjects
+        Your own courses (optional)
       </Text>
       <Text muted style={styles.lead}>
-        Nothing to pick: LarpLess recognises {LIBRARY_MODULES.length} subjects automatically and tracks whichever you
-        study. Optionally add your own courses (course codes, topics, lecturer names) for sharper labels.
+        For sharper labels, add your own courses with words only they use: course codes, topics, lecturer names.
       </Text>
       <EditableTable rows={drafts} onChange={setDrafts} />
       {problem ? (
@@ -324,10 +330,122 @@ function ModulesStep({ onBack, onNext }: { onBack?: () => void; onNext: () => vo
           style={onBack ? styles.gapLeft : undefined}
         />
       </View>
-      <Text variant="small" weight="medium" style={styles.presets}>
-        Recognised automatically
+    </View>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Screen language                                                     */
+/* ------------------------------------------------------------------ */
+
+/** The system locale's language when it's one LarpLess reads, else English. */
+export function localeScreenLanguage(): ScreenLanguage {
+  try {
+    const locale = Intl.DateTimeFormat().resolvedOptions().locale.toLowerCase();
+    return locale.startsWith('es') ? 'es' : 'en';
+  } catch {
+    return 'en';
+  }
+}
+
+const LANGUAGE_COPY: Record<ScreenLanguage, string> = {
+  en: 'Reads English text on screen, with English subject keywords.',
+  es: 'Lee el texto de la pantalla en español, con palabras clave en español (y los términos en inglés que suelen aparecer en clase).',
+};
+
+function LanguageStep({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
+  const saved = useAppStore((s) => s.settings.screenLanguage);
+  const updateSettings = useAppStore((s) => s.updateSettings);
+  // Preselect the system language until the user has picked something other than the default.
+  const [picked, setPicked] = useState<ScreenLanguage>(() => (saved === 'en' ? localeScreenLanguage() : saved));
+  return (
+    <View testID="onboarding-language">
+      <Text variant="h2" style={styles.h}>
+        What language are your screens in?
       </Text>
-      <SubjectLibrary testID="onboarding-library" />
+      <Text muted style={styles.lead}>
+        LarpLess reads the text on your screen to tell subjects apart. Pick the language most of your study material is
+        in; you can change it any time in Settings → Local AI.
+      </Text>
+      {SCREEN_LANGUAGES.map((l) => (
+        <ChoiceCard
+          key={l.value}
+          testID={`onboarding-language-${l.value}`}
+          icon="languages"
+          title={l.label}
+          selected={picked === l.value}
+          onPress={() => setPicked(l.value)}>
+          {LANGUAGE_COPY[l.value]}
+        </ChoiceCard>
+      ))}
+      <View style={styles.actions}>
+        <Button title="Back" variant="ghost" onPress={onBack} />
+        <Button
+          testID="onboarding-next"
+          title="Continue"
+          variant="primary"
+          onPress={() => {
+            if (picked !== saved) updateSettings({ screenLanguage: picked }).catch(() => {});
+            onNext();
+          }}
+          style={styles.gapLeft}
+        />
+      </View>
+    </View>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Your subjects                                                       */
+/* ------------------------------------------------------------------ */
+
+/**
+ * "Which subjects do you study?": tap any number of library subjects. Core subjects are always on; every other
+ * subject left unpicked is turned off (`disabledSubjects`), so the classifier compares fewer candidates (a Maths or
+ * Computing subject that's off still counts as Maths or Programming). Picking none keeps everything on.
+ */
+function SubjectsStep({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
+  const disabled = useAppStore((s) => s.settings.disabledSubjects);
+  const updateSettings = useAppStore((s) => s.updateSettings);
+  const optional = useMemo(() => LIBRARY_MODULES.filter((m) => !isCoreSubject(m.id)).map((m) => m.id), []);
+  // Coming back (or after a relaunch): what's on now, unless that's everything (nothing picked yet).
+  const [picked, setPicked] = useState<Set<string>>(() =>
+    disabled.length ? new Set(optional.filter((id) => !disabled.includes(id))) : new Set(),
+  );
+  const toggle = (id: string) =>
+    setPicked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const off = optional.filter((id) => !picked.has(id));
+  return (
+    <View testID="onboarding-subjects">
+      <Text variant="h2" style={styles.h}>
+        Which subjects do you study?
+      </Text>
+      <Text muted style={styles.lead}>
+        Pick as many as you like. LarpLess then only chooses between these and the outlined core subjects, which makes
+        its labels more accurate. You can change them any time on the Subjects page.
+      </Text>
+      <Text variant="small" testID="onboarding-subjects-count" style={styles.presets}>
+        {picked.size ? `${picked.size} picked, plus ${CORE_SUBJECT_NAMES.length} core subjects` : 'Nothing picked yet: every subject stays on'}
+      </Text>
+      <SubjectLibrary testID="onboarding-library" disabled={off} onToggle={toggle} />
+      <View style={styles.actions}>
+        <Button title="Back" variant="ghost" onPress={onBack} />
+        <Button
+          testID="onboarding-next"
+          title={picked.size ? 'Continue' : 'Skip: detect every subject'}
+          variant="primary"
+          onPress={() => {
+            updateSettings({ disabledSubjects: picked.size ? off : [] }).catch(() => {});
+            onNext();
+          }}
+          style={styles.gapLeft}
+        />
+      </View>
     </View>
   );
 }
