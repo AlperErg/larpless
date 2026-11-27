@@ -1,12 +1,15 @@
 // FLScreenModel (Windows only for now; the macOS app has no counterpart yet, so the classifier skips this step
 // there): on-device "decision" classifier. classify() captures the screen, reads its text with Windows.Media.Ocr,
-// embeds the image with SigLIP 2 (vision tower) and the title + text with all-MiniLM-L6-v2, both through ONNX
+// embeds the image with SigLIP 2 (vision tower) and the title + text with paraphrase-multilingual-MiniLM-L12-v2
+// (int8, tokenized by FLUnigram), both through ONNX
 // Runtime, and resolves with numbers only: a logit per fixed SigLIP prompt (Assets/Models/FLScreenModelPrompts.json,
 // built by scripts/embed_bench/export_prompts.py) and a cosine per caller-supplied text. src/core/screenModel.ts
 // turns those into a verdict.
 //
-// The model files (~460 MB) are downloaded once by download() from pinned Hugging Face URLs into
-// LocalFolder\Models and checked against their size and SHA-256.
+// The model files (~505 MB) are downloaded once by download() from pinned Hugging Face URLs into
+// LocalFolder\Models and checked against their size and SHA-256. The text model's vocabulary arrives as the
+// tokenizers library's unigram.json and is converted once into minilm-ml-vocab.txt (FLUnigramVocab), which has a
+// pinned SHA-256 of its own.
 //
 // PRIVACY: the frame, the OCR text and the embeddings stay in this process's memory and are dropped after each
 // call; nothing is written to disk or logged except sizes and timings. Only the window snapshot (the same
@@ -44,6 +47,7 @@
 #include "FLScreenCapture.h"
 #include "FLUtil.h"
 #include "FLUnigram.h"
+#include "FLUnigramVocab.h"
 
 #pragma comment(lib, "bcrypt.lib")
 
@@ -61,10 +65,16 @@ struct FLScreenModelCore : std::enable_shared_from_this<FLScreenModelCore> {
   using ReactPromise = winrt::Microsoft::ReactNative::ReactPromise<T>;
 
   // The only file names download() accepts and classify() loads. One text model for every screen language: the
-  // int8 paraphrase-multilingual-MiniLM-L12-v2, tokenized by FLUnigram with the vocabulary shipped in Assets/Models.
+  // int8 paraphrase-multilingual-MiniLM-L12-v2, tokenized by FLUnigram.
   static constexpr wchar_t kVision[]{L"siglip2-vision.onnx"};
   static constexpr wchar_t kText[]{L"minilm-ml.onnx"};
-  static constexpr wchar_t kVocab[]{L"minilm-ml-vocab.txt"};  // packaged asset, never downloaded
+  // FLUnigram's vocabulary. JS lists it with the URL, size and SHA-256 of its source, unigram.json, which Fetch
+  // saves as kVocabSource and DeriveVocab converts into this file, checked against kVocabBytes / kVocabSha256
+  // (export_prompts.py ML_VOCAB_SHA256; scripts/embed_bench/unigram-vocab-check.sh checks the conversion).
+  static constexpr wchar_t kVocab[]{L"minilm-ml-vocab.txt"};
+  static constexpr wchar_t kVocabSource[]{L"unigram.json"};
+  static constexpr uint64_t kVocabBytes{7'763'089};
+  static constexpr char kVocabSha256[]{"62fce312d72594ad30235447483680a6d1bbce5d7e219bbe29a241539e449f92"};
   // all-MiniLM-L6-v2's files from installs before the multilingual model (~90 MB); Status() deletes them once.
   static constexpr wchar_t kLegacyText[]{L"minilm.onnx"};
   static constexpr wchar_t kLegacyVocab[]{L"minilm-vocab.txt"};
@@ -109,7 +119,8 @@ struct FLScreenModelCore : std::enable_shared_from_this<FLScreenModelCore> {
           std::error_code ec;
           const auto path{dir / winrt::to_hstring(name).c_str()};
           if (!std::filesystem::is_regular_file(path, ec) ||
-              static_cast<double>(std::filesystem::file_size(path, ec)) != size) {
+              static_cast<double>(std::filesystem::file_size(path, ec)) !=
+                  InstalledSize(winrt::to_hstring(name).c_str(), size)) {
             missing.push_back(JSValue{name});
           }
         }
@@ -144,7 +155,8 @@ struct FLScreenModelCore : std::enable_shared_from_this<FLScreenModelCore> {
       }
       FileSpec s{winrt::to_hstring(Text(*obj, "name")).c_str(), Text(*obj, "url"), Text(*obj, "sha256"),
                  static_cast<uint64_t>(Number(*obj, "size", 0))};
-      const bool knownName{s.name == kVision || s.name == kText};
+      const bool knownName{s.name == kVision || s.name == kText ||
+                           (s.name == kVocab && EndsWith(s.url, "/unigram.json"))};
       if (!knownName || s.url.rfind("https://huggingface.co/", 0) != 0 || s.sha256.size() != 64 || s.size == 0) {
         result.Reject(ReactError{"E_INVALID_ARG", "unexpected model file spec", {}});
         return;
@@ -166,16 +178,27 @@ struct FLScreenModelCore : std::enable_shared_from_this<FLScreenModelCore> {
           auto const &s{specs[i]};
           std::error_code ec;
           const auto path{dir / s.name};
-          if (std::filesystem::is_regular_file(path, ec) && std::filesystem::file_size(path, ec) == s.size) {
+          if (std::filesystem::is_regular_file(path, ec) &&
+              static_cast<double>(std::filesystem::file_size(path, ec)) ==
+                  InstalledSize(s.name, static_cast<double>(s.size))) {
             continue;
           }
+          const bool derived{s.name == kVocab};
+          const auto fetched{derived ? dir / kVocabSource : path};
           try {
-            code = Fetch(s, path, i, specs.size(), message);
+            code = Fetch(s, fetched, i, specs.size(), message);
+            if (code.empty() && derived) {
+              code = DeriveVocab(fetched, path, message);
+            }
           } catch (...) {
             // A dropped connection throws out of Fetch: don't leave up to 372 MB of .part behind.
-            auto part{path};
-            part += L".part";
-            std::filesystem::remove(part, ec);
+            for (auto leftover : {fetched, path}) {
+              leftover += L".part";
+              std::filesystem::remove(leftover, ec);
+            }
+            if (derived) {
+              std::filesystem::remove(fetched, ec);
+            }
             throw;
           }
         }
@@ -359,6 +382,15 @@ struct FLScreenModelCore : std::enable_shared_from_this<FLScreenModelCore> {
     return it == obj.end() || it->second.IsNull() ? fallback : it->second.AsDouble();
   }
 
+  static bool EndsWith(std::string const &s, std::string_view suffix) {
+    return s.size() >= suffix.size() && s.compare(s.size() - suffix.size(), suffix.size(), suffix) == 0;
+  }
+
+  // The size a listed file has once installed: its download size, except the vocabulary, which is converted.
+  static double InstalledSize(std::wstring const &name, double listed) {
+    return name == kVocab ? static_cast<double>(kVocabBytes) : listed;
+  }
+
   static double Ms(std::chrono::steady_clock::time_point since) {
     return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - since).count();
   }
@@ -473,6 +505,46 @@ struct FLScreenModelCore : std::enable_shared_from_this<FLScreenModelCore> {
     return {};
   }
 
+  // unigram.json (already size- and SHA-256-checked by Fetch) -> minilm-ml-vocab.txt, once per download. The JSON
+  // is deleted either way; a converted file that doesn't match the pin is never moved into place.
+  std::string DeriveVocab(std::filesystem::path const &source, std::filesystem::path const &path, std::string &message) {
+    std::error_code ec;
+    std::string json;
+    {
+      std::ifstream file{source, std::ios::binary};
+      json.assign(std::istreambuf_iterator<char>{file}, std::istreambuf_iterator<char>{});
+    }
+    std::filesystem::remove(source, ec);
+    std::string vocab;
+    const bool converted{UnigramVocabJson::Convert(json, vocab)};
+    json = std::string{};  // ~15 MB
+    Sha256 hash;
+    hash.Update(reinterpret_cast<uint8_t const *>(vocab.data()), static_cast<uint32_t>(vocab.size()));
+    if (!converted || vocab.size() != kVocabBytes || hash.Hex() != kVocabSha256) {
+      message = "the text model's vocabulary failed its conversion check";
+      return "E_CHECKSUM";
+    }
+    auto part{path};
+    part += L".part";
+    {
+      std::ofstream file{part, std::ios::binary | std::ios::trunc};
+      file.write(vocab.data(), static_cast<std::streamsize>(vocab.size()));
+      file.close();
+      if (!file) {
+        std::filesystem::remove(part, ec);
+        message = "cannot write the model file (is the disk full?)";
+        return "E_DOWNLOAD";
+      }
+    }
+    std::filesystem::rename(part, path, ec);
+    if (ec) {
+      std::filesystem::remove(part, ec);
+      message = "cannot move the model into place";
+      return "E_DOWNLOAD";
+    }
+    return {};
+  }
+
   static JSValueObject ProgressPayload(FileSpec const &s, size_t index, size_t count, uint64_t received) {
     return JSValueObject{{"name", winrt::to_string(s.name)},
                          {"receivedBytes", static_cast<double>(received)},
@@ -524,15 +596,14 @@ struct FLScreenModelCore : std::enable_shared_from_this<FLScreenModelCore> {
     }
     const auto dir{ModelDir()};
     std::error_code ec;
-    for (auto const *file : {kVision, kText}) {
+    for (auto const *file : {kVision, kText, kVocab}) {
       if (!std::filesystem::is_regular_file(dir / file, ec)) {
         message = "model files are not downloaded";
         return "E_NOT_INSTALLED";
       }
     }
     const auto start{std::chrono::steady_clock::now()};
-    const auto vocab{AssetPath(kVocab)};
-    if (!LoadPrompts() || vocab.empty() || !m_unigram.Load(vocab.wstring())) {
+    if (!LoadPrompts() || !m_unigram.Load((dir / kVocab).wstring())) {
       message = "prompt table or vocabulary unreadable";
       return "E_MODEL";
     }

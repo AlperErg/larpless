@@ -101,7 +101,7 @@ export interface ScreenModelSetupState {
 }
 export interface ScreenModelSetupActions {
   refresh(): Promise<void>;
-  /** Downloads the pinned model files (~460 MB) with progress. Never rejects. */
+  /** Downloads the pinned model files (~505 MB) with progress. Never rejects. */
   downloadModels(): Promise<void>;
   cancelDownload(): void;
 }

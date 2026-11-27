@@ -40,12 +40,20 @@ export const SCREEN_MODEL_FILES: ScreenModelFile[] = [
     size: 371_807_752,
   },
   {
-    // paraphrase-multilingual-MiniLM-L12-v2 (Apache-2.0), int8 ONNX export. Its SentencePiece vocabulary is
-    // derived from tokenizer.json and ships inside the app (minilm-ml-vocab.txt), so only the model downloads.
+    // paraphrase-multilingual-MiniLM-L12-v2 (Apache-2.0), int8 ONNX export.
     name: 'minilm-ml.onnx',
     url: 'https://huggingface.co/Xenova/paraphrase-multilingual-MiniLM-L12-v2/resolve/2c4055b12046f11709e9df2c122e59ffbdc2f900/onnx/model_int8.onnx',
     sha256: 'd6ea442ff6a891daefed7c83b2f596fc5dc66bf697e4d006236f64f34bbcf4c8',
     size: 118_054_609,
+  },
+  {
+    // Its SentencePiece Unigram vocabulary. The repo has no plain-text vocabulary, so native code downloads
+    // unigram.json (url, sha256 and size below are that file's) and converts it once into minilm-ml-vocab.txt,
+    // which has its own pinned SHA-256 and size natively (kVocabSha256 / kVocabBytes); status() checks that size.
+    name: 'minilm-ml-vocab.txt',
+    url: 'https://huggingface.co/Xenova/paraphrase-multilingual-MiniLM-L12-v2/resolve/2c4055b12046f11709e9df2c122e59ffbdc2f900/unigram.json',
+    sha256: '71b44701d7efd054205115acfa6ef126c5d2f84bd3affe0c59e48163674d19a6',
+    size: 14_763_234,
   },
 ];
 

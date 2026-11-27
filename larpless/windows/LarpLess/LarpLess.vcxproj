@@ -132,6 +132,7 @@
     <ClInclude Include="Native\FLScreenModel.h" />
     <ClInclude Include="Native\FLSound.h" />
     <ClInclude Include="Native\FLUnigram.h" />
+    <ClInclude Include="Native\FLUnigramVocab.h" />
     <ClInclude Include="Native\FLUtil.h" />
     <ClInclude Include="Native\FLWebcam.h" />
     <ClInclude Include="Native\FLWindow.h" />
@@ -152,11 +153,6 @@
     <!-- FLScreenModel's fixed SigLIP prompt embeddings (scripts/embed_bench/export_prompts.py). The model weights
          themselves are downloaded at onboarding into LocalFolder\Models. -->
     <None Include="Assets\Models\FLScreenModelPrompts.json">
-      <DeploymentContent>true</DeploymentContent>
-    </None>
-    <!-- FLUnigram's vocabulary for the multilingual text model, written by export_prompts.py (text model minilm-ml);
-         the model itself (minilm-ml.onnx) is downloaded like the others. -->
-    <None Include="Assets\Models\minilm-ml-vocab.txt">
       <DeploymentContent>true</DeploymentContent>
     </None>
     <!--

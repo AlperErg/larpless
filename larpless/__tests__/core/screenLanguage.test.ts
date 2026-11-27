@@ -75,11 +75,20 @@ describe('screen model inputs', () => {
 
 describe('model files', () => {
   it('one multilingual text model for every screen language, so switching never downloads anything', () => {
-    expect(SCREEN_MODEL_FILES.map((f) => f.name)).toEqual(['siglip2-vision.onnx', 'minilm-ml.onnx']);
+    expect(SCREEN_MODEL_FILES.map((f) => f.name)).toEqual(['siglip2-vision.onnx', 'minilm-ml.onnx', 'minilm-ml-vocab.txt']);
     for (const f of SCREEN_MODEL_FILES) {
       expect(f.url.startsWith('https://huggingface.co/')).toBe(true);
       expect(f.sha256).toMatch(/^[0-9a-f]{64}$/);
     }
+  });
+
+  it('downloads the vocabulary as unigram.json from the same pinned commit as the text model', () => {
+    // FLScreenModel.h accepts minilm-ml-vocab.txt only from a URL ending in /unigram.json, and converts it.
+    const byName = new Map(SCREEN_MODEL_FILES.map((f) => [f.name, f]));
+    const model = byName.get('minilm-ml.onnx')!;
+    const vocab = byName.get('minilm-ml-vocab.txt')!;
+    expect(vocab.url.endsWith('/unigram.json')).toBe(true);
+    expect(vocab.url.replace(/\/unigram\.json$/, '')).toBe(model.url.replace(/\/onnx\/model_int8\.onnx$/, ''));
   });
 });
 

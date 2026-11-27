@@ -16,10 +16,11 @@ Also checks the C++ preprocessing (box downsample) against the processor, and wr
 --text-model picks the text model whose ONNX IO and tokenizer cases are checked:
     minilm-ml  (default; the app's one text model for every language since 2026-11-27) the int8
                paraphrase-multilingual-MiniLM-L12-v2, XLM-R SentencePiece Unigram: hash-checks the pinned
-               tokenizer.json, derives windows/LarpLess/Assets/Models/minilm-ml-vocab.txt ("piece<TAB>score"
-               per line, id = line number; FLUnigram.h loads it, and the app ships it, the ONNX is downloaded)
-               and checks its SHA-256, checks the C++ normalisation rule against the tokenizer's charsmap and
-               writes unigram_cases.json. The Mac will ship a byte-identical copy (Part B of the Spanish plan).
+               tokenizer.json and unigram.json (the vocabulary the app downloads), checks they hold the same
+               vocabulary, derives scripts/embed_bench/minilm-ml-vocab.txt ("piece<TAB>score" per line, id =
+               line number, gitignored: what FLUnigram.h loads once the app has converted unigram.json) and checks
+               its SHA-256, checks the C++ normalisation rule against the tokenizer's charsmap and writes
+               unigram_cases.json.
     minilm     the old all-MiniLM-L6-v2 (BERT WordPiece) -> wordpiece_cases.json, still what the Mac's
                FLScreenModelWordPiece.swift is checked against (wordpiece-check-mac.sh) until Part B ports
                FLUnigram; Windows no longer uses it.
@@ -63,13 +64,16 @@ MINILM_ML_FILES = {  # path: (bytes, sha256)
     "onnx/model.onnx": (470268510, "185ae63f47e17a7e8d30d0e6a3cde6a6e4b79bc5b81666ecffc279a6856ca113"),
     "onnx/model_int8.onnx": (118054609, "d6ea442ff6a891daefed7c83b2f596fc5dc66bf697e4d006236f64f34bbcf4c8"),
     "tokenizer.json": (17082913, "b60b6b43406a48bf3638526314f3d232d97058bc93472ff2de930d43686fa441"),
+    # tokenizers' saved Unigram model: the vocabulary alone. The app downloads this one (SCREEN_MODEL_FILES).
+    "unigram.json": (14763234, "71b44701d7efd054205115acfa6ef126c5d2f84bd3affe0c59e48163674d19a6"),
 }
 # Ships as minilm-ml.onnx, the one text model for every language: the int8 export (2026-11-27: Spanish 13/14;
 # English holdout 10/11 -> 9/11 accepted to avoid a second download; same speed as L6, ~+50 MB RAM).
 MINILM_ML_ONNX = "onnx/model_int8.onnx"
-# Shipped in the app (not downloaded), packaged like FLScreenModelPrompts.json. LF line endings: the hash below is of
-# exactly these bytes (FLUnigram.h tolerates CRLF, but a CRLF checkout won't match the hash).
-ML_VOCAB = LARPLESS / "windows" / "LarpLess" / "Assets" / "Models" / "minilm-ml-vocab.txt"
+# What the app converts the downloaded unigram.json into (FLUnigramVocab.h, run by FLScreenModel.h's DeriveVocab,
+# which pins this hash as kVocabSha256; scripts/embed_bench/unigram-vocab-check.sh checks the C++ conversion).
+# Written here for unigram-check-windows.ps1; not committed.
+ML_VOCAB = HERE / "minilm-ml-vocab.txt"
 ML_VOCAB_SHA256 = "62fce312d72594ad30235447483680a6d1bbce5d7e219bbe29a241539e449f92"  # 7763089 bytes, 250002 pieces
 OUT =LARPLESS / "windows" / "LarpLess" / "Assets" / "Models" / "FLScreenModelPrompts.json"
 OUT_MAC = LARPLESS / "macos" / "Focusline-macOS" / "Native" / "ScreenModel" / "FLScreenModelPrompts.json"
@@ -246,11 +250,14 @@ def unigram_cases() -> None:
     from tokenizers import Tokenizer
 
     repo, rev = MINILM_ML
-    tpath = Path(hf_hub_download(repo, "tokenizer.json", revision=rev))
-    size, sha = MINILM_ML_FILES["tokenizer.json"]
-    got = hashlib.sha256(tpath.read_bytes()).hexdigest()
-    if tpath.stat().st_size != size or got != sha:
-        sys.exit(f"tokenizer.json: {tpath.stat().st_size} bytes, sha256 {got}; expected {size} {sha}")
+    paths = {}
+    for name in ("tokenizer.json", "unigram.json"):
+        paths[name] = Path(hf_hub_download(repo, name, revision=rev))
+        size, sha = MINILM_ML_FILES[name]
+        got = hashlib.sha256(paths[name].read_bytes()).hexdigest()
+        if paths[name].stat().st_size != size or got != sha:
+            sys.exit(f"{name}: {paths[name].stat().st_size} bytes, sha256 {got}; expected {size} {sha}")
+    tpath = paths["tokenizer.json"]
     spec = json.loads(tpath.read_text(encoding="utf-8"))
     print("tokenizer.json normalizer", spec["normalizer"]["type"], "pre_tokenizer", json.dumps(spec["pre_tokenizer"]),
           "post_processor", [p.get("SpecialToken", {}).get("id", "$A") for p in spec["post_processor"]["single"]])
@@ -259,12 +266,15 @@ def unigram_cases() -> None:
     assert spec["pre_tokenizer"] == {"type": "Sequence", "pretokenizers": [
         {"type": "WhitespaceSplit"}, {"type": "Metaspace", "replacement": "▁", "add_prefix_space": True}]}
 
-    # 1. The vocabulary FLUnigram.h loads. repr() round-trips the float64 score exactly.
+    # 1. The vocabulary FLUnigram.h loads. The app converts unigram.json, so it must hold exactly tokenizer.json's
+    # vocabulary. repr() round-trips the float64 score exactly (and equals the JSON's own number text).
+    unigram = json.loads(paths["unigram.json"].read_text(encoding="utf-8"))
+    if unigram.get("type") != "Unigram" or unigram.get("unk_id") != model["unk_id"] or unigram["vocab"] != model["vocab"]:
+        sys.exit("unigram.json doesn't hold tokenizer.json's vocabulary")
     lines = []
     for piece, score in model["vocab"]:
         assert piece and not any(ch in piece for ch in "\t\r\n"), repr(piece)
         lines.append(f"{piece}\t{score!r}\n")
-    ML_VOCAB.parent.mkdir(parents=True, exist_ok=True)
     ML_VOCAB.write_text("".join(lines), encoding="utf-8", newline="\n")
     data = ML_VOCAB.read_bytes()
     vocab_sha = hashlib.sha256(data).hexdigest()

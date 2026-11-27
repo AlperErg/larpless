@@ -3,10 +3,11 @@
 # Visual Studio C++ toolset (no app build needed) and prints "unigram N/M identical".
 # Usage, from larpless/:
 #   powershell -ExecutionPolicy Bypass -File scripts\embed_bench\unigram-check-windows.ps1 [-Vocab <minilm-ml-vocab.txt>] [-Cases <file>]
-# -Vocab defaults to the copy the app ships, windows\LarpLess\Assets\Models\minilm-ml-vocab.txt (written by
-# export_prompts.py --text-model minilm-ml); -Cases to unigram_cases.json (another file in the same format works too).
+# -Vocab defaults to scripts\embed_bench\minilm-ml-vocab.txt, the file the app converts the downloaded unigram.json
+# into (written by export_prompts.py --text-model minilm-ml; not committed); -Cases to unigram_cases.json (another
+# file in the same format works too).
 param(
-  [string]$Vocab = (Join-Path $PSScriptRoot '..\..\windows\LarpLess\Assets\Models\minilm-ml-vocab.txt'),
+  [string]$Vocab = (Join-Path $PSScriptRoot 'minilm-ml-vocab.txt'),
   [string]$Cases = (Join-Path $PSScriptRoot 'unigram_cases.json')
 )
 $ErrorActionPreference = 'Stop'

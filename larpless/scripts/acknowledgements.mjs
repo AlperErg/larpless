@@ -84,7 +84,7 @@ const EXTRAS = [
     license: 'Apache-2.0',
     notice:
       'On-device screen classifier: multilingual text embeddings, by sentence-transformers; int8 ONNX export by Xenova.\n' +
-      'Downloaded at onboarding (pinned commit, SHA-256 checked). minilm-ml-vocab.txt, shipped with the app, is derived from its tokenizer.json.\n' +
+      'Downloaded at onboarding (pinned commit, SHA-256 checked), with its vocabulary (unigram.json), which is converted on the device.\n' +
       'Source: https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2\n' +
       'ONNX export: https://huggingface.co/Xenova/paraphrase-multilingual-MiniLM-L12-v2',
     file: 'licenses/Apache-2.0.txt',
