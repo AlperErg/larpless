@@ -433,6 +433,12 @@ export function createSessionController(deps: SessionControllerDeps): SessionCon
       } else if (e.type === 'flash') {
         flash = 'backOnTrack';
       }
+         else if (e.type === 'closeDistraction') {
+        log(`[enforcer] closing: ${e.appName} - ${e.activity}`);
+        native.enforcer.closeDistractingApp(e.appName).catch((err) => {
+          log(`[enforcer] close failed: ${(err as Error)?.message ?? 'error'}`);
+        });
+      }
       // tint and pulse are derived from the store in toPanelState.
     }
   }

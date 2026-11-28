@@ -28,7 +28,8 @@ export type AlertEffect =
   | { type: 'notify'; level: 2 | 3; title: string; body: string }
   | { type: 'chime'; kind: ChimeKind }
   | { type: 'pulse'; on: boolean }
-  | { type: 'flash' };
+  | { type: 'flash' }
+  | { type: 'closeDistraction'; appName: string | null; activity: string };
 
 export function thresholdsMs(settings: Pick<Settings, 'strictness' | 'demoFast'>): { level2: number; level3: number } {
   if (settings.demoFast) return { level2: 20_000, level3: 50_000 };
@@ -92,7 +93,11 @@ export function evaluate(
       body: prev.lastSubjectName ? `Back to ${prev.lastSubjectName}?` : 'Back to studying?',
     });
     if (prev.level < 2 && settings.soundsEnabled) effects.push({ type: 'chime', kind: 'soft' });
-    if (lvl === 3) effects.push({ type: 'pulse', on: true });
+    if (lvl === 3) {
+      effects.push({ type: 'pulse', on: true });
+      // NEW: close the distracting app when we hit level 3
+      effects.push({ type: 'closeDistraction', appName: chunk.appName, activity: chunk.activity });
+    }
   }
   return { next, effects };
 }

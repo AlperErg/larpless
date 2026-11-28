@@ -23,4 +23,9 @@ export const mockApis: NativeApis = {
   nowPlaying: mockNowPlaying,
   ollamaHost: mockOllamaHost,
   keychain: mockKeychain,
+  enforcer: {
+    closeDistractingApp: async (appName: string | null) => {
+      console.log(`[mock enforcer] would close: ${appName}`);
+    },
+  },
 };

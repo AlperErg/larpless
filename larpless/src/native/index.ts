@@ -1,3 +1,4 @@
+import { enforcer } from './enforcer';
 import { NativeModules } from 'react-native';
 import { config } from '../config';
 import type { NativeApis } from '../contracts/native';
@@ -36,4 +37,5 @@ export const native: NativeApis = {
   nowPlaying: pick('nowPlaying', 'FLNowPlaying', nowPlaying),
   ollamaHost: pick('ollamaHost', 'FLOllama', ollamaHost),
   keychain: pick('keychain', 'FLKeychain', keychain),
+  enforcer: pick('enforcer', 'FLEnforcer', enforcer),
 };
