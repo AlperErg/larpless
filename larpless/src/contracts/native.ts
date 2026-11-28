@@ -292,4 +292,9 @@ export interface NativeApis {
   nowPlaying: NowPlayingApi;
   ollamaHost: OllamaHostApi;
   keychain: KeychainApi;
+  enforcer: EnforcerApi;
+}
+export interface EnforcerApi {
+  /** Force-close the frontmost distracting app. No-op if appName is null or is LarpLess itself. */
+  closeDistractingApp(appName: string | null): Promise<void>;
 }

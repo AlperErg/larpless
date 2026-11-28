@@ -122,6 +122,10 @@
     <ClInclude Include="targetver.h" />
     <ClInclude Include="Native\FLAppShell.h" />
     <ClInclude Include="Native\FLFloatingPanel.h" />
+    <ClInclude Include="Native\FLAppShell.h" />
+    <ClInclude Include="Native\FLFloatingPanel.h" />
+    <ClInclude Include="Native\FLEnforcer.h" />
+    <ClInclude Include="Native\FLKeychain.h" />
     <ClInclude Include="Native\FLKeychain.h" />
     <ClInclude Include="Native\FLNowPlaying.h" />
     <ClInclude Include="Native\FLNotifications.h" />
